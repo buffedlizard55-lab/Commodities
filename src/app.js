@@ -14,6 +14,7 @@ import {
   formatDollars,
   normalizeMarkets,
   normalizeOrderBook,
+  settlePaperTrade,
   strategyExplanation,
   tradesToCsv,
 } from './engine.js';
@@ -24,6 +25,7 @@ const state = {
   seasonYear: SEASON_YEAR,
   markets: [],
   books: new Map(),
+  settlementChecks: new Map(),
   selectedTicker: null,
   currentSignals: new Map(),
   apiStatus: 'idle',
@@ -167,12 +169,40 @@ async function fetchOpenMarkets() {
   return { markets: [...unique.values()], sourcePages };
 }
 
+async function reconcileSettlements() {
+  const activeTrades = state.trades.filter((trade) => trade.status === 'open' || trade.status === 'partially-closed');
+  const missing = [...new Set(activeTrades.map((trade) => trade.ticker))].filter((ticker) => !marketByTicker(ticker));
+  let changed = false;
+  for (const ticker of missing.slice(0, 10)) {
+    const checkedAt = state.settlementChecks.get(ticker) ?? 0;
+    if (Date.now() - checkedAt < 300_000) continue;
+    state.settlementChecks.set(ticker, Date.now());
+    try {
+      const payload = await fetchJson(`${KALSHI_MARKET_DATA_URL}/markets/${encodeURIComponent(ticker)}`);
+      const market = normalizeMarket(payload?.market ?? payload);
+      if (!['yes', 'no'].includes(String(market.result ?? '').toLowerCase())) continue;
+      state.trades = state.trades.map((trade) => {
+        if (trade.ticker !== ticker || !['open', 'partially-closed'].includes(trade.status)) return trade;
+        const settled = settlePaperTrade(trade, market);
+        if (settled.status === 'settled') changed = true;
+        return settled;
+      });
+    } catch (error) {
+      // A missing/temporarily unavailable settlement record is never converted
+      // into an inferred result or a guessed exit.
+    }
+  }
+  if (changed) saveLocalState();
+  return changed;
+}
+
 async function loadMarkets({ announce = true } = {}) {
   setApiStatus('loading');
   try {
     const result = await fetchOpenMarkets();
     const markets = result.markets.filter((market) => !market.status || OPEN_MARKET_STATUSES.has(market.status)).sort(marketSort);
     state.markets = markets;
+    await reconcileSettlements();
     state.lastUpdated = new Date().toISOString();
     saveObservation(markets, result.sourcePages);
     setApiStatus('live');
@@ -404,7 +434,7 @@ function renderLedger() {
   if (state.activeLedgerTab === 'trades') {
     head.innerHTML = '<tr><th>Strategy / ticker</th><th>Side & size</th><th>Entry (verified)</th><th>Exit (verified)</th><th>Fees / slippage</th><th>Net PnL</th><th>Actions</th></tr>';
     if (!state.trades.length) { body.innerHTML = '<tr><td colspan="7" class="empty-cell">No records yet. Use “Simulate fill” on a live order book. No synthetic trades are inserted.</td></tr>'; return; }
-    body.innerHTML = [...state.trades].reverse().map((trade) => `<tr><td><div class="persona-cell"><span class="avatar">${escapeHtml(trade.username.slice(0, 2).toUpperCase())}</span><div><strong>${escapeHtml(trade.username)}</strong><small title="${escapeHtml(trade.title)}">${escapeHtml(trade.ticker)}</small></div></div></td><td><b>${escapeHtml(trade.side.toUpperCase())}</b><br><small>${escapeHtml(formatContracts(trade.contracts))} contracts</small></td><td><b>${formatDollars(trade.entryPrice, 4)}</b><br><small>${escapeHtml(formatDate(trade.entryAt))}</small></td><td>${trade.exitAt ? `<b>${formatDollars(trade.exitPrice, 4)}</b><br><small>${escapeHtml(formatDate(trade.exitAt))}</small>` : '<span class="evidence-pill none">open · mark live</span>'}</td><td>${formatDollars((trade.entryFee ?? 0) + (trade.exitFee ?? 0), 4)}<br><small>slip ${formatDollars(trade.slippage ?? 0, 4)}</small></td><td class="${(trade.pnl ?? 0) > 0 ? 'return-positive' : (trade.pnl ?? 0) < 0 ? 'return-negative' : ''}">${trade.pnl === null ? '—' : formatDollars(trade.pnl, 4)}</td><td>${trade.status === 'open' ? `<button class="button button-small button-ghost" data-action="close-trade" data-trade-id="${escapeHtml(trade.id)}" type="button">Exit at book</button>` : '<span class="evidence-pill">closed</span>'}</td></tr>`).join('');
+    body.innerHTML = [...state.trades].reverse().map((trade) => `<tr><td><div class="persona-cell"><span class="avatar">${escapeHtml(trade.username.slice(0, 2).toUpperCase())}</span><div><strong>${escapeHtml(trade.username)}</strong><small title="${escapeHtml(trade.title)}">${escapeHtml(trade.ticker)}</small></div></div></td><td><b>${escapeHtml(trade.side.toUpperCase())}</b><br><small>${escapeHtml(formatContracts(trade.contracts))} contracts</small></td><td><b>${formatDollars(trade.entryPrice, 4)}</b><br><small>${escapeHtml(formatDate(trade.entryAt))}</small></td><td>${trade.exitAt ? `<b>${formatDollars(trade.exitPrice, 4)}</b><br><small>${escapeHtml(formatDate(trade.exitAt))}</small>` : '<span class="evidence-pill none">open · mark live</span>'}</td><td>${formatDollars((trade.entryFee ?? 0) + (trade.exitFee ?? 0), 4)}<br><small>slip ${formatDollars(trade.slippage ?? 0, 4)}</small></td><td class="${(trade.pnl ?? 0) > 0 ? 'return-positive' : (trade.pnl ?? 0) < 0 ? 'return-negative' : ''}">${trade.pnl === null ? '—' : formatDollars(trade.pnl, 4)}</td><td>${trade.status === 'open' ? `<button class="button button-small button-ghost" data-action="close-trade" data-trade-id="${escapeHtml(trade.id)}" type="button">Exit at book</button>` : `<span class="evidence-pill">${escapeHtml(trade.status)}</span>`}</td></tr>`).join('');
   } else if (state.activeLedgerTab === 'upcoming') {
     head.innerHTML = '<tr><th>Observed</th><th>Strategy</th><th>Contract</th><th>Proposed side</th><th>Price</th><th>Reason / evidence</th><th>Status</th></tr>';
     const intents = [...state.intents].reverse().filter((intent) => intent.status === 'proposed');

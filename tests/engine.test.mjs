@@ -8,6 +8,7 @@ import {
   normalizeOrderBook,
   standardQuadraticFee,
   closePaperTrade,
+  settlePaperTrade,
 } from '../src/engine.js';
 
 const strategy = { id: 'book-edge', username: 'BookRocket', name: 'Book Edge Sweep' };
@@ -59,6 +60,16 @@ test('affordability includes the modeled fee', () => {
   assert.equal(contracts, 19);
   assert.ok(contracts * 0.5 + standardQuadraticFee(0.5, contracts) <= 10);
   assert.ok((contracts + 1) * 0.5 + standardQuadraticFee(0.5, contracts + 1) > 10);
+});
+
+test('official binary result settles an open paper trade with a verified date', () => {
+  const trade = createPaperTrade({ strategy, market, book, side: 'yes', requestedContracts: 3, now: new Date('2026-09-19T00:00:00Z') });
+  const settled = settlePaperTrade(trade, normalizeMarket({ ...market.raw, result: 'yes', status: 'settled', settlement_ts: 1798675200 }));
+  assert.equal(settled.status, 'settled');
+  assert.equal(settled.exitPrice, 1);
+  assert.equal(settled.exitAt, '2026-12-31T00:00:00.000Z');
+  assert.equal(settled.exitFee, 0);
+  assert.ok(Number.isFinite(settled.pnl));
 });
 
 test('paper fill records verified entry evidence and closes only with full liquidity', () => {
