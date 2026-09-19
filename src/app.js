@@ -357,8 +357,9 @@ function renderCompetition() {
   const openTrades = state.trades.filter((trade) => trade.status === 'open' || trade.status === 'partially-closed').length;
   const totalEquity = rows.reduce((sum, row) => sum + row.summary.equity, 0);
   const metricCards = $('#competition-metrics');
+  const hasVerifiedEvidence = state.observations.length > 0 || state.trades.length > 0;
   if (metricCards) metricCards.innerHTML = [
-    ['Season equity', formatDollars(totalEquity), `${strategies.length} paper accounts`],
+    [hasVerifiedEvidence ? 'Season equity' : 'Starting paper capital', formatDollars(totalEquity), hasVerifiedEvidence ? `${strategies.length} paper accounts` : 'no verified fills yet'],
     ['Simulated trades', String(totalTrades), 'verified book fills only'],
     ['Open contracts', String(openTrades), 'marked at live bid'],
     ['Data snapshots', String(state.observations.length), 'compact browser memory'],
