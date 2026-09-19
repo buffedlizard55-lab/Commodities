@@ -43,7 +43,7 @@ The tests cover reciprocal YES/NO asks, depth consumption, VWAP/slippage, fee ar
 4. A YES ask is `1 - best NO bid`; a NO ask is `1 - best YES bid`, matching Kalshi's documented binary-book representation. Derived values are visibly labelled.
 5. The standard quadratic taker-fee estimate is implemented from the published formula and centicent rounding documentation. Series-specific overrides and membership-specific balance rounding remain flagged for review.
 6. An exit is recorded only when the current verified bid book can fully consume the open position. Partial liquidity is not silently treated as a full exit.
-7. No result is marked settled from a quote. Future settlement reconciliation must use the official market result and terms.
+7. No result is marked settled from a quote. When an open paper position disappears from the open-market list, the app checks the official market endpoint and settles only on an explicit YES/NO result with a returned date field.
 
 ## Three review passes completed
 

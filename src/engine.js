@@ -245,6 +245,38 @@ export function createPaperTrade({ strategy, market, book, side, requestedContra
   };
 }
 
+export function settlePaperTrade(trade, market) {
+  if (!trade || !['open', 'partially-closed'].includes(trade.status)) return trade;
+  const result = String(market?.result ?? '').toLowerCase();
+  if (!['yes', 'no'].includes(result)) return trade;
+  const payoutPerContract = trade.side === result ? 1 : 0;
+  const payout = payoutPerContract * trade.contracts;
+  const raw = market.raw ?? {};
+  const settlementDateField = raw.settlement_ts ?? raw.settled_time ?? raw.settlement_time ?? raw.close_time ?? raw.expiration_time ?? null;
+  const settlementAt = parseTimestamp(settlementDateField);
+  // A result without an official date is insufficient for this ledger.
+  if (settlementAt === null) return trade;
+  const exitAt = new Date(settlementAt).toISOString();
+  const pnl = payout - (trade.entryNotional + trade.entryFee);
+  return {
+    ...trade,
+    status: 'settled',
+    exitAt,
+    exitPrice: payoutPerContract,
+    exitNotional: payout,
+    exitFee: 0,
+    pnl,
+    settlementResult: result,
+    settlementDateField: settlementDateField === null ? null : String(settlementDateField),
+    exitSource: {
+      endpoint: `${KALSHI_MARKET_DATA_URL}/markets/${encodeURIComponent(market.ticker)}`,
+      retrievedAt: new Date().toISOString(),
+      marketRaw: raw,
+      settlement: 'official market result; simple binary settlement fee assumed zero per Kalshi settlement documentation',
+    },
+  };
+}
+
 export function closePaperTrade(trade, market, book, now = new Date(), feeMultiplier = 1) {
   if (!trade || trade.status !== 'open') return trade;
   const execution = executeAgainstBook(book, trade.side, 'sell', trade.contracts);
