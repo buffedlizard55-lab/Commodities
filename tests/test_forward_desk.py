@@ -24,8 +24,8 @@ from paper_engine import (execute, taker_fee, affordable_contracts, parse_book, 
 T0 = parse_ts("2026-09-20T15:00:00Z")
 
 
-def series(ticker, exchange_index=0, fee_type="quadratic", tags=None, category="Climate and Weather"):
-    return {"series": {"ticker": ticker, "title": ticker, "category": category, "categories": [category], "tags": tags or [],
+def series(ticker, exchange_index=0, fee_type="quadratic", tags=None, category="Climate and Weather", title=None):
+    return {"series": {"ticker": ticker, "title": title or ticker, "category": category, "categories": [category], "tags": tags or [],
                        "fee_type": fee_type, "fee_multiplier": 1, "exchange_index": exchange_index, "frequency": "daily",
                        "settlement_sources": [{"name": "test", "url": "https://example.invalid"}], "contract_terms_url": "x",
                        "last_updated_ts": "2026-09-01T00:00:00Z"}}
@@ -61,7 +61,8 @@ def build_fixtures(settled=False):
     close_wx = "2026-09-21T05:00:00Z"
     close_15 = "2026-09-20T15:10:00Z"  # 10 minutes after T0
     fx = {
-        "series/KXHIGHNY": series("KXHIGHNY"),
+        # Verified series record (GET /series/KXHIGHNY, 2026-09-20): tag "Daily temperature".
+        "series/KXHIGHNY": series("KXHIGHNY", tags=["Daily temperature"], title="Highest temperature in New York"),
         "series/KXBTC15M": series("KXBTC15M", exchange_index=2, category="Crypto"),
         "series/KXNFLGAME": series("KXNFLGAME", fee_type="quadratic_with_maker_fees", category="Sports"),
         "series/KXFED": series("KXFED", category="Economics"),
@@ -74,21 +75,36 @@ def build_fixtures(settled=False):
     ]
     btc = [market("KXBTC15M-26SEP201515-15", "KXBTC15M-26SEP201515", close_15, 0.76, 0.78, last=0.78, prev=0.60, volume=90000, exchange_index=2)]
     nfl = [market("KXNFLGAME-26SEP20AAABBB-AAA", "KXNFLGAME-26SEP20AAABBB", "2026-09-20T23:00:00Z", 0.88, 0.90, last=0.90, prev=0.80,
-                  volume=250000, open_time="2026-09-15T12:00:00Z")]
+                  volume=250000, open_time="2026-09-15T12:00:00Z", yes_sub_title="Alpha",
+                  rules_primary="If Alpha wins the Alpha vs Bravo Pro Football game originally scheduled for "
+                                "Sep 20, 2026, then the market resolves to Yes.")]
     fed = [market("KXFED-26OCT-T4.50", "KXFED-26OCT", "2026-10-28T18:00:00Z", 0.02, 0.03, volume=40000)]
+    # Live-score candidate: 0.78/0.80 quote on the team ESPN shows leading 21-7 (ScorePulse band <= 0.85).
+    nfl.append(market("KXNFLGAME-26SEP20CCCDDD-CCC", "KXNFLGAME-26SEP20CCCDDD", "2026-09-21T01:00:00Z", 0.78, 0.80,
+                      last=0.80, prev=0.80, volume=9000, open_time="2026-09-15T12:00:00Z", yes_sub_title="Charlie",
+                      rules_primary="If Charlie wins the Charlie vs Delta Pro Football game originally scheduled for "
+                                    "Sep 20, 2026, then the market resolves to Yes."))
+    # FDA drug-decision market whose title names a drug (openFDA Drugs@FDA lookup) + official series record.
+    fx["series/KXFDAAPPROVE"] = series("KXFDAAPPROVE", tags=["Medicine"], category="Science and Technology",
+                                       title="Will the FDA approve drug?")
+    fda = [market("KXFDAAPPROVE-TST-26OCT01", "KXFDAAPPROVE-TST", "2026-10-01T03:59:00Z", 0.90, 0.93, volume=8000,
+                  title="Will the FDA approve testdrug for smoking cessation before Oct 1, 2026?",
+                  yes_sub_title="Before Oct 1, 2026")]
     if not settled:
         fx["markets?series_ticker=KXHIGHNY&status=open&limit=200"] = {"cursor": "", "markets": wx}
         fx["markets?series_ticker=KXBTC15M&status=open&limit=200&exchange_index=2"] = {"cursor": "", "markets": btc}
         fx["markets?series_ticker=KXNFLGAME&status=open&limit=200"] = {"cursor": "", "markets": nfl}
         fx["markets?series_ticker=KXFED&status=open&limit=200"] = {"cursor": "", "markets": fed}
+        fx["markets?series_ticker=KXFDAAPPROVE&status=open&limit=200"] = {"cursor": "", "markets": fda}
     else:
         for key in ("markets?series_ticker=KXHIGHNY&status=open&limit=200", "markets?series_ticker=KXBTC15M&status=open&limit=200&exchange_index=2",
-                    "markets?series_ticker=KXNFLGAME&status=open&limit=200", "markets?series_ticker=KXFED&status=open&limit=200"):
+                    "markets?series_ticker=KXNFLGAME&status=open&limit=200", "markets?series_ticker=KXFED&status=open&limit=200",
+                    "markets?series_ticker=KXFDAAPPROVE&status=open&limit=200"):
             fx[key] = {"cursor": "", "markets": []}
         outcomes = {"KXHIGHNY-26SEP20-T71": "no", "KXHIGHNY-26SEP20-B72.5": "yes", "KXHIGHNY-26SEP20-B74.5": "no",
                     "KXHIGHNY-26SEP20-T78": "no", "KXBTC15M-26SEP201515-15": "yes", "KXNFLGAME-26SEP20AAABBB-AAA": "yes",
-                    "KXFED-26OCT-T4.50": "no"}
-        for row in wx + btc + nfl + fed:
+                    "KXNFLGAME-26SEP20CCCDDD-CCC": "yes", "KXFED-26OCT-T4.50": "no", "KXFDAAPPROVE-TST-26OCT01": "yes"}
+        for row in wx + btc + nfl + fed + fda:
             done = dict(row)
             done.update({"status": "finalized", "result": outcomes[row["ticker"]], "settlement_ts": "2026-09-21T15:00:00Z",
                          "settlement_value_dollars": "1.0000" if outcomes[row["ticker"]] == "yes" else "0.0000",
@@ -108,7 +124,52 @@ def build_fixtures(settled=False):
     fx[f"markets/KXBTC15M-26SEP201515-15/orderbook?depth={FD.BOOK_DEPTH}&exchange_index=2"] = book([(0.75, 800), (0.76, 1200)], [(0.20, 500), (0.22, 900)])  # yes ask 0.78
     fx[f"markets/KXNFLGAME-26SEP20AAABBB-AAA/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.88, 5000)], [(0.10, 9000)])                 # yes ask 0.90
     fx[f"markets/KXFED-26OCT-T4.50/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.02, 1000)], [(0.97, 20000)])                           # yes ask 0.03
+    fx[f"markets/KXNFLGAME-26SEP20CCCDDD-CCC/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.78, 4000)], [(0.20, 6000)])                    # yes ask 0.80
+    fx[f"markets/KXFDAAPPROVE-TST-26OCT01/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.90, 3000)], [(0.07, 5000)])                      # yes ask 0.93
     return fx
+
+
+def espn_event(event_id, away, home, away_score, home_score, state="in", detail="End 1st Quarter"):
+    """One event in the ESPN scoreboard shape verified live 2026-09-20
+    (https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard)."""
+    return {"id": event_id, "date": "2026-09-20T23:00Z", "name": f"{away} at {home}", "shortName": f"{away[:3]} @ {home[:3]}",
+            "competitions": [{"competitors": [
+                {"homeAway": "home", "score": home_score, "winner": False,
+                 "team": {"abbreviation": home[:3].upper(), "displayName": f"{home} Team", "shortDisplayName": home,
+                          "location": home}},
+                {"homeAway": "away", "score": away_score, "winner": True,
+                 "team": {"abbreviation": away[:3].upper(), "displayName": f"{away} Team", "shortDisplayName": away,
+                          "location": away}}],
+                "status": {"type": {"state": state, "shortDetail": detail, "completed": state == "post",
+                                    "displayClock": "0:00"}}}]}
+
+
+def espn_body(state="in"):
+    return {"events": [espn_event("401872933", "Alpha", "Bravo", "3", "0", state),
+                       espn_event("401872934", "Charlie", "Delta", "21", "7", state)]}
+
+
+def openfda_body():
+    """openFDA Drugs@FDA shape verified live 2026-09-20 (api.fda.gov/drug/drugsfda.json?limit=1)."""
+    return {"meta": {"results": {"total": 1, "limit": 5}}, "results": [{
+        "application_number": "NDA207871", "sponsor_name": "TEST PHARMA",
+        "openfda": {"brand_name": ["TESTDRUG"], "substance_name": ["TESTDRUG"]},
+        "submissions": [{"submission_type": "ORIG", "submission_number": "1", "submission_status": "AP",
+                         "submission_status_date": "20260101", "review_priority": "PRIORITY"}]}]}
+
+
+def signal_fetcher(url):
+    """One fetcher for every official signal source; unknown URLs raise (the adapter abstains)."""
+    body = None
+    if "api.weather.gov" in url:
+        body = nws_body()
+    elif "site.api.espn.com" in url:
+        body = espn_body()
+    elif "api.fda.gov" in url:
+        body = openfda_body()
+    if body is None:
+        raise RuntimeError(f"no signal fixture for {url}")
+    return body, json.dumps(body, separators=(",", ":")).encode()
 
 
 def evidence_hashes(base, rel):
@@ -177,10 +238,9 @@ class DeskCycleTests(unittest.TestCase):
         client = FixtureClient(fixtures)
         index = FD.load_series_index()
         errors = []
-        FD.ensure_series(client, index, FS.TRACKED_SERIES, errors)
+        FD.ensure_series(client, index, FS.TRACKED_SERIES + ["KXFDAAPPROVE"], errors)
         state = FD.read_json(os.path.join(self.tmp, "state.json")) or FD.new_state(now_ts)
-        body = nws_body()
-        cycle = FD.Cycle(client, now_ts, index, state, nws_fetcher=lambda url: (body, json.dumps(body).encode()))
+        cycle = FD.Cycle(client, now_ts, index, state, nws_fetcher=signal_fetcher)
         cycle.errors.extend(errors)
         summary = cycle.run()
         FD.save_series_index(index)
@@ -189,7 +249,7 @@ class DeskCycleTests(unittest.TestCase):
 
     def test_two_cycle_lifecycle(self):
         cycle, summary = self.run_cycle(build_fixtures(), T0)
-        self.assertEqual(summary["marketsSeen"], 7)
+        self.assertEqual(summary["marketsSeen"], 9)
         self.assertTrue(summary["nwsCaptured"])
         fills = [e for e in cycle.events if e["kind"] == "fill"]
         by_strategy = {}
@@ -212,6 +272,29 @@ class DeskCycleTests(unittest.TestCase):
         self.assertEqual(tick[0]["limitPrice"], 0.92)
         # Cheap tail personas: DipHunter picks the 1c T78 ticket or the 3c Fed ticket, sized to depth.
         self.assertIn("dip-hunter", by_strategy)
+        # ScorePulse: ESPN shows the market's team leading 21-7 (>= 8) -> YES at the 0.80 touch.
+        pulse = by_strategy.get("score-pulse")
+        self.assertTrue(pulse, f"score-pulse did not fill; espn signals={cycle.espn}; errors={cycle.signal_errors}")
+        self.assertEqual(pulse[0]["ticker"], "KXNFLGAME-26SEP20CCCDDD-CCC")
+        self.assertEqual(pulse[0]["side"], "yes")
+        self.assertEqual(pulse[0]["entryTouch"], 0.80)
+        self.assertIn("ESPN scoreboard", pulse[0]["reason"])
+        # FdaRecordCheck: openFDA Drugs@FDA lists an approved application -> YES at the 0.93 touch.
+        record = by_strategy.get("fda-record")
+        self.assertTrue(record, f"fda-record did not fill; fda signals={cycle.fda}; errors={cycle.signal_errors}")
+        self.assertEqual(record[0]["ticker"], "KXFDAAPPROVE-TST-26OCT01")
+        self.assertEqual(record[0]["side"], "yes")
+        self.assertIn("openFDA Drugs@FDA", record[0]["reason"])
+        # Committed per-strategy page + daily summary for the site.
+        for rel in ("strategies/score-pulse.json", "strategies/weather-bracket.json", "summary/2026-09-20.json"):
+            self.assertTrue(os.path.exists(os.path.join(self.tmp, rel)), rel)
+        page = FD.read_json(os.path.join(self.tmp, "strategies/score-pulse.json"))
+        self.assertEqual(page["strategy"]["username"], "ScorePulse")
+        self.assertEqual(page["account"]["fills"], len([e for e in cycle.events
+                                                        if e["strategyId"] == "score-pulse" and e["kind"] == "fill"]))
+        self.assertTrue(page["analysis"] and page["equity"])
+        day = FD.read_json(os.path.join(self.tmp, "summary/2026-09-20.json"))
+        self.assertEqual(day["fills"], sum(1 for e in cycle.events if e["kind"] == "fill"))
         # Ledger invariants per account: cash + entry notional + fees == starting cash (nothing realized yet).
         for strategy_id, account in cycle.state["accounts"].items():
             spent = sum(p["entryNotional"] + p["entryFee"] for p in account["positions"])

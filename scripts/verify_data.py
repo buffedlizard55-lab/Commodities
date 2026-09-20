@@ -12,6 +12,9 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(__file__))
+from compact_storage import check_index as check_compaction, read_maybe_compressed  # noqa: E402
+
 BASE = os.path.join(os.path.dirname(__file__), "..", "data", "season-2026")
 FAILURES = []
 PASSES = []
@@ -42,6 +45,64 @@ def fnum(cell):
     if cell == "":
         return None
     return float(cell)
+
+
+def verify_archive_backtest(season_dir):
+    """Invariants of the backtest over the collector's archived candlesticks (verified prices only)."""
+    base = os.path.join(season_dir, "backtest-archive")
+    if not os.path.exists(os.path.join(base, "competition.json")):
+        print("SKIP  archive backtest (not generated yet)")
+        return
+    with open(os.path.join(base, "competition.json")) as fh:
+        competition = json.load(fh)
+    with open(os.path.join(base, "trades.json")) as fh:
+        trades = json.load(fh)
+    with open(os.path.join(base, "leaderboard.json")) as fh:
+        board = json.load(fh)
+    check("archive.markets_gt_0", len(competition["markets"]) > 0, f"({len(competition['markets'])} markets)")
+    check("archive.bars_match_index", competition["verifiedBars"] == sum(m["bars"] for m in competition["markets"].values()),
+          f"({competition['verifiedBars']} bars)")
+    check("archive.all_markets_have_official_result",
+          all(m["result"] in ("yes", "no") for m in competition["markets"].values()))
+    check("archive.every_market_binds_a_candle_file",
+          all(m.get("file") and m.get("sha256") for m in competition["markets"].values()))
+    check("archive.candle_files_exist",
+          all(os.path.exists(os.path.join(season_dir, "forward", m["file"])) for m in competition["markets"].values()))
+    for trade in trades:
+        check(f"archive.trade.{trade['id']}.prices_in_[0,1]",
+              0 < trade["entryPrice"] < 1 and 0 <= trade["exitPrice"] <= 1, quiet=True)
+        check(f"archive.trade.{trade['id']}.no_look_ahead", trade["exitTs"] >= trade["entryTs"], quiet=True)
+        check(f"archive.trade.{trade['id']}.pnl_arithmetic",
+              abs(trade["pnl"] - (trade["exitNotional"] - trade["exitFee"] - trade["entryNotional"] - trade["entryFee"])) < 0.01,
+              quiet=True)
+        check(f"archive.trade.{trade['id']}.entry_at_verified_ask",
+              trade["entryPrice"] <= trade["entryBar"]["yes_ask_close"] + 1e-9 or trade["side"] == "no", quiet=True)
+    for row in board:
+        closed = [t for t in trades if t["strategyId"] == row["strategyId"]]
+        check(f"archive.{row['strategyId']}.realized_matches_trades",
+              abs(sum(t["pnl"] for t in closed) - row["realizedPnl"]) < 0.01, quiet=True)
+        check(f"archive.{row['strategyId']}.cash_identity",
+              abs((row["startingCash"] + row["realizedPnl"]) - row["cash"]) < 0.01, quiet=True)
+    print(f"INFO  archive backtest: {len(competition['markets'])} markets, {competition['verifiedBars']} bars, "
+          f"{len(trades)} trades, {len(board)} strategies")
+
+
+def verify_execution_realism(fwd):
+    """The desk's fills compared against the official trade tape (scripts/execution_realism.py)."""
+    summary_path = os.path.join(fwd, "execution", "summary.json")
+    if not os.path.exists(summary_path):
+        print("SKIP  execution realism (no official tape comparison yet)")
+        return
+    with open(summary_path) as fh:
+        summary = json.load(fh)
+    check("execution.has_comparisons", summary.get("compared", 0) > 0, f"({summary.get('compared')} fills compared)")
+    check("execution.every_comparison_binds_a_tape_hash",
+          all(c.get("tapeSha256") for c in summary.get("rows", [])) if summary.get("rows") else True, quiet=True)
+    check("execution.tape_url_is_official",
+          all(str(c.get("tapeUrl", "")).startswith("https://external-api.kalshi.com/trade-api/v2/markets/trades")
+              for c in summary.get("rows", [])) if summary.get("rows") else True, quiet=True)
+    print(f"INFO  execution realism: {summary.get('compared')} fills compared, median |desk-tape| "
+          f"{summary.get('medianAbsCentsDiff')}c, {summary.get('withinOneCentPct')}% of fills within 1c of a real print")
 
 
 def verify_forward_ledger():
@@ -89,17 +150,21 @@ def verify_forward_ledger():
         ev = event.get("evidence") or {}
         rel = ev.get("file")
         if rel not in hashes_by_file:
-            path = os.path.join(fwd, rel or "")
             found = set()
-            if rel and os.path.exists(path):
-                with open(path) as fh:
-                    for line in fh:
-                        if line.strip():
-                            row = json.loads(line)
-                            found.add(row["sha256"])
-                            if row.get("kind") == "orderbook":
-                                check(f"forward.evidence.{row['cycle']}.{row['ticker']}.self_hash",
-                                      hashlib.sha256(row["raw"].encode()).hexdigest() == row["sha256"], quiet=True)
+            # Evidence files older than 30 days may have been gzipped by scripts/compact_storage.py;
+            # read_maybe_compressed returns the original bytes either way, so the hash binding holds.
+            try:
+                blob = read_maybe_compressed(fwd, rel) if rel else None
+            except FileNotFoundError:
+                blob = None
+            if blob:
+                for line in blob.decode("utf-8").splitlines():
+                    if line.strip():
+                        row = json.loads(line)
+                        found.add(row["sha256"])
+                        if row.get("kind") == "orderbook":
+                            check(f"forward.evidence.{row['cycle']}.{row['ticker']}.self_hash",
+                                  hashlib.sha256(row["raw"].encode()).hexdigest() == row["sha256"], quiet=True)
             hashes_by_file[rel] = found
         check(f"forward.event.{event['positionId']}.{event['kind']}.evidence_bound", ev.get("sha256") in hashes_by_file.get(rel, set()),
               f"{rel} {ev.get('sha256', '')[:12]}", quiet=True)
@@ -109,6 +174,13 @@ def verify_forward_ledger():
         if event["kind"] == "fill":
             check(f"forward.event.{event['positionId']}.fill_sane", event["contracts"] > 0 and event["entryNotional"] > 0 and
                   event["entryFee"] >= 0 and event["unfilledContracts"] >= 0, quiet=True)
+    # storage compaction index (IRR-24): every entry must still verify byte-for-byte
+    if os.path.exists(os.path.join(fwd, "COMPRESSED.json")):
+        passed, failures = check_compaction(fwd)
+        check("forward.compaction.index_verifies", not failures, f"{passed} files verified; {failures[:3]}", quiet=True)
+    # archive backtest (scripts/backtest_archive.py) and execution-realism report, when present
+    verify_archive_backtest(os.path.join(fwd, ".."))
+    verify_execution_realism(fwd)
     forward_passes = sum(1 for p in PASSES if p.startswith("PASS forward."))
     forward_fails = sum(1 for f in FAILURES if f.startswith("FAIL forward."))
     print(f"INFO  forward ledger: {len(state['accounts'])} accounts, {len(events)} events, {forward_passes} checks passed, {forward_fails} failed")

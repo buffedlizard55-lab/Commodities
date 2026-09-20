@@ -164,3 +164,39 @@ repository. A future session should re-poll both windows and record which one pe
   live in the collector (NWS forecast archived; FDA and game personas trade the exchange price).
   Still open: KXFED full-history chunks 2–13, SEC/insider mapping, NBA official feed, ESPN scoreboard
   archive, other NWS cities, index/commodity range series for LeapMapper.
+
+## Season infrastructure added, 2026-09-20 (second session)
+
+- **`backtest-archive/`** — replay of `forward/candles/` by `scripts/backtest_archive.py`:
+  19 markets, 825 verified bars, 87 trades, 7 rule sets. Entries fill at a stored bar's verified ask,
+  exits at a later stored bid or at the official `result`; a market with no official result is never
+  traded; series with a non-quadratic fee type are skipped; the fee multiplier comes from the series
+  record (`KXMLBGAME` 0.5). `verify_data.py` re-checks the bar count against `candles/index.jsonl`,
+  the official results, the candle files' existence, the absence of look-ahead, every PnL line and
+  each strategy's cash identity.
+- **`forward/strategies/<id>.json`** — one committed page file per persona (rule, why, provenance,
+  account counters, positions, ledger events, equity rows, intents, evidence file list, analysis).
+  Written at the end of every cycle; `scripts/render_pages.py` re-renders them offline from the
+  committed ledger without inventing anything. These are the data behind `strategy.html?id=<id>`.
+- **`forward/summary/<YYYY-MM-DD>.json`** (+ `today.json`) — the UTC day's roll-up: cycles, API
+  reads, fills/exits/settlements, equity totals, open exposure, movers, signal-adapter status.
+  Every value is a sum of rows already in `cycles/` and `trades.jsonl`.
+- **`forward/execution/`** — trade-tape comparisons written by `scripts/execution_realism.py`
+  (`--live`, runner only). Not present yet: no comparison has run against the live tape (IRR-29).
+- **`history/`** — full official candle history per market from `scripts/archive_history.py`
+  (bounded chunks, one `chunks.jsonl` row per request with its URL and SHA-256). Empty until the
+  runner performs the KXFED archive.
+- **`../seasons.json`** — season index (`activeSeason`, per-season cycles/fills/settlements,
+  `frozen` flag) written by `scripts/season.py` through the collector; the site reads it instead of
+  hard-coding `season-2026`.
+- **Compaction (IRR-24)** — `scripts/compact_storage.py` gzips `evidence/` and `quotes/` captures
+  older than N days and records their hashes in `COMPRESSED.json`; append-only ledger files are never
+  compressed. `--check` exits 1 on a hash mismatch and runs in the workflow before every commit.
+- **New signal adapters** (`scripts/signals.py`): Census Gazetteer city centroids → NWS gridpoints
+  per `KXHIGH*` series; ESPN scoreboards for NFL / college football / NBA / MLB; openFDA Drugs@FDA
+  records for `KXFDA*` markets. Each capture is stored with its URL and SHA-256; an adapter that
+  answers nothing writes an explicit error note. Adapter caches are gitignored on purpose.
+- Registry now lists **69 sources** and irregularities **IRR-01..IRR-31** (NWS is a proxy, not a
+  settlement source, for 24 of 26 daily-temperature series; no PDUFA dates in Drugs@FDA; ESPN core
+  rejects Kalshi's strike UUID; execution realism untested live; archive sample too small; two
+  personas have not traded).
