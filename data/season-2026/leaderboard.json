@@ -1,0 +1,120 @@
+[
+  {
+    "strategyId": "spike-surfer",
+    "username": "SpikeSurfer",
+    "name": "Release Spike Surfer",
+    "rule": "Buy in the direction of a bar whose |last - previous last| >= 0.20 AND volume >= 3x the average of the prior 10 volume bars; exit at the first verified bid above entry, else hold to settlement.",
+    "why": "Chases information releases (CPI, score, Fed) when the verified tape shows both a price jump and heavy official volume. Loses big when the spike is a trap.",
+    "startingCash": 10000.0,
+    "equity": 10245.65,
+    "returnPct": 2.4565,
+    "trades": 1,
+    "wins": 1,
+    "losses": 0,
+    "bestTradePnl": 245.65,
+    "worstTradePnl": 245.65,
+    "realizedPnl": 245.65,
+    "feesPaid": 17.4995,
+    "slippagePaid": -263.15,
+    "marketsTraded": [
+      "KXNFLGAME-26SEP17DETBUF-BUF"
+    ],
+    "evidenceState": "verified backtest fills",
+    "rank": 1
+  },
+  {
+    "strategyId": "sure-thing",
+    "username": "SureThing",
+    "name": "Favorite Holder",
+    "rule": "Buy YES at the verified ask when bar close >= 0.90 and bar volume >= 100,000 contracts; hold to official settlement.",
+    "why": "Favorite-longshot-bias play: the literature says heavy favorites on event markets are slightly under-priced. Only enters when the verified tape proves a liquid 90+ cent favorite.",
+    "startingCash": 10000.0,
+    "equity": 10245.65,
+    "returnPct": 2.4565,
+    "trades": 1,
+    "wins": 1,
+    "losses": 0,
+    "bestTradePnl": 245.65,
+    "worstTradePnl": 245.65,
+    "realizedPnl": 245.65,
+    "feesPaid": 17.4995,
+    "slippagePaid": -263.15,
+    "marketsTraded": [
+      "KXNFLGAME-26SEP17DETBUF-BUF"
+    ],
+    "evidenceState": "verified backtest fills",
+    "rank": 2
+  },
+  {
+    "strategyId": "yield-sniper",
+    "username": "YieldSniper",
+    "name": "Certainty Carry",
+    "rule": "Buy NO at the verified NO ask (1 - YES bid) when NO ask is in [0.97, 0.99] (i.e. YES bid 0.01-0.03), the bar has volume, and official settlement is within 21 days; hold to settlement. NO asks below 0.97 are lottery tickets, not carry, and are rejected.",
+    "why": "Earns the residual on near-certain outcomes with a hard time horizon. Small, steady, documented; dies instantly if the favorite collapses.",
+    "startingCash": 10000.0,
+    "equity": 10000.18,
+    "returnPct": 0.0018,
+    "trades": 1,
+    "wins": 1,
+    "losses": 0,
+    "bestTradePnl": 0.18,
+    "worstTradePnl": 0.18,
+    "realizedPnl": 0.18,
+    "feesPaid": 0.0132,
+    "slippagePaid": -0.19,
+    "marketsTraded": [
+      "KXCPI-26AUG-T0.8"
+    ],
+    "evidenceState": "verified backtest fills",
+    "rank": 3
+  },
+  {
+    "strategyId": "dip-hunter",
+    "username": "DipHunter",
+    "name": "Cheap Dip Hunter",
+    "rule": "Buy YES at the verified ask when ask <= 0.05 on a bar with volume; exit at the first verified bid >= 2x entry, else hold to settlement.",
+    "why": "Return-seeking lottery-ticket play: pay pennies, need a 100% payoff or a double to quit. Honest exposure to one-sided books where the YES bid sits at 0.",
+    "startingCash": 10000.0,
+    "equity": 9998.71,
+    "returnPct": -0.0129,
+    "trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "bestTradePnl": -0.1,
+    "worstTradePnl": -1.2,
+    "realizedPnl": -1.29,
+    "feesPaid": 0.0815,
+    "slippagePaid": 1.21,
+    "marketsTraded": [
+      "KXCPI-26AUG-T0.8",
+      "KXFED-26SEP-T4.75"
+    ],
+    "evidenceState": "verified backtest fills",
+    "rank": 4
+  },
+  {
+    "strategyId": "cross-chaser",
+    "username": "CrossChaser",
+    "name": "Momentum Cross (Pine-style)",
+    "rule": "Long when last price > slow SMA and fast SMA > slow SMA (daily 5/10, hourly 3/6); exit when last price < slow SMA at the verified bid; else hold to settlement.",
+    "why": "Classic trend-following (PinePilot-style) on a verified tape. Buys continuation after breakouts; pays the spread both ways.",
+    "startingCash": 10000.0,
+    "equity": 9950.74,
+    "returnPct": -0.4926,
+    "trades": 4,
+    "wins": 1,
+    "losses": 3,
+    "bestTradePnl": 238.7,
+    "worstTradePnl": -283.34,
+    "realizedPnl": -49.26,
+    "feesPaid": 229.1295,
+    "slippagePaid": -181.41,
+    "marketsTraded": [
+      "KXCPI-26AUG-T0.8",
+      "KXFED-26SEP-T4.75",
+      "KXNFLGAME-26SEP17DETBUF-BUF"
+    ],
+    "evidenceState": "verified backtest fills",
+    "rank": 5
+  }
+]

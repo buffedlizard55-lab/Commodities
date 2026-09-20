@@ -1,0 +1,23 @@
+# Source: GET https://external-api.kalshi.com/trade-api/v2/series/KXNFLGAME/markets/KXNFLGAME-26SEP17DETBUF-BUF/candlesticks?start_ts=1789646400&end_ts=1789697600&period_interval=60
+# Market: KXNFLGAME-26SEP17DETBUF-BUF "Buffalo wins" (DET Lions @ BUF Bills, Sep 17, 2026).
+# result=yes, settlement_value 1.00, settlement_ts=2026-09-18T03:34:55.133992Z, close_time=2026-09-18T03:29:53Z.
+# Retrieved 2026-09-19 (UTC). 14 hourly bars, 2026-09-17 12:00Z -> 2026-09-18 01:00Z (end_ts).
+# The API returned no bar for the 01:00Z-02:00Z hour (none present in the response; not interpolated).
+# Cross-check: SUM(volume)=8989894.63; last open_interest 6349995.83; last price close 0.94.
+# Narrative: price held 0.68/0.69 bid/ask for 10 straight hours, then closed 0.95 on the
+# 23:00-00:00 UTC bar (vol 3,727,803.14 contracts, ~13x the preceding hour) and 0.94 the next bar.
+end_period_ts,price_open,price_high,price_low,price_close,price_mean,price_previous,volume,open_interest,yes_bid_close,yes_ask_close
+1789646400,0.69,0.69,0.68,0.69,0.6895,0.69,123102.20,1114722.56,0.68,0.69
+1789650000,0.69,0.69,0.68,0.69,0.6897,0.69,27210.31,1140623.47,0.68,0.69
+1789653600,0.69,0.69,0.68,0.69,0.6897,0.69,60420.86,1198015.47,0.68,0.69
+1789657200,0.69,0.69,0.68,0.69,0.6897,0.69,82129.69,1275716.27,0.68,0.69
+1789660800,0.69,0.69,0.68,0.69,0.6894,0.69,86490.79,1358113.87,0.68,0.69
+1789664400,0.69,0.69,0.68,0.69,0.6858,0.69,77702.68,1429162.53,0.68,0.69
+1789668000,0.69,0.69,0.68,0.69,0.6896,0.69,248865.16,1570021.44,0.68,0.69
+1789671600,0.69,0.69,0.68,0.69,0.6896,0.69,93454.02,1657215.10,0.68,0.69
+1789675200,0.69,0.69,0.68,0.69,0.6898,0.69,215567.42,1858058.19,0.68,0.69
+1789678800,0.69,0.70,0.68,0.70,0.6982,0.69,282642.38,2037998.19,0.69,0.70
+1789682400,0.70,0.70,0.69,0.70,0.6997,0.70,457661.27,2731437.64,0.69,0.70
+1789686000,0.70,0.70,0.69,0.69,0.6996,0.70,724830.69,3427644.61,0.69,0.70
+1789689600,0.70,0.95,0.68,0.95,0.8495,0.69,3727803.14,5327552.61,0.94,0.95
+1789693200,0.94,0.97,0.90,0.94,0.9411,0.95,2782014.02,6349995.83,0.93,0.94

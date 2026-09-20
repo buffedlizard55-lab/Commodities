@@ -16,6 +16,7 @@
       </a>
       <nav class="top-nav" aria-label="Primary navigation">
         <a href="#competition">Competition</a>
+        <a href="#backtest">Backtest</a>
         <a href="#live-desk">Live desk</a>
         <a href="#strategies">Strategies</a>
         <a href="#ledger">Ledger</a>
@@ -46,7 +47,7 @@
         </div>
         <div class="truth-card">
           <span class="truth-icon">✓</span>
-          <div><strong>Truth boundary</strong><p>Only an API-confirmed fill enters the leaderboard. A strategy idea or a quote plan is not a trade.</p></div>
+          <div><strong>Truth boundary</strong><p>Backtest fills come only from the committed verified Kalshi tape; live fills only from a fresh API-confirmed book. A strategy idea or a quote plan is not a trade.</p></div>
         </div>
       </div>
     </section>
@@ -58,7 +59,7 @@
       </article>
       <article class="notice notice-blue">
         <div class="notice-icon">↻</div>
-        <div><strong>Forward test when history is absent</strong><p>No historical quote file is bundled here, so this build makes no backtest claim. It records timestamped live observations and uses Kalshi’s documented historical endpoints as the next research path.</p></div>
+        <div><strong>Backtest on a committed verified tape</strong><p>Season 2026 now bundles official Kalshi candlesticks captured 2026-09-19 (with SHA-256 hashes and cross-checks). Backtest fills use verified asks/bids and official settlements; the live desk keeps forward-testing against the API at runtime.</p></div>
       </article>
     </section>
 
@@ -81,9 +82,37 @@
       </div>
     </section>
 
+    <section id="backtest" class="section backtest-section" aria-labelledby="backtest-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">02 · backtest &amp; replay</p><h2 id="backtest-title">Committed season memory — verified tape only</h2></div>
+        <div class="heading-meta"><span class="live-pill" id="season-memory-state">Loading committed data…</span></div>
+      </div>
+      <div class="desk-intro">
+        <div class="desk-callout"><span class="callout-kicker">The verification line</span><strong>Every bar below is an official Kalshi response, stored in this repository.</strong><p>Candlesticks were captured from <code>GET /series/{series}/markets/{ticker}/candlesticks</code> on 2026-09-19 and committed with SHA-256 hashes. Entries fill at the bar’s verified ask, exits at the verified bid, and settlements use the official result and timestamp. No synthetic bars, no reconstructed prices.</p></div>
+        <div class="desk-facts"><div><span>Data collected</span><b id="bt-collected">—</b></div><div><span>Verified markets</span><b id="bt-markets">—</b></div><div><span>Backtest bars</span><b id="bt-bars">—</b></div><div><span>Taker fee model</span><b>0.07·q·p·(1−p)</b></div></div>
+      </div>
+      <div class="backtest-grid">
+        <div class="panel">
+          <div class="panel-header"><div><h3>Committed leaderboard</h3><p id="bt-board-note">data/season-2026/leaderboard.json</p></div><span class="source-badge">repo-committed</span></div>
+          <div class="table-shell"><table id="backtest-leaderboard"><thead><tr><th>Rank</th><th>Username</th><th>Equity</th><th>Return</th><th>Realized PnL</th><th>Trades</th><th>Evidence state</th></tr></thead><tbody><tr><td colspan="7" class="empty-cell">Loading committed memory…</td></tr></tbody></table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div><h3>Upcoming forward trades</h3><p id="bt-intents-note">Proposed from the committed 2026-09-19 live snapshot — not fills</p></div><span class="source-badge">proposed</span></div>
+          <div class="table-shell"><table id="backtest-intents"><thead><tr><th>Strategy</th><th>Contract</th><th>Side</th><th>Price</th><th>Displayed depth</th><th>Reason</th></tr></thead><tbody><tr><td colspan="6" class="empty-cell">Loading committed memory…</td></tr></tbody></table></div>
+        </div>
+      </div>
+      <div class="subsection-title">Every backtest trade (verified fills)</div>
+      <div class="table-shell ledger-shell"><table id="backtest-trades"><thead><tr><th>Strategy</th><th>Market</th><th>Side</th><th>Contracts</th><th>Entry (verified)</th><th>Exit (verified)</th><th>Fees</th><th>Slippage</th><th>PnL</th></tr></thead><tbody><tr><td colspan="9" class="empty-cell">Loading committed memory…</td></tr></tbody></table></div>
+      <div class="subsection-title">Why it worked / didn’t</div>
+      <div id="backtest-explanations" class="explain-grid"></div>
+      <div class="subsection-title">Committed data files (SHA-256 bound)</div>
+      <div id="backtest-files" class="file-list"></div>
+      <p class="micro-note"><span>Pipeline</span> <code>scripts/verify_data.py</code> re-checks every stored file (50 assertions) and <code>scripts/build_competition.py</code> recomputes this memory deterministically from the stored CSVs. The browser cannot edit these files; live-desk paper fills stay in local storage and are separate from the committed backtest.</p>
+    </section>
+
     <section id="live-desk" class="section desk-section" aria-labelledby="desk-title">
       <div class="section-heading">
-        <div><p class="eyebrow">02 · upcoming trades</p><h2 id="desk-title">Open-contract simulation desk</h2></div>
+        <div><p class="eyebrow">03 · upcoming trades</p><h2 id="desk-title">Open-contract simulation desk</h2></div>
         <div class="section-actions"><button class="button button-small button-ghost" id="load-open-button" type="button">Load open contracts</button><a class="text-link" href="https://external-api.kalshi.com/trade-api/v2/markets?status=open" target="_blank" rel="noreferrer">Official JSON ↗</a></div>
       </div>
       <div class="desk-intro">
@@ -104,30 +133,30 @@
     </section>
 
     <section id="strategies" class="section" aria-labelledby="strategies-title">
-      <div class="section-heading"><div><p class="eyebrow">03 · research roster</p><h2 id="strategies-title">Strategies under test</h2></div><div class="filter-row"><button class="filter-button active" data-filter="all" type="button">All <span id="strategy-count">—</span></button><button class="filter-button" data-filter="live-book" type="button">Live-book eligible</button><button class="filter-button" data-filter="blocked" type="button">Source-gated</button></div></div>
+      <div class="section-heading"><div><p class="eyebrow">04 · research roster</p><h2 id="strategies-title">Strategies under test</h2></div><div class="filter-row"><button class="filter-button active" data-filter="all" type="button">All <span id="strategy-count">—</span></button><button class="filter-button" data-filter="live-book" type="button">Live-book eligible</button><button class="filter-button" data-filter="backtest" type="button">Backtested (committed)</button><button class="filter-button" data-filter="blocked" type="button">Source-gated</button></div></div>
       <p class="section-lede">Every username has a falsifiable rule and an evidence gate. The roster aims at returns, not a risk-management score. A strategy is not allowed to create a trade until the data needed for its rule and the exchange price are both present.</p>
       <div id="strategy-grid" class="strategy-grid"></div>
     </section>
 
     <section id="method" class="section split-section" aria-labelledby="method-title">
-      <div><p class="eyebrow">04 · research method</p><h2 id="method-title">Backtest only when the tape is real.</h2><p class="section-lede">The project separates three states that are often mixed together: historical replay, live forward testing, and a research hypothesis. The UI never turns a hypothesis into a result.</p></div>
+      <div><p class="eyebrow">05 · research method</p><h2 id="method-title">Backtest only when the tape is real.</h2><p class="section-lede">The project separates three states that are often mixed together: historical replay, live forward testing, and a research hypothesis. The UI never turns a hypothesis into a result.</p></div>
       <div class="method-steps">
         <article class="method-step"><span>01</span><div><h3>Verify the event</h3><p>Read the market ticker, status, close time, title, settlement terms and official API timestamp. A link to a third-party summary is not settlement evidence.</p></div></article>
         <article class="method-step"><span>02</span><div><h3>Verify the executable book</h3><p>Fetch the open market’s order book, preserve the raw level prices and quantities, and consume depth level by level. A midpoint is a mark, not a fill.</p></div></article>
         <article class="method-step"><span>03</span><div><h3>Log the fill ledger</h3><p>Store entry and exit times, side, VWAP, requested and filled size, level-by-level liquidity, slippage, fee assumption, source URL and market close time.</p></div></article>
-        <article class="method-step"><span>04</span><div><h3>Explain the outcome</h3><p>Leaderboard commentary is derived from observed fills. No fills means no return claim. A future backtest must use Kalshi historical candlesticks or trades, never reconstructed or invented bars.</p></div></article>
+        <article class="method-step"><span>04</span><div><h3>Explain the outcome</h3><p>Leaderboard commentary is derived from observed fills. No fills means no return claim. The committed backtest uses only stored Kalshi candlesticks and official settlements, never reconstructed or invented bars; every future backtest must meet the same bar.</p></div></article>
       </div>
     </section>
 
     <section id="ledger" class="section" aria-labelledby="ledger-title">
-      <div class="section-heading"><div><p class="eyebrow">05 · audit ledger</p><h2 id="ledger-title">Every placed simulation, readable</h2></div><div class="section-actions"><button id="export-json" class="button button-small button-ghost" type="button">Export JSON</button><button id="export-csv" class="button button-small button-ghost" type="button">Export CSV</button><button id="clear-ledger" class="button button-small button-danger" type="button">Clear local ledger</button></div></div>
+      <div class="section-heading"><div><p class="eyebrow">06 · audit ledger</p><h2 id="ledger-title">Every placed simulation, readable</h2></div><div class="section-actions"><button id="export-json" class="button button-small button-ghost" type="button">Export JSON</button><button id="export-csv" class="button button-small button-ghost" type="button">Export CSV</button><button id="clear-ledger" class="button button-small button-danger" type="button">Clear local ledger</button></div></div>
       <div class="ledger-tabs" role="tablist"><button class="ledger-tab active" data-ledger-tab="trades" type="button">Placed simulations <span id="trade-count">0</span></button><button class="ledger-tab" data-ledger-tab="upcoming" type="button">Upcoming intents <span id="intent-count">0</span></button><button class="ledger-tab" data-ledger-tab="observations" type="button">Verified observations <span id="observation-count">0</span></button></div>
       <div class="table-shell ledger-shell"><table id="ledger-table"><thead></thead><tbody><tr><td class="empty-cell">No records yet. A record is created only after a live API response or an intent generated from one.</td></tr></tbody></table></div>
       <p class="ledger-footnote">Storage is local to this browser under a versioned schema. Export regularly if this record matters. Raw API snapshots are intentionally compact and capped; fill records retain the exact execution evidence needed for review.</p>
     </section>
 
     <section id="sources" class="section sources-section" aria-labelledby="sources-title">
-      <div class="section-heading"><div><p class="eyebrow">06 · sources &amp; irregularities</p><h2 id="sources-title">Links for manual review</h2></div><span class="source-updated">Registry version 1 · <span id="registry-date">2026-09-19</span></span></div>
+      <div class="section-heading"><div><p class="eyebrow">07 · sources &amp; irregularities</p><h2 id="sources-title">Links for manual review</h2></div><span class="source-updated">Registry version 1 · <span id="registry-date">2026-09-19</span></span></div>
       <div class="source-layout"><div id="source-list" class="source-list"></div><aside class="irregularities"><h3>Flagged boundaries</h3><ul id="irregularity-list"></ul></aside></div>
       <div class="social-note"><strong>Social and community research:</strong> Reddit, YouTube, Facebook, X and other social posts may help discover hypotheses, but this build treats them as discovery-only. They never verify a Kalshi price, fill, settlement result or date. A strategy must be re-expressed against a primary source before it can enter the live roster.</div>
     </section>
