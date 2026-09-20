@@ -140,3 +140,27 @@ repository. A future session should re-poll both windows and record which one pe
 - **Fresh KXBTC forward markets**: the committed forward intents reference 26SEP2017 markets that
   close 2026-09-20T21:00:00Z; a future desk refresh should pick up later-dated KXBTC markets.
 - **CEO / NWS / SEC / FDA / NCAA / MLB / NFL / NBA adapters**: unchanged (see above).
+
+## Forward desk added, 2026-09-20 (automated collector)
+
+- `forward/` is written by `scripts/forward_desk.py` on GitHub Actions (`.github/workflows/forward-desk.yml`,
+  cron `7,37 * * * *` on the default branch, manual dispatch on any branch). It is **excluded from
+  `SHA256SUMS.txt`** because it changes every cycle; it binds itself through per-record `sha256`
+  fields (order-book evidence rows are self-hashing: `sha256(raw) == sha256`) and its git history.
+  `scripts/verify_data.py` checks the ledger invariants on every run.
+- Endpoints per cycle (all official, unauthenticated): `GET /series/{ticker}` (cached 7 days),
+  `GET /markets?series_ticker=…&status=open&limit=200` (+`exchange_index` for shards 2/3),
+  `GET /markets/{ticker}/orderbook?depth=20`, `GET /markets/{ticker}` (settlement),
+  `GET /series/{s}/markets/{t}/candlesticks` (period 1440 for the SMA persona, period 1 for the
+  15-minute panic-fade persona), and `https://api.weather.gov/gridpoints/OKX/34,45/forecast` (NWS).
+- Universe catalog: `data/universe/series-catalog.json` from `GET /series?category=…&include_volume=true`
+  for 13 categories (13,607 series on 2026-09-20; `discovery-log.jsonl` holds the response hashes).
+- Dry runs discarded before the first counted cycle: `20260920T031222Z`, `20260920T031848Z` (IRR-17;
+  still visible in git history at commits 33c47ad / 36c4089). First counted cycle: `20260920T032126Z`.
+- Resolved gaps from the list above: **KXGOLD liquidity** — the liquid gold series is `KXGOLD15M`
+  (settled markets show 140k–154k contracts each; `KXGOLDH` stays thin); **fresh KXBTC forward
+  markets** — the desk now refreshes its own universe every cycle; **CEO** — no MasterSite project
+  exists (verified negative), Kalshi CEO series are traded directly; **NWS / FDA / game adapters** —
+  live in the collector (NWS forecast archived; FDA and game personas trade the exchange price).
+  Still open: KXFED full-history chunks 2–13, SEC/insider mapping, NBA official feed, ESPN scoreboard
+  archive, other NWS cities, index/commodity range series for LeapMapper.

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "registryDate": "2026-09-20",
   "verificationRule": "A live fill is accepted only from a Kalshi market-data response captured by this application. Project pages and external sources below are research references or gates; they never become exchange-price evidence by themselves.",
   "sources": [
@@ -470,6 +470,105 @@
       "use": "Kalshi gold contract for MetalMomentum (hourly 1-minute-candle strike binaries, settled by Pyth gold)",
       "status": "verified 2026-09-20",
       "note": "Series KXGOLDH (Commodities, frequency hourly, fee quadratic x1, settlement source Pyth Metal.Index.1OZGOLD/USD). Markets are strike binaries per hourly event (KXGOLDH-YYMMDDHH), events created ~2h before occurrence. Liquidity immature at verification: settled market KXGOLDH-26SEP1920-T4407.99 (result no, settlement value 4376.42, settlement_ts 2026-09-20T01:03:14.503804Z) shows zero-volume candlesticks with only a 0.24->0.03 yes-ask. KXGOLDH is therefore forward-desk watch only, not backtest-ready."
+    },
+    {
+      "id": "kalshi-series-list",
+      "name": "Kalshi series list by category (GET /series)",
+      "url": "https://external-api.kalshi.com/trade-api/v2/series?category=Companies&include_volume=true",
+      "kind": "primary exchange",
+      "use": "Universe discovery: 13,607 series across 13 categories captured 2026-09-20 into data/universe/series-catalog.json (ticker, tags, fee_type, fee_multiplier, exchange_index, volume_fp, settlement sources)",
+      "status": "scheduled (weekly)",
+      "note": "scripts/discover_universe.py. CEO personas use series tagged 'CEOs' whose ticker names a CEO market; FDA personas use KXFDA* series tagged 'Medicine'. Series records carry per-series fee multipliers (KXMLBGAME = 0.5) and shard ids (KXMLBGAME/KXNBAGAME = 3, crypto/gold = 2)."
+    },
+    {
+      "id": "kalshi-orderbook-live",
+      "name": "Kalshi order book (GET /markets/{ticker}/orderbook?depth=20)",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXHIGHNY-26SEP20-T71/orderbook?depth=10",
+      "kind": "primary exchange",
+      "use": "Executable depth for every forward-desk fill and exit; the verbatim response is stored in data/season-2026/forward/evidence/YYYY-MM-DD.jsonl with its SHA-256",
+      "status": "scheduled (every 30 min)",
+      "note": "Book levels are YES bids and NO bids (ascending, best last). Asks are derived by the documented reciprocal rule. Fractional contract counts are official (FixedPointCount, 0.01 granularity)."
+    },
+    {
+      "id": "kalshi-market-record",
+      "name": "Kalshi market record (GET /markets/{ticker})",
+      "url": "https://docs.kalshi.com/api-reference/market/get-market",
+      "kind": "primary exchange",
+      "use": "Settlement of forward positions: result + settlement_ts + settlement_value_dollars; previous_price_dollars is officially 'the last traded YES contract a day ago' (used by the 24h-momentum personas)",
+      "status": "scheduled",
+      "note": "liquidity_dollars is deprecated (always 0) and is ignored. finalized markets without a yes/no result are held and flagged, never inferred."
+    },
+    {
+      "id": "kalshi-candles-1m",
+      "name": "Kalshi 1-minute candlesticks for open 15-minute markets",
+      "url": "https://docs.kalshi.com/api-reference/market/get-market-candlesticks",
+      "kind": "primary exchange",
+      "use": "PanicFader reads the last 20 minutes of official 1-minute closes on open KXBTC15M / KXETH15M / KXGOLD15M markets; PinePilotX reads 45 days of daily closes on KXFED / KXCPI / KXCPIYOY / KXFEDDECISION",
+      "status": "scheduled",
+      "note": "Only the official candlestick endpoint is used; no tick history is reconstructed."
+    },
+    {
+      "id": "kalshi-gold-15m",
+      "name": "Kalshi KXGOLD15M - Gold 15-minute (shard 2, Pyth-settled)",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXGOLD15M&status=settled&limit=2&exchange_index=2",
+      "kind": "primary exchange",
+      "use": "The liquid gold series: settled markets show volume_fp 140,925 and 153,523 per 15-minute market (2026-09-19). Traded forward by MetalMomentum / TailSprint15 / PanicFader",
+      "status": "verified 2026-09-20",
+      "note": "Settlement source per series record: Pyth Metal.Index.1OZGOLD/USD (feed 3712). Price grid tapered_deci_cent (0.001 steps below 0.10 and above 0.90). Weekend hours per product_metadata."
+    },
+    {
+      "id": "kalshi-weather-ny",
+      "name": "Kalshi KXHIGHNY - NYC daily high temperature brackets",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXHIGHNY&status=open&limit=3",
+      "kind": "primary exchange",
+      "use": "Weather personas. Markets expose strike_type (greater / less / between) with floor_strike / cap_strike; settlement source is The Weather Company's CLINYC value (rules_primary)",
+      "status": "verified 2026-09-20",
+      "note": "Bracket membership is evaluated from the official strike fields, never parsed from titles."
+    },
+    {
+      "id": "nws-central-park",
+      "name": "NWS API point forecast - Central Park (gridpoint OKX/34,45)",
+      "url": "https://api.weather.gov/gridpoints/OKX/34,45/forecast",
+      "kind": "official government data",
+      "use": "Point-in-time forecast high for the KXHIGHNY event date; archived every cycle in data/season-2026/forward/signals/nws-central-park.jsonl with the response hash",
+      "status": "scheduled",
+      "note": "Resolved from https://api.weather.gov/points/40.7789,-73.9692 on 2026-09-20. The NWS forecast is a signal, not the settlement source (The Weather Company)."
+    },
+    {
+      "id": "kalshi-rate-limits",
+      "name": "Kalshi rate limits and tiers",
+      "url": "https://docs.kalshi.com/getting_started/rate_limits.md",
+      "kind": "primary exchange docs",
+      "use": "Collector pacing: ~8 reads/s ceiling with exponential backoff on 429 (documented guidance)",
+      "status": "reference",
+      "note": "Basic tier read budget 200 tokens/s (10 tokens per default request). Unauthenticated reads are paced conservatively."
+    },
+    {
+      "id": "reddit-btc15-scalp",
+      "name": "r/KalshiBTCUporDown15 - 'My full strategy for BTC Up or Down 15' (limit buy 75-80c, take-profit 95c)",
+      "url": "https://www.reddit.com/r/KalshiBTCUporDown15/comments/1ribidl/my_full_strategy_for_btc_up_to_down_15/",
+      "kind": "community (discovery only)",
+      "use": "Recreated mechanically as HighProbScalp (entry band 75-80c, take-profit at a 95c bid); the poster's discretionary indicators are not reproduced",
+      "status": "discovery",
+      "note": "Verified to exist via web search on 2026-09-20 (reddit.com blocks direct fetches from this sandbox). Community claims verify nothing; only the desk's official-price ledger counts."
+    },
+    {
+      "id": "github-actions-collector",
+      "name": "Forward-desk collector workflow (GitHub Actions)",
+      "url": "https://github.com/buffedlizard55-lab/Commodities/actions/workflows/forward-desk.yml",
+      "kind": "project infrastructure",
+      "use": "Runs scripts/forward_desk.py twice an hour (cron 7,37 * * * *) on the default branch and commits data/season-2026/forward/; weekly universe refresh Monday 06:17 UTC",
+      "status": "scheduled",
+      "note": "GitHub schedules only run on the default branch, may be delayed under load, and are disabled after 60 days without repository activity; each cycle records its real wall-clock time in cycles/*.jsonl."
+    },
+    {
+      "id": "kalshi-paper-sim-sibling",
+      "name": "KalshiPaperSim (sibling project, reverse-engineered for the competition mechanics)",
+      "url": "https://github.com/buffedlizard55-lab/KalshiPaperSim",
+      "kind": "user project",
+      "use": "Reference for the Live Desk / Desk Season mechanics: cut-off ladders, close_time semantics, attribution invariant equity = realized + unrealized - fees, unranked-until-fill rule, 10% volume cap",
+      "status": "reviewed 2026-09-20",
+      "note": "Its historical replay results (e.g. HighProb_Scalp8095 -65.03%) are that project's numbers, not verified here."
     }
   ],
   "irregularities": [
@@ -487,6 +586,15 @@
     "IRR-12 · (resolved 2026-09-20) The 2026-09-19 build was transcribed in a sandbox without direct egress. On 2026-09-20 every MANIFEST URL was re-fetched via the sandbox fetch tool; raw JSON responses are stored under data/season-2026/raw/ (SHA-256 bound) and all three candle CSVs were field-by-field diffed against the raw (KXCPI 44 bars OK, KXFED-90d 72 bars OK, NFL 14 bars OK after the IRR-15a fix). The settled-market, orderbook (byte-exact), trade-tape and series refetches match the committed files; the KXFED open limit=4 refetch is a dynamic list - 3 of 4 tickers (KXFED-27APR-T5.50/T5.75/T6.00) match field-for-field and the 4th differs only because new 27APR strikes were created after the 2026-09-19 snapshot. FRED and Stooq remain unreachable from this sandbox (IRR-13).",
     "IRR-13 · (resolved 2026-09-20, with gap) FRED's CSV endpoint and Stooq remain unreachable from this sandbox (error page / blocked connection, both re-tested 2026-09-20). The official LBMA JSON feed (prices.lbma.org.uk/json/gold_am.json) IS reachable; rows 2026-06-15..2026-09-18 are stored verbatim (data/season-2026/raw/lbma-gold-am-2026.json). Kalshi's own gold series KXGOLDH (shard 2, Pyth-settled, hourly 1-minute-candle strikes) was discovered and verified, but recent KXGOLDH events show zero volume (liquidity immature), so MetalMomentum still cannot produce verified fills - it moves from 'no source at all' to 'reference data verified, fills gated on Kalshi gold liquidity'.",
     "IRR-14 · (resolved 2026-09-20) The per-market trade-tape parameter is `ticker` (not market_ticker): GET /trade-api/v2/markets/trades?ticker=<TICKER>&limit=N, verified 2026-09-20 - the call for KXBTC-26SEP2017-T90749.99 returned exactly 1 trade matching that market's volume_fp (raw stored in data/season-2026/raw/refetch-20260920-markets-trades-ticker-KXBTC-26SEP2017-T90749.99.json). The all-market sample in trade-tape-sample.csv remains as captured on 2026-09-19.",
-    "IRR-15 · (2026-09-20) (a) The committed NFL hourly CSV (transcribed 2026-09-19) carried a one-bar transcription shift: price_mean on bars 1789660800/1789664400/1789668000/1789675200 and price_close (with ask) on bar 1789678800 (committed 0.70 vs official 0.69). Fixed by mechanical regeneration from the canonical raw (scripts/candles_from_raw.py --diff now clean on all 14 bars). Backtest impact: CrossChaser's entry moved from the 21:00Z bar (where the verified ask was 0.69) to the 22:00Z bar (where 0.70 was the verified ask) - same entry price 0.70, 7142 contracts, exit 0.69 bid, identical PnL -$283.34, fees and leaderboard unchanged; the fill is now attributed to the bar on which that price was actually verified. (b) Exchange-side inconsistency: two official candlesticks calls minutes apart for KXNFLGAME-26SEP17DETBUF-BUF returned different volume/OI/close/mean for bars 1789678800-1789686000 - the narrow window (start_ts=1789657200&end_ts=1789686000) shifts values one hour later and introduces OI states (188254.68, 2295532.84) absent from the documented window. The documented MANIFEST URL (start_ts=1789646400&end_ts=1789697600&period_interval=60) is treated as canonical; flagged for a future session to re-check whether the exchange re-published that window."
+    "IRR-15 · (2026-09-20) (a) The committed NFL hourly CSV (transcribed 2026-09-19) carried a one-bar transcription shift: price_mean on bars 1789660800/1789664400/1789668000/1789675200 and price_close (with ask) on bar 1789678800 (committed 0.70 vs official 0.69). Fixed by mechanical regeneration from the canonical raw (scripts/candles_from_raw.py --diff now clean on all 14 bars). Backtest impact: CrossChaser's entry moved from the 21:00Z bar (where the verified ask was 0.69) to the 22:00Z bar (where 0.70 was the verified ask) - same entry price 0.70, 7142 contracts, exit 0.69 bid, identical PnL -$283.34, fees and leaderboard unchanged; the fill is now attributed to the bar on which that price was actually verified. (b) Exchange-side inconsistency: two official candlesticks calls minutes apart for KXNFLGAME-26SEP17DETBUF-BUF returned different volume/OI/close/mean for bars 1789678800-1789686000 - the narrow window (start_ts=1789657200&end_ts=1789686000) shifts values one hour later and introduces OI states (188254.68, 2295532.84) absent from the documented window. The documented MANIFEST URL (start_ts=1789646400&end_ts=1789697600&period_interval=60) is treated as canonical; flagged for a future session to re-check whether the exchange re-published that window.",
+    "IRR-16 · (2026-09-20) The committed SHA256SUMS.txt carried a stale hash for MANIFEST.md (9007334d… vs the actual 9538a3ed…) because the manifest was edited after the sums were written in the previous session. Regenerated by scripts/verify_data.py; the workflow now re-runs the verifier on every collector cycle so the sums can no longer drift.",
+    "IRR-17 · (2026-09-20) The first two live collector cycles (20260920T031222Z, 20260920T031848Z; commits 33c47ad and 36c4089 in git history) were dry runs: the first swept displayed depth without a limit price and the second used an earlier mark policy/CSV schema. Both ledgers were deleted before the season's first counted cycle (20260920T032126Z) so the committed season starts on one consistent fill and mark policy. Nothing from the dry runs is counted.",
+    "IRR-18 · (2026-09-20) Kalshi's previous_price_dollars is officially 'the last traded YES contract a day ago', not the previous tick. The 24h-momentum personas (TickChaser, SpikeSurfer) therefore ignore markets younger than 24 hours, and the community 'panic fade' was re-expressed on official 1-minute candlesticks instead of last-vs-previous.",
+    "IRR-19 · (2026-09-20) The 'CEOs' tag on Kalshi Companies series also covers non-CEO markets (e.g. KXWEALTHY, KXBIGTECHLAYOFF, KXUNSEC); the CEO persona universe is restricted to tagged series whose ticker names a CEO market. Likewise KXFDA* includes FDA-politics series (KXFDA, KXFDABANS, KXFDANOM…); the FDA persona uses only KXFDA* series tagged 'Medicine'. MasterSite still has no CEO project (re-verified against its 2026-09-20 data file), so IRR-08 is closed as a verified negative.",
+    "IRR-20 · (2026-09-20) Backtest slippage attribution bug: settlement exits were charged (mid - payout) x q as 'slippage' and the entry half-spread used the last bar's mid, ignoring the held side. Fixed (settlement slippage = 0, side-aware entry half-spread from the entry bar). Equity, returns and PnL were unaffected; only the informational slippage column changed (SpikeSurfer -263.15 -> 26.315).",
+    "IRR-21 · (2026-09-20) The previous session's src/app.js called an undefined loadSeasonMemory() at boot and used normalizeMarket without importing it, so the published page never rendered the Backtest section and never reconciled settlements. Both fixed; src/season.js now renders the committed memory and the forward desk, and a jsdom smoke test exercises every section without console errors.",
+    "IRR-22 · (2026-09-20) Forward-desk fills are paper fills against displayed depth captured by a REST read: queue position, latency and market impact are not simulated, and large resting levels (e.g. 254,715 contracts at 1c on KXNCAAFGAME-26SEP19UTSATEX-UTSA) are taken at face value. A real order could fill differently; every fill stores the verbatim book so the assumption can be audited.",
+    "IRR-23 · (2026-09-20) Marks: strategies are ranked on equity = cash + contracts x (best displayed bid, else last official trade, else 0); the bid-only liquidation equity is shown alongside. Thin one-sided books make the two diverge (a 1c ticket with no bid marks at the last trade, liquidates at 0) until settlement resolves it.",
+    "IRR-24 · (2026-09-20) Storage growth: each cycle appends roughly 10-30 KB (books, quotes, intents, equity rows). A full year at 48 cycles/day is a few hundred MB uncompressed in git and in the Pages artifact; a monthly compaction job (gzip old evidence/quotes, keep hashes) is recommended before 2027."
   ]
 }
