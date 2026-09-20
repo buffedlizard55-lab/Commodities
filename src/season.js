@@ -3,8 +3,12 @@
 // the collector or the backtest script wrote; the browser never computes a result of its own.
 import { formatContracts, formatDate, formatDollars } from './engine.js';
 
-const FORWARD_BASE = 'data/season-2026/forward/';
-const SEASON_BASE = 'data/season-2026/';
+const SEASONS_PATH = 'data/seasons.json';
+// Season-aware paths: the desk writes data/season-<UTC year>/, so the site follows data/seasons.json
+// (written by scripts/forward_desk.py) and falls back to Season 2026 when the index is absent.
+export const seasonMeta = { activeSeason: '2026', seasons: [], loaded: false };
+const SEASON_BASE = () => `data/season-${seasonMeta.activeSeason}/`;
+const FORWARD_BASE = () => `${SEASON_BASE()}forward/`;
 const REPO_TREE = 'https://github.com/buffedlizard55-lab/Commodities/blob/main/';
 const KALSHI_MARKET_URL = (ticker) => `https://external-api.kalshi.com/trade-api/v2/markets/${encodeURIComponent(ticker)}`;
 
@@ -22,29 +26,72 @@ async function fetchJson(path) {
   return response.json();
 }
 
-const forward = { leaderboard: null, state: null, recent: null, curves: null, tab: 'positions', error: null };
+const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, tab: 'positions', error: null };
+
+export async function loadSeasonsIndex() {
+  try {
+    const index = await fetchJson(SEASONS_PATH);
+    if (index && index.activeSeason) {
+      seasonMeta.activeSeason = String(index.activeSeason);
+      seasonMeta.seasons = index.seasons ?? [];
+      seasonMeta.rolloverRule = index.rolloverRule ?? '';
+      seasonMeta.generatedAt = index.generatedAt ?? null;
+    }
+  } catch { /* no index yet: stay on Season 2026 */ }
+  seasonMeta.loaded = true;
+  renderSeasons();
+  return seasonMeta;
+}
+
+function renderSeasons() {
+  const list = $('#season-list');
+  if (!list) return;
+  if (!seasonMeta.seasons.length) { list.innerHTML = '<p class="muted-inline">No season index committed yet (data/seasons.json).</p>'; return; }
+  list.innerHTML = seasonMeta.seasons.map((row) => `<article class="season-chip ${row.active ? 'active' : ''} ${row.frozen ? 'frozen' : ''}">
+      <strong>Season ${esc(row.season)}</strong>
+      <span>${row.active ? 'active now' : row.frozen ? 'frozen' : 'pending'}</span>
+      <small>${esc(row.cycles ?? 0)} cycle(s) · ${esc(row.participants ?? 0)} account(s) · ${esc(row.fills ?? 0)} fill(s) · ${esc(row.settlements ?? 0)} settlement(s)</small>
+      <small>created ${esc(formatDate(row.createdAt))}${row.lastCycleAt ? ` · last cycle ${esc(formatDate(row.lastCycleAt))}` : ''}</small>
+      <small class="mono">${esc(row.dir)}/ · backtest ${row.backtest ? 'yes' : 'no'} · archive backtest ${row.archiveBacktest ? 'yes' : 'no'}</small>
+    </article>`).join('');
+  const note = $('#season-note');
+  if (note) note.textContent = seasonMeta.rolloverRule ?? '';
+  const statePill = $('#season-state');
+  if (statePill) {
+    statePill.textContent = `Season ${seasonMeta.activeSeason} active · ${seasonMeta.seasons.length} season(s) committed`;
+    statePill.classList.add('ok');
+  }
+  const year = $('#season-year');
+  if (year && year.textContent === '—') year.textContent = seasonMeta.activeSeason;
+}
 
 export async function loadForwardDesk() {
   const label = $('#forward-state');
+  if (!seasonMeta.loaded) await loadSeasonsIndex();
   try {
-    const [leaderboard, state, recent, curves] = await Promise.all([
-      fetchJson(`${FORWARD_BASE}leaderboard.json`),
-      fetchJson(`${FORWARD_BASE}state.json`),
-      fetchJson(`${FORWARD_BASE}recent.json`).catch(() => ({ events: [], intents: [], cycles: [] })),
-      fetchJson(`${FORWARD_BASE}curves.json`).catch(() => ({ recent: {}, daily: {} })),
+    const [leaderboard, state, recent, curves, execution, today] = await Promise.all([
+      fetchJson(`${FORWARD_BASE()}leaderboard.json`),
+      fetchJson(`${FORWARD_BASE()}state.json`),
+      fetchJson(`${FORWARD_BASE()}recent.json`).catch(() => ({ events: [], intents: [], cycles: [] })),
+      fetchJson(`${FORWARD_BASE()}curves.json`).catch(() => ({ recent: {}, daily: {} })),
+      fetchJson(`${FORWARD_BASE()}execution/summary.json`).catch(() => null),
+      fetchJson(`${FORWARD_BASE()}summary/today.json`).catch(() => null),
     ]);
+    forward.execution = execution; forward.today = today;
     Object.assign(forward, { leaderboard, state, recent, curves, error: null });
-    if (label) { label.textContent = `Committed desk state · ${leaderboard.cycles} cycle(s)`; label.classList.add('ok'); }
+    if (label) { label.textContent = `Committed desk state · Season ${esc(leaderboard.season ?? seasonMeta.activeSeason)} · ${leaderboard.cycles} cycle(s)`; label.classList.add('ok'); }
     const updated = $('#forward-updated');
     if (updated) updated.textContent = `last cycle ${formatDate(state.lastCycle?.at)} · ${state.lastCycle?.apiCalls ?? '—'} official API reads · ${state.lastCycle?.marketsSeen ?? '—'} open contracts scanned`;
   } catch (error) {
     forward.error = error;
     if (label) label.textContent = 'Forward ledger not published yet';
     const updated = $('#forward-updated');
-    if (updated) updated.textContent = 'The first collector cycle commits data/season-2026/forward/ (see the Actions link below).';
+    if (updated) updated.textContent = `The first collector cycle commits data/season-${seasonMeta.activeSeason}/forward/ (see the Actions link below).`;
   }
   renderForwardBoard();
   renderForwardLedger();
+  renderExecutionRealism();
+  renderToday();
   renderMasterSiteMap();
   return forward;
 }
@@ -94,7 +141,7 @@ function renderForwardBoard() {
     const evidence = row.fills ? ['verified forward fills', ''] : ['unranked · no fill yet', 'none'];
     return `<tr class="board-row" data-strategy="${esc(row.strategyId)}">
       <td class="rank">${row.rank ?? '—'}</td>
-      <td><div class="persona-cell"><span class="avatar">${esc(row.username.slice(0, 2).toUpperCase())}</span><div><strong>${esc(row.username)}</strong><small>${esc(row.name)} · <a class="text-link" href="${esc(row.source?.url ?? '#')}" target="_blank" rel="noreferrer">${esc(row.source?.kind ?? 'source')} ↗</a></small></div></div></td>
+      <td><div class="persona-cell"><span class="avatar">${esc(row.username.slice(0, 2).toUpperCase())}</span><div><strong><a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">${esc(row.username)}</a></strong><small>${esc(row.name)} · <a class="text-link" href="${esc(row.source?.url ?? '#')}" target="_blank" rel="noreferrer">${esc(row.source?.kind ?? 'source')} ↗</a> · <a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">strategy page</a></small></div></div></td>
       <td><b>${money(row.equity)}</b></td>
       <td class="${cls(row.returnPct)}">${pct(row.returnPct)}</td>
       <td class="${cls(row.liquidationReturnPct)}"><small>${money(row.liquidationEquity)}<br>${pct(row.liquidationReturnPct)}</small></td>
@@ -104,7 +151,7 @@ function renderForwardBoard() {
       <td>${sparkline(curve)}</td>
       <td><span class="evidence-pill ${evidence[1]}">${esc(evidence[0])}</span></td>
     </tr>
-    <tr class="board-detail" data-strategy-detail="${esc(row.strategyId)}" hidden><td colspan="10"><div class="detail-grid"><div><span>Rule</span><p>${esc(row.rule)}</p></div><div><span>Why it should (or should not) work</span><p>${esc(row.why)}</p></div><div><span>Provenance</span><p>${esc(row.source?.label ?? '')}</p></div><div class="span-2"><span>Result analysis (from the ledger)</span><p>${esc(row.analysis ?? '')}</p></div><div><span>Ledger</span><p><a class="text-link" href="${REPO_TREE}data/season-2026/forward/trades.jsonl" target="_blank" rel="noreferrer">trades.jsonl ↗</a> · <a class="text-link" href="${REPO_TREE}data/season-2026/forward/state.json" target="_blank" rel="noreferrer">state.json ↗</a> · unfilled remainder ${formatContracts(row.unfilledContracts)} contracts</p></div></div></td></tr>`;
+    <tr class="board-detail" data-strategy-detail="${esc(row.strategyId)}" hidden><td colspan="10"><div class="detail-grid"><div><span>Rule</span><p>${esc(row.rule)}</p></div><div><span>Why it should (or should not) work</span><p>${esc(row.why)}</p></div><div><span>Provenance</span><p>${esc(row.source?.label ?? '')}</p></div><div class="span-2"><span>Result analysis (from the ledger)</span><p>${esc(row.analysis ?? '')}</p></div><div><span>Ledger</span><p><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/trades.jsonl" target="_blank" rel="noreferrer">trades.jsonl ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/state.json" target="_blank" rel="noreferrer">state.json ↗</a> · <a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">full strategy page</a> · unfilled remainder ${formatContracts(row.unfilledContracts)} contracts</p></div></div></td></tr>`;
   }).join('') || '<tr><td colspan="10" class="empty-cell">No strategies in the committed board.</td></tr>';
   if (policies) policies.innerHTML = [
     ['Fill policy', leaderboard.fillPolicy],
@@ -114,7 +161,7 @@ function renderForwardBoard() {
 
 function evidenceLink(evidence) {
   if (!evidence) return '—';
-  const file = evidence.file ? `<a class="text-link" href="${REPO_TREE}data/season-2026/forward/${esc(evidence.file)}" target="_blank" rel="noreferrer">${esc(evidence.file.split('/').pop())} ↗</a>` : '';
+  const file = evidence.file ? `<a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/${esc(evidence.file)}" target="_blank" rel="noreferrer">${esc(evidence.file.split('/').pop())} ↗</a>` : '';
   const url = evidence.url ? `<a class="text-link" href="${esc(evidence.url)}" target="_blank" rel="noreferrer">official ↗</a>` : '';
   return `${file}${file && url ? ' · ' : ''}${url}<br><small class="mono">sha256 ${esc(shortHash(evidence.sha256))} · ${esc(formatDate(evidence.retrievedAt))}</small>`;
 }
@@ -192,6 +239,115 @@ function renderForwardLedger() {
   }
 }
 
+
+function renderExecutionRealism() {
+  const panel = $('#execution-realism');
+  if (!panel) return;
+  const summary = forward.execution;
+  const status = $('#execution-state');
+  if (!summary || !summary.statuses) {
+    panel.innerHTML = '<div class="empty-state"><span class="empty-icon">◎</span><h3>Not compared yet</h3><p><code>scripts/execution_realism.py --live</code> writes <code>forward/execution/summary.json</code> after a runner cycle. The desk fills stay what they always were — verified order-book fills — this file only measures them against the official tape.</p></div>';
+    if (status) { status.textContent = 'not compared yet (runner-only)'; status.classList.add('error'); }
+    return;
+  }
+  const s = summary.statuses;
+  const median = summary.medianAbsCentsDiff;
+  if (status) {
+    status.textContent = median === null ? `${s.compared ?? 0} fill(s) compared` : `median |desk − tape| = ${median.toFixed(2)}¢`;
+    status.classList.toggle('ok', median !== null && median <= 1);
+    status.classList.toggle('error', median !== null && median > 1);
+  }
+  const cards = [
+    ['Desk fills compared', String(summary.compared ?? 0), 'against GET /markets/trades on the same ticker'],
+    ['Covered by the tape', `${summary.tapeCoveredPct ?? 0}%`, 'official prints existed in the comparison window'],
+    ['Within 1¢ of the tape', `${summary.withinOneCentPct ?? 0}%`, 'median |desk − tape| = ' + (median === null ? 'n/a' : `${median.toFixed(2)}¢`)],
+    ['Desk price inside the tape range', `${summary.insideTapeRangePct ?? 0}%`, 'the desk never claims a better print than happened'],
+  ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
+  const byStrategy = Object.entries(summary.byStrategy ?? {}).sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([id, row]) => `<tr><td><a class="text-link" href="strategy.html?id=${esc(id)}">${esc(id)}</a></td><td>${esc(row.compared)}</td><td>${row.medianAbsCentsDiff === null ? '—' : row.medianAbsCentsDiff.toFixed(2) + '¢'}</td><td>${esc(row.withinOneCentPct ?? 0)}%</td><td>${esc(row.tapeCoveredPct ?? 0)}%</td></tr>`).join('');
+  panel.innerHTML = `<div class="metrics-grid">${cards}</div>
+    <p class="verdict">${esc(summary.verdict ?? '')}</p>
+    <div class="table-shell"><table><thead><tr><th>Strategy</th><th>Fills compared</th><th>Median |desk − tape|</th><th>Within 1¢</th><th>Tape covered</th></tr></thead><tbody>${byStrategy || '<tr><td colspan="5" class="empty-cell">No fill has been compared yet.</td></tr>'}</tbody></table></div>
+    <p class="micro-note"><span>Evidence</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/execution/summary.json" target="_blank" rel="noreferrer">execution/summary.json ↗</a> · <a class="text-link" href="https://docs.kalshi.com/api-reference/trade/get-trades" target="_blank" rel="noreferrer">official trade tape docs ↗</a> · window ±${esc(summary.window)}s · compared at ${esc(formatDate(summary.comparedAt))}</p>`;
+}
+
+function renderToday() {
+  const panel = $('#daily-summary');
+  if (!panel) return;
+  const day = forward.today;
+  if (!day) { panel.innerHTML = '<p class="muted-inline">No daily summary committed yet.</p>'; return; }
+  const eq = day.equity ?? {};
+  const cards = [
+    ['Accounts', String(day.accounts ?? 0), `each starts at ${money(STARTING_CASH_LABEL)}`],
+    ['Equity (mark-to-bid)', money(eq.total), `${pct(eq.returnPct)} across ${esc(eq.ranked ?? 0)} ranked`],
+    ['Equity (last trade)', money(eq.liquidationTotal), 'conservative mark, no bid assumed'],
+    ['Realized PnL', money(eq.realizedPnl), `${money(eq.feesPaid)} fees · ${money(eq.slippagePaid)} slippage`],
+    [`Today (${esc(day.fills ?? 0)} fills)`, money(day.realizedToday), `${esc(day.exits ?? 0)} exits · ${esc(day.settlements ?? 0)} settlements · ${money(day.feesToday)} fees`],
+    ['Ledger', `${formatContracts(day.ledger?.contracts)} contracts filled`, `${esc(day.ledger?.markets ?? 0)} distinct contracts touched`],
+    ['Open positions', `${esc(day.positions?.open ?? 0)} (${formatContracts(day.positions?.contracts)} ct)`, `entry notional ${money(day.positions?.entryNotional)}`],
+    ['Top strategy', day.leaders?.[0] ? pct(day.leaders[0].returnPct) : '—', day.leaders?.[0] ? `${esc(day.leaders[0].username)} · ${esc(day.leaders[0].fills ?? 0)} fill(s) today` : 'none ranked yet'],
+  ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
+  const movers = (day.rows ?? []).slice(0, 12).map((m) => `<tr><td><a class="text-link" href="strategy.html?id=${esc(m.strategyId)}">${esc(m.username)}</a></td>
+      <td>${money(m.equity)}</td><td class="${cls(m.returnPct)}">${pct(m.returnPct)}</td>
+      <td class="${cls(m.pnlToday)}">${money(m.pnlToday)}</td><td>${esc(m.fillsToday)} / ${esc(m.closesToday)}</td><td>${esc(m.openPositions)}</td></tr>`).join('');
+  const signals = (day.signals ?? []).map((sig) => `<span class="evidence-pill ${sig.ok ? '' : 'blocked'}">${esc(sig.source)}: ${sig.ok ? (sig.captured ? `${esc(sig.captured)} captured` : 'captured') : 'not captured'}</span>`).join(' ');
+  panel.innerHTML = `<div class="section-head"><h3>${esc(day.date ?? '')} <span class="pill">${esc(day.weekday ?? '')}</span></h3>
+      <p class="muted-inline">${esc(day.cycles ?? 0)} cycle(s) committed today · ${esc(day.apiCalls ?? 0)} official API reads (${esc(day.apiErrors ?? 0)} non-200) · ${esc(day.errors ?? 0)} recorded error(s)${(day.errorSamples ?? []).length ? `: ${esc(day.errorSamples.join(' | '))}` : ''}</p></div>
+    <div class="metric-grid">${cards}</div>
+    <div class="two-col"><div><h4>Board at the close of the day</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Strategy</th><th>Equity</th><th>Return</th><th>PnL today</th><th>Fills / closes</th><th>Open</th></tr></thead><tbody>${movers || '<tr><td colspan="6" class="empty-cell">No account in this season yet.</td></tr>'}</tbody></table></div></div>
+    <div><h4>Signal adapters</h4><p class="signal-chips">${signals || 'none captured'}</p>
+      <p class="note">Best move today: <b>${esc(day.bestMove?.username ?? '—')}</b> ${day.bestMove ? money(day.bestMove.pnlToday) : ''} · worst: <b>${esc(day.worstMove?.username ?? '—')}</b> ${day.worstMove ? money(day.worstMove.pnlToday) : ''}</p>
+      <p class="note">${esc(day.note ?? '')}</p></div></div>
+    <p class="note"><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/summary/${esc(day.date ?? 'today')}.json" target="_blank" rel="noreferrer">summary/${esc(day.date ?? 'today')}.json ↗</a> · written by <code>scripts/forward_desk.py</code> every cycle</p>`;
+}
+
+const STARTING_CASH_LABEL = 10000;
+
+export async function loadArchiveBacktest() {
+  const panel = $('#archive-backtest');
+  const statePill = $('#archive-state');
+  if (!panel) return null;
+  let archive = null; let board = null; let explanations = [];
+  try {
+    [archive, board] = await Promise.all([
+      fetchJson(`${SEASON_BASE()}backtest-archive/competition.json`),
+      fetchJson(`${SEASON_BASE()}backtest-archive/leaderboard.json`),
+    ]);
+  } catch { /* not built yet */ }
+  try { explanations = await fetchJson(`${SEASON_BASE()}backtest-archive/explanations.json`); } catch { /* optional */ }
+  if (!archive || !Array.isArray(board) || !board.length) {
+    panel.innerHTML = '<div class="empty-state"><span class="empty-icon">◎</span><h3>No archive backtest for this season yet</h3><p><code>python3 scripts/backtest_archive.py</code> replays the committed candle archive and writes <code>backtest-archive/</code>. Nothing is shown until those files exist.</p></div>';
+    if (statePill) { statePill.textContent = 'not built for this season'; statePill.classList.add('error'); }
+    return null;
+  }
+  const byId = Object.fromEntries((explanations ?? []).map((row) => [row.strategyId, row]));
+  const rows = board.map((row) => `<tr><td class="rank">${esc(row.rank)}</td>
+    <td><b>${esc(row.username)}</b><br><small>${esc(row.name)}</small></td>
+    <td class="${cls(row.returnPct)}"><b>${pct(row.returnPct)}</b><br><small>${money(row.realizedPnl)}</small></td>
+    <td><small>${esc(row.trades)} trade(s) · ${esc(row.wins ?? 0)}W ${esc(row.losses ?? 0)}L · ${esc(row.marketsTraded)} market(s) · ${formatContracts(row.contracts)} ct</small></td>
+    <td><small>${money(row.feesPaid)} fees · ${money(row.slippagePaid)} slippage · ${esc(row.skippedNoLiquidity ?? 0)} skipped for no depth</small></td>
+    <td><small>${esc(row.rule)}</small></td>
+    <td><small>${esc((byId[row.strategyId] ?? {}).explanation ?? row.why ?? '')}</small></td></tr>`).join('');
+  const facts = [
+    ['Archived markets', String(archive.marketCount ?? 0), `${esc((archive.series ?? []).length)} series · min ${esc(archive.minBars ?? 0)} bars`],
+    ['Verified bars', String(archive.verifiedBars ?? 0), `periods ${(archive.periods ?? []).join(' / ')} min`],
+    ['Sizing', archive.sizingRule ?? '—', 'no entry without bar volume'],
+    ['Exits', archive.exitRule ?? '—', 'official result at the archived settlement_ts'],
+    ['Fees', archive.feeRule ?? '—', 'quadratic taker fee, series multiplier'],
+    ['Provenance', 'candles/index.jsonl', 'every bar bound to its response URL + SHA-256'],
+  ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
+  if (statePill) { statePill.textContent = `${archive.marketCount} markets · ${archive.verifiedBars} bars · ${board.length} rule sets`; statePill.classList.add('ok'); }
+  panel.innerHTML = `<div class="metrics-grid">${facts}</div>
+    <div class="table-shell"><table><thead><tr><th>#</th><th>Rule set</th><th>Return on $10,000</th><th>Trading profile</th><th>Cost of trading</th><th>Entry rule</th><th>Why it won or lost</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="micro-note"><span>Evidence</span>Replayed bar by bar by <code>scripts/backtest_archive.py</code> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/trades.json" target="_blank" rel="noreferrer">every trade ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/explanations.json" target="_blank" rel="noreferrer">per-rule explanations ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/candles/index.jsonl" target="_blank" rel="noreferrer">candle index ↗</a> · a market is never traded before it has an official result.</p>`;
+  return { archive, board, explanations };
+}
+
+export async function loadStrategyDetail(strategyId) {
+  const base = `${FORWARD_BASE()}strategies/${strategyId}.json`;
+  try { return await fetchJson(base); } catch { return null; }
+}
+
 export function bindForwardEvents() {
   document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-forward-tab]');
@@ -231,10 +387,11 @@ export async function loadSeasonMemory(state, afterLoad) {
   const label = $('#season-memory-state');
   try {
     const [competition, leaderboard, trades, intents, explanations] = await Promise.all([
-      fetchJson(`${SEASON_BASE}competition.json`), fetchJson(`${SEASON_BASE}leaderboard.json`), fetchJson(`${SEASON_BASE}trades.json`),
-      fetchJson(`${SEASON_BASE}intents.json`), fetchJson(`${SEASON_BASE}explanations.json`),
+      fetchJson(`${SEASON_BASE()}competition.json`), fetchJson(`${SEASON_BASE()}leaderboard.json`), fetchJson(`${SEASON_BASE()}trades.json`),
+      fetchJson(`${SEASON_BASE()}intents.json`), fetchJson(`${SEASON_BASE()}explanations.json`),
     ]);
     state.season = { competition, leaderboard, trades, intents, explanations };
+    loadArchiveBacktest();
     if (label) { label.textContent = `Committed memory loaded · ${competition.verifiedBars} verified bars`; label.classList.add('ok'); }
   } catch (error) {
     if (label) label.textContent = `Committed memory unavailable (${error.message})`;
@@ -251,7 +408,7 @@ function renderSeasonMemory(season) {
   $('#bt-collected').textContent = competition.dataCollectedAt ?? '—';
   $('#bt-markets').textContent = `${markets.length} settled`;
   $('#bt-bars').textContent = `${competition.verifiedBars} (+${competition.coldOpenContextBars ?? 0} context)`;
-  $('#bt-board-note').textContent = `data/season-2026/leaderboard.json · ${competition.sizingRule}`;
+  $('#bt-board-note').textContent = `${SEASON_BASE()}leaderboard.json · ${competition.sizingRule}`;
   $('#bt-intents-note').textContent = `${intents.length} proposed from the committed ${competition.dataCollectedAt} live snapshot — not fills`;
   $('#backtest-leaderboard tbody').innerHTML = leaderboard.map((row) => `<tr><td class="rank">${row.rank}</td><td><div class="persona-cell"><span class="avatar">${esc(row.username.slice(0, 2).toUpperCase())}</span><div><strong>${esc(row.username)}</strong><small>${esc(row.name)}</small></div></div></td><td><b>${money(row.equity)}</b></td><td class="${cls(row.returnPct)}">${pct(row.returnPct)}</td><td class="${cls(row.realizedPnl)}">${money(row.realizedPnl)}</td><td>${row.trades}</td><td><span class="evidence-pill">${esc(row.evidenceState)}</span></td></tr>`).join('');
   $('#backtest-intents tbody').innerHTML = intents.length ? intents.map((i) => `<tr><td><b>${esc(i.username)}</b><br><small>${esc(i.strategyName)}</small></td><td><b>${esc(i.ticker)}</b><br><small>${esc(i.title)}</small></td><td>${esc(i.side.toUpperCase())}</td><td>${px(i.proposedPrice)}</td><td>${formatContracts(i.maxDisplayDepth)}</td><td><small>${esc(i.reason)}</small></td></tr>`).join('') : '<tr><td colspan="6" class="empty-cell">No intent stored with the snapshot.</td></tr>';
@@ -261,5 +418,5 @@ function renderSeasonMemory(season) {
   }).join('');
   $('#backtest-explanations').innerHTML = explanations.map((e) => `<article class="explain-card"><strong>@${esc(e.username)}</strong><p>${esc(e.explanation)}</p></article>`).join('');
   const files = ['MANIFEST.md', 'SHA256SUMS.txt', 'competition.json', 'leaderboard.json', 'trades.json', 'intents.json', 'explanations.json', 'market-records.json', 'series-records.json', 'cutoff.json', 'candles-KXCPI-26AUG-T0.8-daily.csv', 'candles-KXFED-26SEP-T4.75-daily.csv', 'candles-KXNFLGAME-26SEP17DETBUF-BUF-hourly.csv', 'raw/'];
-  $('#backtest-files').innerHTML = files.map((f) => `<a class="file-chip" href="${REPO_TREE}data/season-2026/${esc(f)}" target="_blank" rel="noreferrer">${esc(f)} ↗</a>`).join('');
+  $('#backtest-files').innerHTML = files.map((f) => `<a class="file-chip" href="${REPO_TREE}${SEASON_BASE()}${esc(f)}" target="_blank" rel="noreferrer">${esc(f)} ↗</a>`).join('');
 }

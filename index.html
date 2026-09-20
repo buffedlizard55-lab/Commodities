@@ -18,8 +18,11 @@
         <a href="#competition">Season board</a>
         <a href="#forward-ledger">Placed trades</a>
         <a href="#backtest">Backtest</a>
+        <a href="#archive-backtest-section">Archive backtest</a>
+        <a href="#execution">Execution realism</a>
         <a href="#live-desk">Live desk</a>
-        <a href="#strategies">Strategies</a>
+        <a href="#strategies">Strategy pages</a>
+        <a href="#seasons">Seasons</a>
         <a href="#sources">Sources</a>
       </nav>
       <button id="refresh-button" class="button button-small button-ghost" type="button">Refresh data</button>
@@ -31,7 +34,7 @@
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot" id="api-dot"></span> AUTOMATED FORWARD TEST · PAPER ONLY</p>
         <h1 id="page-title">A trading lab that shows its work.</h1>
-        <p class="hero-lede">Twenty rule-based strategies trade open Kalshi contracts on paper, twice an hour, from a scheduled collector that reads only the official public API. Every fill consumes a captured order book, every settlement comes from the official result, and every record is committed to this repository with its evidence. No made-up quotes, no silent fallbacks.</p>
+        <p class="hero-lede">Twenty-two rule-based strategies trade open Kalshi contracts on paper, twice an hour, from a scheduled collector that reads only the official public API. Every fill consumes a captured order book, every settlement comes from the official result, and every record is committed to this repository with its evidence. No made-up quotes, no silent fallbacks.</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#competition">See the season board <span aria-hidden="true">↓</span></a>
           <a class="button button-ghost" href="#forward-ledger">Read the trade ledger</a>
@@ -98,6 +101,15 @@
       <p class="ledger-footnote">This page shows the most recent window (<code>recent.json</code>, <code>state.json</code>). The complete append-only history lives in <code>trades.jsonl</code>, <code>intents/</code>, <code>equity/</code>, <code>quotes/</code>, <code>cycles/</code> and <code>evidence/</code> under <code>data/season-2026/forward/</code>; <code>scripts/verify_data.py</code> re-checks the cash identity, event counts and evidence hashes on every run.</p>
     </section>
 
+    <section id="daily" class="section" aria-labelledby="daily-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">03 · today</p><h2 id="daily-title">Today on the desk</h2></div>
+        <div class="section-actions"><span id="today-state" class="live-pill">Reading summary/today.json…</span></div>
+      </div>
+      <p class="section-lede">A per-day roll-up of the live competition — equity, activity, movers and which official signal adapters answered — written by the collector on every cycle alongside the ledger. Nothing on it is typed by hand.</p>
+      <div id="daily-summary"><p class="muted-inline">Loading today's summary…</p></div>
+    </section>
+
     <section id="backtest" class="section backtest-section" aria-labelledby="backtest-title">
       <div class="section-heading">
         <div><p class="eyebrow">03 · backtest &amp; replay</p><h2 id="backtest-title">Committed season memory — verified tape only</h2></div>
@@ -124,6 +136,24 @@
       <div class="subsection-title">Committed data files (SHA-256 bound)</div>
       <div id="backtest-files" class="file-list"></div>
       <p class="micro-note"><span>Pipeline</span> <code>scripts/verify_data.py</code> re-checks every stored file (51 assertions) and <code>scripts/build_competition.py</code> recomputes this memory deterministically from the stored CSVs. The browser cannot edit these files; live-desk paper fills stay in local storage and are separate from the committed backtest.</p>
+    </section>
+
+    <section id="archive-backtest-section" class="section backtest-section" aria-labelledby="archive-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">05 · archive backtest</p><h2 id="archive-title">Backtested on the real candle archive</h2></div>
+        <div class="section-actions"><span id="archive-state" class="live-pill">Reading backtest-archive/…</span></div>
+      </div>
+      <p class="section-lede">The collector now stores an official candle archive, so the same accounting can be replayed bar by bar over it. Every entry is the ask of a stored official bar, every exit is a later stored bid or the exchange's own settlement, and a market is only traded once it has an official result. No synthetic price appears anywhere in this table.</p>
+      <div id="archive-backtest"><p class="muted-inline">Loading the archive backtest…</p></div>
+    </section>
+
+    <section id="execution" class="section" aria-labelledby="execution-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">06 · execution realism</p><h2 id="execution-title">Our fills versus the official trade tape</h2></div>
+        <div class="section-actions"><span id="execution-state" class="live-pill">Not compared yet</span></div>
+      </div>
+      <p class="section-lede">Every fill this desk claims is re-read against Kalshi's published trade tape (<code>GET /markets/trades?ticker=…</code>) for the same ticker inside a window around the fill. That is the honest test of whether a simulated fill could actually have been executed — and where it is optimistic, this section says so.</p>
+      <div id="execution-realism"><p class="muted-inline">Loading the comparison…</p></div>
     </section>
 
     <section id="live-desk" class="section desk-section" aria-labelledby="desk-title">
@@ -154,6 +184,16 @@
       <div id="strategy-grid" class="strategy-grid"></div>
       <div class="subsection-title">Where the ideas came from (MasterSite review, 2026-09-20)</div>
       <div class="table-shell"><table id="mastersite-map"><thead><tr><th>Requested source</th><th>MasterSite project</th><th>What it publishes</th><th>Kalshi mapping used</th><th>Persona</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section id="seasons" class="section" aria-labelledby="seasons-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">09 · seasons</p><h2 id="seasons-title">One-year competition, season by season</h2></div>
+        <div class="section-actions"><span class="live-pill" id="season-state">Reading data/seasons.json…</span></div>
+      </div>
+      <p class="section-lede">The competition runs for one year per season, keyed by the UTC year of each cycle. When the year turns, the desk opens a fresh season directory with every strategy back at $10,000 and freezes the finished one — nothing is overwritten, so a finished season stays readable.</p>
+      <div id="season-list" class="season-grid"></div>
+      <p id="season-note" class="micro-note"></p>
     </section>
 
     <section id="method" class="section split-section" aria-labelledby="method-title">

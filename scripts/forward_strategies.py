@@ -25,9 +25,16 @@ SERIES_WEATHER = ["KXHIGHNY"]
 SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME"]
 SELECTOR_CEO = "tag:CEOs&contains:CEO"   # Companies-category series tagged CEOs whose ticker names a CEO market
 SELECTOR_FDA = "prefix:KXFDA&tag:Medicine"  # FDA drug-decision series (excludes FDA-politics series)
+# Every Kalshi daily-high temperature series (verified in data/universe/series-catalog.json:
+# tag "Daily temperature", e.g. KXHIGHLAX/CHI/MIA/AUS/DEN/PHIL/SFO/PHX/SEA/ATL/BOS/DAL/DC/LV/HOU/...).
+SELECTOR_WEATHER = "tag:Daily temperature&prefix:KXHIGH"
 
 TRACKED_SERIES = SERIES_ECON + SERIES_CRYPTO + SERIES_GOLD + SERIES_WEATHER + SERIES_SPORTS
-TRACKED_SELECTORS = [SELECTOR_CEO, SELECTOR_FDA]
+TRACKED_SELECTORS = [SELECTOR_CEO, SELECTOR_FDA, SELECTOR_WEATHER]
+
+# Minimum live lead (points/runs) before ScorePulse buys the leading side, per sport.  These are
+# rule parameters, not risk limits: the desk always sizes 50% of free cash.
+LIVE_SCORE_THRESHOLDS = {"KXNFLGAME": 8.0, "KXNCAAFGAME": 8.0, "KXNBAGAME": 10.0, "KXMLBGAME": 3.0}
 
 
 def _cheaper_side(m, maximum, minimum=0.0):
@@ -359,6 +366,61 @@ def entry_weather_fade(m, ctx):
             "reason": f"bracket is {distance:.0f}F away from the NWS forecast high {forecast['high_f']}F (issued {forecast['updated']}); NO ask {ask:.2f} <= 0.92"}
 
 
+def entry_live_score(m, ctx):
+    """Buy the side of the team ESPN's official scoreboard shows leading, late in the game.
+
+    Signal source: the public ESPN scoreboard JSON (ESPN is a listed settlement source for
+    KXNCAAFGAME / KXMLBGAME / KXNBAGAME per GET /series).  The mapping is accepted only when exactly
+    one event matches the team names + scheduled date in the Kalshi market's own rules_primary;
+    otherwise ctx["espn"] has no entry and the rule abstains.  The price is always Kalshi's.
+    """
+    signal = (ctx.get("espn") or {}).get(m.get("ticker"))
+    if not signal or signal.get("state") != "in":
+        return None
+    diff = signal.get("scoreDiff")
+    if diff is None:
+        return None
+    threshold = LIVE_SCORE_THRESHOLDS.get(m.get("series_ticker"), 8)
+    if diff < threshold:
+        return None
+    side = "yes"  # a Kalshi game market's YES side is the team named in yes_sub_title
+    ask, bid = m.get("yes_ask"), m.get("yes_bid")
+    if ask is None or bid is None or not 0 < ask <= 0.85 or (ask - bid) > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    return {"side": side, "price": ask, "limit": 0.85,
+            "reason": f"ESPN scoreboard ({signal['detail']}, event {signal['espnEventId']}): {signal['away']} "
+                      f"{_fmt_score(signal.get('awayScore'))} @ {signal['home']} {_fmt_score(signal.get('homeScore'))} "
+                      f"-> market side '{signal['marketSide']}' leads by {_fmt_score(diff)} (>= {threshold}); "
+                      f"YES ask {ask:.2f} <= 0.85 with spread {ask - bid:.2f}"}
+
+
+def _fmt_score(value):
+    if value is None:
+        return "?"
+    return f"{value:g}"
+
+
+def entry_fda_record(m, ctx):
+    """Buy YES on an FDA drug-decision market when openFDA Drugs@FDA already lists an approval.
+
+    Signal source: openFDA Drugs@FDA (https://api.fda.gov/drug/drugsfda.json), the drug name taken
+    from the market's own official title.  Only positive record evidence is traded: when the lookup
+    finds no application the rule abstains (absence is not proof of a future decision, and Drugs@FDA
+    publishes no PDUFA target date - IRR-27).
+    """
+    signal = (ctx.get("fda") or {}).get(m.get("ticker"))
+    if not signal or not signal.get("approvedRecord"):
+        return None
+    ask, bid = m.get("yes_ask"), m.get("yes_bid")
+    if ask is None or bid is None or not 0 < ask <= 0.97 or (ask - bid) > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    application = (signal.get("applications") or [{}])[0]
+    return {"side": "yes", "price": ask, "limit": 0.97,
+            "reason": f"openFDA Drugs@FDA lists {application.get('application_number') or 'an application'} for "
+                      f"{signal['drug']} (first ORIG approval {application.get('first_orig_approved') or 'n/a'}); "
+                      f"YES ask {ask:.2f} <= 0.97 with spread {ask - bid:.2f}"}
+
+
 def entry_sma_cross(m, ctx):
     bars = (ctx.get("candles") or {}).get(m.get("ticker"))
     if not bars or len(bars) < 10:
@@ -468,13 +530,13 @@ STRATEGIES = [
      "why": "Executive departures are rare, dated events; the favourite (usually NO) tends to carry. Loses the full stake on a surprise exit."},
     {"id": "weather-bracket", "username": "WeatherCatalyst", "name": "NWS Forecast Bracket", "group": "weather",
      "source": {"kind": "MasterSite project + official feed", "label": "SFWeather (NWS pipeline) -> NWS gridpoint forecast for Central Park (OKX/34,45) -> KXHIGHNY", "url": "https://buffedlizard55-lab.github.io/SFWeather/"},
-     "universe": SERIES_WEATHER, "entry": entry_weather_bracket, "exit": exit_hold, "fraction": 0.5, "needs_nws": True,
-     "rule": "Buy YES on the NYC daily-high bracket that contains the point-in-time NWS forecast high when its ask is <= 70c; hold to settlement (The Weather Company CLINYC value).",
-     "why": "Tests whether the official NWS forecast beats the market's bracket pricing. The forecast is archived at decision time so the signal is auditable."},
+     "universe": SELECTOR_WEATHER, "entry": entry_weather_bracket, "exit": exit_hold, "fraction": 0.5, "needs_nws": True,
+     "rule": "Buy YES on the daily-high bracket (any tracked KXHIGH* city) that contains the point-in-time NWS forecast high for that city when its ask is <= 70c; hold to settlement.",
+     "why": "Tests whether the official NWS forecast beats the market's bracket pricing across cities. The forecast is archived at decision time so the signal is auditable; the settlement value comes from the station named in each market's rules_primary (The Weather Company for most cities - IRR-26), so the NWS forecast is a signal, not the settlement source."},
     {"id": "weather-fade", "username": "WeatherFader", "name": "Forecast-Distance Fader", "group": "weather",
      "source": {"kind": "MasterSite project + official feed", "label": "SFWeather (NWS pipeline) -> NWS gridpoint forecast -> KXHIGHNY", "url": "https://buffedlizard55-lab.github.io/SFWeather/"},
-     "universe": SERIES_WEATHER, "entry": entry_weather_fade, "exit": exit_hold, "fraction": 0.5, "needs_nws": True,
-     "rule": "Buy NO on NYC daily-high brackets at least 4F away from the NWS forecast high when the NO ask is <= 92c; hold to settlement.",
+     "universe": SELECTOR_WEATHER, "entry": entry_weather_fade, "exit": exit_hold, "fraction": 0.5, "needs_nws": True,
+     "rule": "Buy NO on daily-high brackets (any tracked KXHIGH* city) at least 4F away from that city's NWS forecast high when the NO ask is <= 92c; hold to settlement.",
      "why": "Sells far-from-forecast tails. Small steady gains unless the forecast busts by 4F+."},
     {"id": "fda-premium", "username": "FDAReaction", "name": "FDA Decision Premium", "group": "biotech",
      "source": {"kind": "MasterSite project", "label": "DrugAnalysis - FDA Decisions & Biotech Reactions -> Kalshi KXFDA* series", "url": "https://buffedlizard55-lab.github.io/DrugAnalysis/"},
@@ -491,6 +553,16 @@ STRATEGIES = [
      "universe": SERIES_SPORTS, "entry": entry_underdog_sweep, "exit": exit_take_profit(multiple=2.0), "fraction": 0.5,
      "rule": "Within 12h of expected resolution, buy a 2-20c underdog side on a game market with volume >= 10,000; sell at a bid >= 2x entry, else hold to settlement.",
      "why": "Convexity on upsets. The favourite-longshot literature predicts this bleeds; it is here to measure exactly how much."},
+    {"id": "score-pulse", "username": "ScorePulse", "name": "Live Scoreboard Leader", "group": "sports",
+     "source": {"kind": "official feed + exchange series", "label": "ESPN scoreboard API (public JSON) -> Kalshi KX*GAME series; ESPN is a listed settlement source for KXNCAAFGAME/KXMLBGAME/KXNBAGAME", "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"},
+     "universe": SERIES_SPORTS, "entry": entry_live_score, "exit": exit_hold, "fraction": 0.5, "needs_espn": True,
+     "rule": "While a game market is live, buy the side of the team the ESPN scoreboard shows leading by at least 8 points (football), 10 (basketball) or 3 runs (baseball) when YES is quoted at or below 85c with a displayed spread <= 5c; hold to settlement.",
+     "why": "In-game score is public information the market may price slowly; the exchange price is the only execution evidence. The ESPN event is matched to the market by the team names and scheduled date in the market's own rules_primary, and a non-unique match makes the rule abstain rather than guess."},
+    {"id": "fda-record", "username": "FdaRecordCheck", "name": "Drugs@FDA Record Check", "group": "biotech",
+     "source": {"kind": "official feed + exchange series", "label": "openFDA Drugs@FDA (public, no key) -> Kalshi KXFDA* drug-decision series", "url": "https://api.fda.gov/drug/drugsfda.json"},
+     "universe": SELECTOR_FDA, "entry": entry_fda_record, "exit": exit_hold, "fraction": 0.5, "needs_fda": True,
+     "rule": "On an FDA drug-decision market whose title names a drug, buy YES at or below 97c (displayed spread <= 5c) when openFDA Drugs@FDA lists an approved application for that drug; abstain when the lookup finds nothing.",
+     "why": "A Drugs@FDA application with an approved ORIG submission is primary evidence that the approval already happened. Drugs@FDA publishes no PDUFA target action date (IRR-27), so absence of a record is never traded as evidence of a future decision."},
     {"id": "gold-leader", "username": "MetalMomentum", "name": "Gold 15-Minute Early Leader", "group": "gold",
      "source": {"kind": "MasterSite negative + exchange series", "label": "GOLD is a ring-buyer directory (not a price signal); Kalshi's liquid gold series KXGOLD15M is traded instead (Pyth-settled)", "url": "https://buffedlizard55-lab.github.io/GOLD/"},
      "universe": SERIES_GOLD, "entry": entry_gold_leader, "exit": exit_hold, "fraction": 0.5,

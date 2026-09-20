@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 node_modules/
+
+# Regenerable adapter caches. Never commit them: a cache written by a fixture/offline run would
+# look exactly like verified data, and every one of these is rebuilt from the official endpoint.
+data/universe/fda-records.json
+data/universe/place-centroids.json
+data/season-*/forward/signals/gridpoints.json

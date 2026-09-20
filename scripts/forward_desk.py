@@ -39,11 +39,21 @@ from kalshi_client import KalshiClient, FixtureClient, KalshiError, USER_AGENT  
 from paper_engine import (STARTING_CASH, normalize_market, parse_book, book_quotes, size_and_fill, execute,  # noqa: E402
                           taker_fee, iso, parse_ts, fnum)
 import forward_strategies as FS  # noqa: E402
+import signals as SIG  # noqa: E402
+from season import resolve_forward_dir, write_seasons_index, season_for  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-FORWARD_DIR = os.path.join(ROOT, "data", "season-2026", "forward")
+DATA_DIR = os.path.join(ROOT, "data")
+# Season memory: data/season-<UTC year>/forward.  The season is resolved from the cycle clock, so
+# the first cycle of a new year rolls over automatically and the previous season stays frozen.
+FORWARD_DIR = os.path.join(DATA_DIR, "season-2026", "forward")
+SEASON = "2026"
 UNIVERSE_DIR = os.path.join(ROOT, "data", "universe")
 SERIES_INDEX_PATH = os.path.join(UNIVERSE_DIR, "series-index.json")
+WRITE_SEASONS_INDEX = True  # tests redirect FORWARD_DIR and must not touch the committed data/ index
+# Central Park gridpoint for KXHIGHNY (the series whose rules_primary names station CLINYC);
+# verified 2026-09-20.  Other cities are resolved through the official Census Gazetteer + NWS
+# /points chain in scripts/signals.py (see IRR-26).
 NWS_FORECAST_URL = "https://api.weather.gov/gridpoints/OKX/34,45/forecast"  # Central Park point (verified 2026-09-20)
 NWS_EVENT_PREFIX = "KXHIGHNY-"
 
@@ -56,6 +66,8 @@ MAX_QUEUED_INTENTS = 1
 MAX_TECHNICAL_MARKETS = 8
 MAX_MICRO_MARKETS = 6
 MAX_CANDLE_ARCHIVES_PER_CYCLE = 10
+MAX_NWS_CITIES = 12          # one NWS gridpoint forecast per city per cycle (official api.weather.gov)
+MAX_FDA_LOOKUPS = 8          # openFDA Drugs@FDA lookups per cycle (results cached 7 days)
 EXIT_FLOOR_TOLERANCE = 0.03
 MARKETABLE_LIMIT_THROUGH = 0.05  # entries are IOC limits at min(rule bound, touch + 5c)
 RECENT_EVENTS = 200
@@ -65,14 +77,25 @@ FEE_TYPES_MODELED = {"quadratic", "quadratic_with_maker_fees", "quadratic_with_c
 MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
 
 
-def set_paths(forward_dir=None, series_index=None):
+def set_paths(forward_dir=None, series_index=None, season=None):
     """Redirect outputs (used by tests so they never touch the committed season memory)."""
-    global FORWARD_DIR, SERIES_INDEX_PATH
+    global FORWARD_DIR, SERIES_INDEX_PATH, SEASON, WRITE_SEASONS_INDEX
     if forward_dir:
         FORWARD_DIR = forward_dir
         SERIES_INDEX_PATH = series_index or os.path.join(forward_dir, "series-index.json")
+        WRITE_SEASONS_INDEX = False
     elif series_index:
         SERIES_INDEX_PATH = series_index
+    if season:
+        SEASON = season
+
+
+def use_season(now_ts: int) -> tuple[str, str, bool]:
+    """Point the desk at the season directory for `now_ts` (rolls over on a new UTC year)."""
+    forward, season, created = resolve_forward_dir(DATA_DIR, now_ts)
+    global FORWARD_DIR, SEASON
+    FORWARD_DIR, SEASON = forward, season
+    return forward, season, created
 
 
 # ----------------------------------------------------------------------------- io helpers
@@ -157,6 +180,52 @@ def compact_series(raw: dict) -> dict:
         "contract_terms_url": raw.get("contract_terms_url"), "volume_fp": raw.get("volume_fp"),
         "last_updated_ts": raw.get("last_updated_ts"),
     }
+
+
+def _selector_matches(ticker: str, row: dict, selector: str) -> bool:
+    """Same clause language as resolve_selector, applied to a series-catalog row."""
+    for clause in [c.strip() for c in selector.split("&") if c.strip()]:
+        kind, _, value = clause.partition(":")
+        if kind == "tag" and value not in (row.get("tags") or []):
+            return False
+        if kind == "prefix" and not ticker.startswith(value):
+            return False
+        if kind == "contains" and value not in ticker:
+            return False
+        if kind not in ("tag", "prefix", "contains"):
+            return False
+    return True
+
+
+def seed_index_from_catalog(index: dict, catalog_path: str | None = None) -> list[str]:
+    """Fill the desk's series index from the weekly official series catalog (offline).
+
+    The catalog is written by scripts/discover_universe.py from GET /series?category=... and holds
+    ticker/title/category/tags/fee_type/fee_multiplier/exchange_index for all 13k+ series.  Seeding
+    from it is what makes selector universes (CEO / FDA / daily-high weather cities) resolvable
+    before any GET /series/{ticker} call; rows are never overwritten once a full record exists.
+    """
+    path = catalog_path or os.path.join(UNIVERSE_DIR, "series-catalog.json")
+    catalog = read_json(path, {})
+    rows = catalog.get("series") or {}
+    added = []
+    for ticker, row in sorted(rows.items()):
+        if ticker in index["series"]:
+            continue
+        expanded = {"title": row.get("t"), "category": row.get("c"), "tags": row.get("g") or []}
+        if not any(_selector_matches(ticker, expanded, selector) for selector in FS.TRACKED_SELECTORS):
+            continue
+        index["series"][ticker] = {
+            "ticker": ticker, "title": row.get("t"), "category": row.get("c"), "categories": [row.get("c")],
+            "tags": row.get("g") or [], "frequency": row.get("q"), "fee_type": row.get("f"),
+            "fee_multiplier": row.get("m"), "exchange_index": int(row.get("x") or 0),
+            "settlement_sources": [{"name": name, "url": None} for name in row.get("s") or []],
+            "volume_fp": row.get("v"), "status": 200, "fetchedAt": catalog.get("updatedAt"),
+            "source": catalog.get("source"),
+            "from": "data/universe/series-catalog.json (weekly GET /series by category)",
+        }
+        added.append(ticker)
+    return added
 
 
 def ensure_series(client: KalshiClient, index: dict, tickers: list[str], errors: list[str]):
@@ -356,9 +425,11 @@ def capture_micro_candles(client, index, markets: dict, now_ts: int, errors) -> 
 
 
 # ----------------------------------------------------------------------------- state
-def new_state(now_ts: int) -> dict:
-    return {"schemaVersion": 1, "season": "2026", "startingCash": STARTING_CASH, "createdAt": iso(now_ts),
-            "cycles": 0, "lastCycle": None, "accounts": {}}
+def new_state(now_ts: int, season: str | None = None) -> dict:
+    return {"schemaVersion": 1, "season": season or SEASON, "startingCash": STARTING_CASH, "createdAt": iso(now_ts),
+            "cycles": 0, "lastCycle": None, "accounts": {},
+            "note": "Season memory for the automated paper-trading desk; written only by scripts/forward_desk.py "
+                    "from official public API responses. Accounts start at $10,000 each season."}
 
 
 def account_for(state: dict, strategy: dict) -> dict:
@@ -400,6 +471,14 @@ class Cycle:
         self._evidence_logged: set[str] = set()
         self.settled_tickers: list[tuple] = []
         self.archived: list[dict] = []
+        self.strategy_pages: list[str] = []
+        self.daily_summary: dict = {}
+        self.espn: dict[str, dict] = {}
+        self.fda: dict[str, dict] = {}
+        self.signal_errors: list[str] = []
+        self.nws_cities: "SIG.NwsCities | None" = None
+        self.espn_adapter: "SIG.EspnScoreboard | None" = None
+        self.fda_adapter: "SIG.OpenFdaRecords | None" = None
 
     # -- data ---------------------------------------------------------------------------
     def load_universe(self):
@@ -408,6 +487,72 @@ class Cycle:
         self.nws, self.nws_record = capture_nws(self.markets, self.cycle_id, self.now_ts, self.nws_fetcher, self.errors)
         self.candles = capture_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
         self.candles1m = capture_micro_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
+        self.capture_signal_adapters()
+
+    # -- official signal adapters (ESPN scoreboard, multi-city NWS, openFDA) --------------
+    def nws_signals(self) -> dict:
+        """Central Park (verified gridpoint for KXHIGHNY) merged with the other city forecasts."""
+        merged = dict(getattr(self, "nws", {}) or {})
+        merged.update(getattr(self, "nws_forecasts", {}) or {})
+        return merged
+
+    def ctx(self, book=None) -> dict:
+        return {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m,
+                "nws": self.nws_signals(), "espn": self.espn, "fda": self.fda, "book": book}
+
+    def capture_signal_adapters(self):
+        """Point-in-time signals from the other official public sources (each one archived).
+
+        Every adapter is best-effort: a failed lookup is logged in signal_errors and the strategies
+        that need it simply abstain this cycle - no value is inferred or defaulted.
+        """
+        fetcher = self.nws_fetcher or SIG.http_fetch
+        self.nws_forecasts = {}
+        weather: dict[str, str] = {}
+        for m in self.markets.values():
+            series_ticker = m["series_ticker"]
+            if series_ticker.startswith("KXHIGH") and series_ticker != "KXHIGHNY":
+                title = series_info(self.index, series_ticker).get("title")
+                if title:
+                    weather[series_ticker] = title
+        if weather:
+            adapter = SIG.NwsCities(fetcher=fetcher)
+            chosen = dict(sorted(weather.items())[:MAX_NWS_CITIES])
+            forecasts, _records = adapter.capture(chosen)
+            self.nws_cities = adapter
+            self.nws_forecasts = forecasts
+            self.signal_errors.extend(adapter.errors)
+            self.signal_errors.extend(adapter.centroids.errors)
+        leagues = sorted({m["series_ticker"] for m in self.markets.values() if m["series_ticker"] in SIG.ESPN_LEAGUES})
+        if leagues:
+            adapter = SIG.EspnScoreboard(fetcher=fetcher)
+            keys = SIG.date_keys_around(self.now_ts, 1)
+            for league in leagues:
+                for key in keys:
+                    adapter.fetch(league, key)
+            self.espn_adapter = adapter
+            self.signal_errors.extend(adapter.errors)
+            for ticker, m in self.markets.items():
+                try:
+                    signal = adapter.signal_for(m, keys)
+                except Exception as error:
+                    self.signal_errors.append(f"espn signal {ticker}: {error}")
+                    continue
+                if signal:
+                    self.espn[ticker] = signal
+        fda_markets = [m for m in self.markets.values() if SIG.FDA_DRUG_SERIES.match(m["series_ticker"])]
+        if fda_markets:
+            adapter = SIG.OpenFdaRecords(fetcher=fetcher)
+            self.fda_adapter = adapter
+            for m in sorted(fda_markets, key=lambda x: (-(x["volume_24h"] or 0), x["ticker"]))[:MAX_FDA_LOOKUPS]:
+                try:
+                    signal = SIG.fda_signal(m, adapter)
+                except Exception as error:
+                    self.signal_errors.append(f"openfda signal {m['ticker']}: {error}")
+                    continue
+                if signal:
+                    self.fda[m["ticker"]] = signal
+            self.signal_errors.extend(adapter.errors)
 
     def get_book(self, ticker: str) -> dict | None:
         if ticker in self.books:
@@ -486,7 +631,7 @@ class Cycle:
 
     # -- reconciliation -----------------------------------------------------------------
     def reconcile(self, strategy: dict, account: dict):
-        ctx = {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m, "nws": getattr(self, "nws", {})}
+        ctx = self.ctx()
         remaining = []
         for position in account["positions"]:
             ticker = position["ticker"]
@@ -610,7 +755,7 @@ class Cycle:
     def candidates_for(self, strategy) -> list[tuple[dict, dict]]:
         series_list = set(resolve_selector(self.index, strategy["universe"]))
         held = {p["ticker"] for p in self.state["accounts"].get(strategy["id"], {}).get("positions", [])}
-        ctx = {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m, "nws": getattr(self, "nws", {})}
+        ctx = self.ctx()
         found = []
         pool = self.markets.values()
         if strategy.get("needs_book"):
@@ -663,7 +808,7 @@ class Cycle:
             # The rule must still hold on the fresh book (the list quote can be stale).
             fresh = dict(m)
             fresh.update(book_quotes(book))
-            ctx = {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m, "nws": getattr(self, "nws", {}), "book": book}
+            ctx = self.ctx(book)
             confirm = strategy["entry"](fresh, ctx)
             intent["bookQuotes"] = book_quotes(book)
             intent["bookAt"] = self.book_meta[m["ticker"]]["at"]
@@ -839,6 +984,9 @@ class Cycle:
             "exits": sum(1 for e in self.events if e["kind"] == "exit"),
             "settlements": sum(1 for e in self.events if e["kind"] == "settlement"),
             "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles), "candlesArchived": len(self.archived),
+            "nwsCityForecasts": len(getattr(self, "nws_forecasts", {}) or {}), "espnSignals": len(self.espn),
+            "fdaSignals": len(self.fda), "signalErrors": self.signal_errors[:20], "signalErrorCount": len(self.signal_errors),
+            "season": self.state.get("season", SEASON),
             "errors": self.errors[:40], "errorCount": len(self.errors),
         }
         self.persisted_intents = self.dedupe_intents()
@@ -847,7 +995,10 @@ class Cycle:
         self.state["lastCycle"] = summary
         self.state["files"] = {"trades": "trades.jsonl", "intents": f"intents/{self.month}.jsonl", "equity": f"equity/{self.month}.csv",
                                "cycles": f"cycles/{self.month}.jsonl", "quotes": f"quotes/{self.day}.csv",
-                               "evidence": f"evidence/{self.day}.jsonl", "nws": "signals/nws-central-park.jsonl"}
+                               "evidence": f"evidence/{self.day}.jsonl", "nws": "signals/nws-central-park.jsonl",
+                               "nwsCities": "signals/nws-cities.jsonl", "espn": "signals/espn-scoreboard.jsonl",
+                               "openfda": "signals/openfda.jsonl", "strategies": "strategies/", "summary": f"summary/{self.day}.json",
+                               "execution": "execution/", "candles": "candles/index.jsonl", "compressed": "COMPRESSED.json"}
         return summary
 
     def persist(self, summary: dict):
@@ -864,8 +1015,20 @@ class Cycle:
                     "open_interest", "close_time", "quote_source"], self.quote_rows)
         if self.nws_record:
             append_jsonl(os.path.join(FORWARD_DIR, "signals", "nws-central-park.jsonl"), [self.nws_record])
+        if self.nws_cities and self.nws_cities.records:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "nws-cities.jsonl"), self.nws_cities.records)
+            self.nws_cities.save()
+        if self.espn_adapter and self.espn_adapter.snapshots:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "espn-scoreboard.jsonl"), self.espn_adapter.snapshots)
+        if self.fda_adapter and self.fda_adapter.records:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "openfda.jsonl"), self.fda_adapter.records)
+            self.fda_adapter.save()
         write_json(os.path.join(FORWARD_DIR, "state.json"), self.state)
-        write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state))
+        write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state, self.state.get("season")))
+        self.strategy_pages = write_strategy_pages(self.state, summary)
+        self.daily_summary = write_daily_summary(self.state, summary)
+        if WRITE_SEASONS_INDEX:
+            write_seasons_index(DATA_DIR, self.now_ts)
         self.write_recent(summary)
         self.write_curves()
 
@@ -878,6 +1041,22 @@ class Cycle:
         recent["cycles"] = ([summary] + recent.get("cycles", []))[:96]
         recent["generatedAt"] = iso(self.now_ts)
         recent["nws"] = self.nws_record and {k: self.nws_record[k] for k in ("at", "updateTime", "daytime", "mapped", "source")}
+        recent["nwsCities"] = [{"series": r.get("series"), "city": r.get("city"), "gridId": r.get("gridId"),
+                                "gridX": r.get("gridX"), "gridY": r.get("gridY"), "censusPlace": r.get("censusPlace"),
+                                "updateTime": r.get("updateTime"), "url": r.get("url"), "sha256": r.get("sha256"),
+                                "days": r.get("days"), "retrievedAt": r.get("retrievedAt")}
+                               for r in (self.nws_cities.records if self.nws_cities else [])]
+        recent["espn"] = [{"league": snap.get("league"), "date": snap.get("date"), "url": snap.get("url"),
+                           "events": snap.get("events"), "sha256": snap.get("sha256"), "retrievedAt": snap.get("retrievedAt")}
+                          for snap in (self.espn_adapter.snapshots if self.espn_adapter else [])]
+        recent["espnSignals"] = self.espn
+        recent["openfda"] = [{"drug": r.get("drug"), "code": r.get("code"), "hits": r.get("hits"),
+                              "approvedRecord": r.get("approvedRecord"), "url": r.get("url"), "sha256": r.get("sha256"),
+                              "retrievedAt": r.get("retrievedAt"),
+                              "applications": r.get("applications")}
+                             for r in (self.fda_adapter.records if self.fda_adapter else [])]
+        recent["fdaSignals"] = self.fda
+        recent["signalErrors"] = self.signal_errors[:20]
         write_json(path, recent, compact=True)
 
     def write_curves(self):
@@ -936,7 +1115,7 @@ def analysis_for(strategy: dict, account: dict, equity: float) -> str:
     return " ".join(parts)
 
 
-def build_leaderboard(state: dict) -> dict:
+def build_leaderboard(state: dict, season: str | None = None) -> dict:
     rows = []
     for strategy in FS.STRATEGIES:
         account = state["accounts"].get(strategy["id"])
@@ -966,7 +1145,8 @@ def build_leaderboard(state: dict) -> dict:
     for row in unranked:
         row["rank"] = None
     rows = ranked + unranked
-    return {"schemaVersion": 1, "season": "2026", "generatedAt": (state.get("lastCycle") or {}).get("at"),
+    return {"schemaVersion": 2, "season": season or state.get("season") or SEASON,
+            "generatedAt": (state.get("lastCycle") or {}).get("at"),
             "cycles": state.get("cycles", 0), "participants": len(rows), "ranked": len(ranked),
             "markPolicy": "equity = cash + sum(contracts x mark) where mark = best displayed bid for the held side, else the last "
                           "official trade price, else 0; liquidationEquity uses the bid only (0 when no bid). Rank by equity; "
@@ -975,7 +1155,173 @@ def build_leaderboard(state: dict) -> dict:
                           f"50% of free cash, consuming displayed depth level by level; exits sell the full position into the bid ladder "
                           f"within {EXIT_FLOOR_TOLERANCE:.2f} of the best bid or not at all; fee 0.07*q*p*(1-p)*series multiplier "
                           f"rounded up to $0.0001; settlement at $1/$0 from the official result with no fee.",
-            "gated": [{k: g[k] for k in ("id", "username", "name", "group", "source", "blocker")} for g in FS.GATED], "rows": rows}
+            "gated": [{k: g[k] for k in ("id", "username", "name", "group", "source", "blocker")} for g in FS.GATED],
+            "rows": rows,
+            "strategyPages": {r["strategyId"]: f"strategies/{r['strategyId']}.json" for r in rows},
+            "pageUrl": "strategy.html"}
+
+
+# ----------------------------------------------------------------------------- per-strategy pages
+def read_jsonl(rel: str) -> list[dict]:
+    path = os.path.join(FORWARD_DIR, rel)
+    if not os.path.exists(path):
+        return []
+    out = []
+    with open(path) as fh:
+        for line in fh:
+            if line.strip():
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    continue
+    return out
+
+
+def read_equity_rows() -> list[dict]:
+    rows = []
+    directory = os.path.join(FORWARD_DIR, "equity")
+    if not os.path.isdir(directory):
+        return rows
+    for name in sorted(os.listdir(directory)):
+        if not name.endswith(".csv"):
+            continue
+        with open(os.path.join(directory, name), newline="") as fh:
+            for row in csv.DictReader(fh):
+                rows.append(row)
+    return rows
+
+
+def write_strategy_pages(state: dict, summary: dict) -> list[str]:
+    """One committed JSON file per persona: identity, rule, analysis, full trade + equity history.
+
+    These are the data files behind strategy.html?id=<strategyId>; everything in them is copied
+    from the ledger the cycle just appended, so the page cannot disagree with trades.jsonl.
+    """
+    events = read_jsonl("trades.jsonl")
+    equity = read_equity_rows()
+    intents: list[dict] = []
+    intents_dir = os.path.join(FORWARD_DIR, "intents")
+    if os.path.isdir(intents_dir):
+        for name in sorted(os.listdir(intents_dir)):
+            if name.endswith(".jsonl"):
+                intents.extend(read_jsonl(os.path.join("intents", name)))
+    written = []
+    for strategy in FS.STRATEGIES:
+        account = state["accounts"].get(strategy["id"])
+        if not account:
+            continue
+        mine = [e for e in events if e.get("strategyId") == strategy["id"]]
+        my_equity = [[r["cycle"], float(r["equity"]), float(r["cash"]), int(r["openPositions"]),
+                      float(r["realizedPnl"]), float(r["feesPaid"]), float(r["slippagePaid"])]
+                     for r in equity if r.get("strategyId") == strategy["id"]]
+        my_intents = [i for i in intents if i.get("strategyId") == strategy["id"]][-RECENT_INTENTS:]
+        equity_now = account.get("lastEquity", account["cash"])
+        payload = {
+            "schemaVersion": 1, "season": state.get("season", SEASON), "generatedAt": summary.get("at"),
+            "cycle": summary.get("cycle"),
+            "strategy": {k: strategy[k] for k in ("id", "username", "name", "group", "rule", "why", "source")},
+            "account": {k: account.get(k) for k in ("cash", "realizedPnl", "feesPaid", "slippagePaid", "fills",
+                                                    "exits", "settlements", "wins", "losses", "filledContracts",
+                                                    "requestedContracts", "unfilledContracts", "bestTradePnl",
+                                                    "worstTradePnl", "lastEquity", "lastLiquidationEquity",
+                                                    "lastMarkValue", "lastLiquidationValue", "lastMarkedAt")},
+            "returnPct": round((equity_now / STARTING_CASH - 1) * 100, 4),
+            "liquidationReturnPct": round((account.get("lastLiquidationEquity", account["cash"]) / STARTING_CASH - 1) * 100, 4),
+            "analysis": analysis_for(strategy, account, equity_now),
+            "positions": account.get("positions") or [],
+            "events": mine[-RECENT_EVENTS:],
+            "eventCount": len(mine),
+            "equity": my_equity[-1000:],
+            "intents": my_intents,
+            "evidenceFiles": sorted({(e.get("evidence") or {}).get("file") for e in mine if (e.get("evidence") or {}).get("file")}),
+            "ledger": {"trades": "trades.jsonl", "intents": "intents/", "equity": "equity/", "evidence": "evidence/",
+                       "quotes": "quotes/", "cycles": "cycles/"},
+        }
+        path = os.path.join(FORWARD_DIR, "strategies", f"{strategy['id']}.json")
+        write_json(path, payload, compact=True)
+        written.append(os.path.relpath(path, FORWARD_DIR))
+    return written
+
+
+def write_daily_summary(state: dict, summary: dict) -> dict:
+    """Roll up the UTC day's cycles into one small file the site shows as 'today'."""
+    day = summary.get("at", "")[:10]
+    cycles = [c for c in read_jsonl(os.path.join("cycles", f"{day[:7]}.jsonl")) if str(c.get("at", "")).startswith(day)]
+    events = [e for e in read_jsonl("trades.jsonl") if str(e.get("at", "")).startswith(day)]
+    fills = [e for e in events if e["kind"] == "fill"]
+    closes = [e for e in events if e["kind"] in ("exit", "settlement")]
+    rows = []
+    for strategy in FS.STRATEGIES:
+        account = state["accounts"].get(strategy["id"])
+        if not account:
+            continue
+        equity = account.get("lastEquity", account["cash"])
+        mine = [e for e in events if e.get("strategyId") == strategy["id"]]
+        rows.append({"strategyId": strategy["id"], "username": strategy["username"], "name": strategy["name"],
+                     "equity": round(equity, 2), "returnPct": round((equity / STARTING_CASH - 1) * 100, 4),
+                     "realizedPnl": round(account["realizedPnl"], 4), "openPositions": len(account["positions"]),
+                     "fillsToday": sum(1 for e in mine if e["kind"] == "fill"),
+                     "closesToday": sum(1 for e in mine if e["kind"] in ("exit", "settlement")),
+                     "pnlToday": round(sum(e["pnl"] for e in mine if "pnl" in e), 4)})
+    rows.sort(key=lambda r: -r["returnPct"])
+    accounts = [a for a in state.get("accounts", {}).values()]
+    equity_total = sum(a.get("lastEquity", a["cash"]) for a in accounts)
+    liquidation_total = sum(a.get("lastLiquidationEquity", a["cash"]) for a in accounts)
+    positions = [p for a in accounts for p in a.get("positions", [])]
+    intents_today = [i for i in (read_jsonl(os.path.join("intents", f"{day[:7]}.jsonl"))
+                                 if os.path.exists(os.path.join(FORWARD_DIR, "intents", f"{day[:7]}.jsonl")) else [])
+                     if str(i.get("at", "")).startswith(day)]
+    errors_today = [str(e) for c in cycles for e in (c.get("errors") or [])]
+    payload = {"schemaVersion": 1, "season": state.get("season", SEASON), "day": day, "generatedAt": summary.get("at"),
+               "cycles": len(cycles), "apiCalls": sum(c.get("apiCalls", 0) for c in cycles),
+               "apiErrors": sum(c.get("apiErrors", 0) for c in cycles),
+               "fills": len(fills), "exits": sum(1 for e in closes if e["kind"] == "exit"),
+               "settlements": sum(1 for e in closes if e["kind"] == "settlement"),
+               "realizedToday": round(sum(e["pnl"] for e in closes), 4),
+               "feesToday": round(sum(e.get("entryFee", 0.0) for e in fills) + sum(e.get("exitFee", 0.0) for e in closes), 4),
+               "bestMove": (max(rows, key=lambda r: r["pnlToday"]) if rows else None),
+               "worstMove": (min(rows, key=lambda r: r["pnlToday"]) if rows else None),
+               "rows": rows, "cycleIds": [c.get("cycle") for c in cycles],
+               # derived views for the site; every one of these is a sum of the rows above
+               "date": day,
+               "weekday": datetime.strptime(day, "%Y-%m-%d").strftime("%A") if day else None,
+               "accounts": len(rows),
+               "equity": {"total": round(equity_total, 2),
+                          "returnPct": round(((equity_total / (STARTING_CASH * len(rows))) - 1) * 100, 4) if rows else 0.0,
+                          "liquidationTotal": round(liquidation_total, 2),
+                          "liquidationReturnPct": round(((liquidation_total / (STARTING_CASH * len(rows))) - 1) * 100, 4) if rows else 0.0,
+                          "ranked": sum(1 for r in rows if r["fillsToday"] or r["closesToday"]),
+                          "realizedPnl": round(sum(a["realizedPnl"] for a in accounts), 4),
+                          "feesPaid": round(sum(a["feesPaid"] for a in accounts), 4),
+                          "slippagePaid": round(sum(a["slippagePaid"] for a in accounts), 4)},
+               "activity": {"fills": len(fills), "exits": sum(1 for e in closes if e["kind"] == "exit"),
+                            "settlements": sum(1 for e in closes if e["kind"] == "settlement"),
+                            "intents": len(intents_today)},
+               "positions": {"open": len(positions),
+                             "contracts": int(sum(float(p.get("contracts") or 0) for p in positions)),
+                             "entryNotional": round(sum(float(p.get("entryNotional") or 0) for p in positions), 2)},
+               "ledger": {"contracts": int(sum(float(e.get("contracts") or 0) for e in fills)),
+                          "markets": len({e.get("ticker") for e in events if e.get("ticker")})},
+               "movers": [{"strategyId": r["strategyId"], "username": r["username"], "returnPct": r["returnPct"],
+                           "fills": r["fillsToday"], "settlements": r["closesToday"], "pnlToday": r["pnlToday"]}
+                          for r in rows[:5]],
+               "leaders": [{"strategyId": r["strategyId"], "username": r["username"], "returnPct": r["returnPct"],
+                            "fills": r["fillsToday"]} for r in rows[:3]],
+               "signals": [{"source": "NWS point forecast", "ok": any(c.get("nwsCaptured") for c in cycles)},
+                           {"source": "NWS city gridpoints", "ok": sum(c.get("nwsCityForecasts", 0) for c in cycles) > 0,
+                            "captured": sum(c.get("nwsCityForecasts", 0) for c in cycles)},
+                           {"source": "ESPN scoreboards", "ok": sum(c.get("espnSignals", 0) for c in cycles) > 0,
+                            "captured": sum(c.get("espnSignals", 0) for c in cycles)},
+                           {"source": "openFDA drugsfda", "ok": sum(c.get("fdaSignals", 0) for c in cycles) > 0,
+                            "captured": sum(c.get("fdaSignals", 0) for c in cycles)},
+                           {"source": "official candlesticks", "ok": sum(c.get("candleMarkets", 0) for c in cycles) > 0,
+                            "captured": sum(c.get("candleMarkets", 0) for c in cycles)}],
+               "errors": len(errors_today), "errorSamples": errors_today[:5],
+               "note": "Roll-up of the committed ledger for one UTC day (cycles/, trades.jsonl). "
+                       "No value here is computed outside the ledger."}
+    write_json(os.path.join(FORWARD_DIR, "summary", f"{day}.json"), payload, compact=True)
+    write_json(os.path.join(FORWARD_DIR, "summary", "today.json"), payload, compact=True)
+    return payload
 
 
 # ----------------------------------------------------------------------------- entry point
@@ -987,22 +1333,40 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="run but do not persist anything")
     parser.add_argument("--out", help="override the forward-desk output directory (tests)")
     parser.add_argument("--series-index", help="override the series index path (tests)")
+    parser.add_argument("--season", help="force a season year (default: the UTC year of the cycle clock)")
     args = parser.parse_args(argv)
-    if args.out:
-        set_paths(forward_dir=args.out, series_index=args.series_index)
     if not args.live and not args.fixtures:
         parser.error("choose --live or --fixtures DIR")
     now_ts = parse_ts(args.now) if args.now else int(time.time())
+    if args.out:
+        set_paths(forward_dir=args.out, series_index=args.series_index, season=args.season or season_for(now_ts))
+        rolled_over = False
+    else:
+        if args.season:
+            set_paths(forward_dir=os.path.join(DATA_DIR, f"season-{args.season}", "forward"), season=args.season)
+            os.makedirs(FORWARD_DIR, exist_ok=True)
+            rolled_over = False
+        else:
+            _forward, season_name, rolled_over = use_season(now_ts)
     if args.fixtures:
         client, nws = fixture_client(args.fixtures)
     else:
         client, nws = KalshiClient(), fetch_json_url
     index = load_series_index()
-    ensure_series(client, index, FS.TRACKED_SERIES, errors := [])
-    state = read_json(os.path.join(FORWARD_DIR, "state.json")) or new_state(now_ts)
+    seeded = seed_index_from_catalog(index)
+    ensure_series(client, index, sorted(set(resolve_selector(index, "tracked"))), errors := [])
+    if seeded:
+        print(f"series index seeded from the weekly catalog: {len(seeded)} series "
+              f"({', '.join(seeded[:6])}{'...' if len(seeded) > 6 else ''})", file=sys.stderr)
+    state = read_json(os.path.join(FORWARD_DIR, "state.json")) or new_state(now_ts, SEASON)
+    if state.get("season") != SEASON:  # rolled over into a directory that held another season
+        state = new_state(now_ts, SEASON)
     backfill_counters(state)
     cycle = Cycle(client, now_ts, index, state, nws_fetcher=nws)
     cycle.errors.extend(errors)
+    if rolled_over:
+        cycle.errors.append(f"season rollover: started Season {SEASON} at {iso(now_ts)} with fresh "
+                            f"${STARTING_CASH:,.0f} accounts; earlier seasons are frozen")
     summary = cycle.run()
     if not args.dry_run:
         save_series_index(index)

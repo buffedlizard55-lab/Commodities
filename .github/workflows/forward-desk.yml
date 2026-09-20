@@ -66,11 +66,34 @@ jobs:
         if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'
         run: python3 scripts/forward_desk.py --live
 
+      # Measures this cycle's fills against the official trade tape (GET /markets/trades).
+      # Never fatal: a missing tape window is recorded as its own status, not a failed build.
+      - name: Compare fills with the official trade tape
+        if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'
+        run: python3 scripts/execution_realism.py --live || echo "execution realism comparison incomplete"
+
+      # Archive the full official candle history for the KXFED market (bounded chunks, one hash each).
+      - name: Archive KXFED full candle history
+        if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'
+        run: python3 scripts/archive_history.py --ticker KXFED-26SEP-T4.75 --period 1440 --live || echo "KXFED history archive incomplete"
+
+      # Replay the committed candle archive bar by bar (verified tape only, official results only).
+      - name: Rebuild the archive backtest
+        run: python3 scripts/backtest_archive.py
+
+      # Storage: verify existing compacted evidence still matches its recorded hash, then compact
+      # evidence/quotes older than 3 days.  Append-only ledger files are never touched.
+      - name: Check compacted storage
+        run: python3 scripts/compact_storage.py --check
+
+      - name: Compact old evidence and quote captures
+        run: python3 scripts/compact_storage.py --days 3 --apply
+
       - name: Verify season memory (invariants + hashes)
         run: python3 scripts/verify_data.py
 
       - name: Offline tests
-        run: python3 -m unittest tests.test_forward_desk
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Commit and push the ledger
         id: publish
@@ -80,12 +103,15 @@ jobs:
           git config user.name "forward-desk[bot]"
           git config user.email "forward-desk[bot]@users.noreply.github.com"
           mkdir -p data/universe
-          git add -A data/season-2026 data/universe
+          # season-agnostic: a rolled-over season (data/season-<next year>) commits like any other.
+          # Adapter caches are gitignored, so only verified artifacts are ever added.
+          git add -A data
           if git diff --cached --quiet; then
             echo "nothing to commit"; exit 0
           fi
-          CYCLE=$(python3 -c "import json;print((json.load(open('data/season-2026/forward/state.json')).get('lastCycle') or {}).get('cycle','universe'))" 2>/dev/null || echo "universe")
-          git commit -m "desk: ${{ steps.mode.outputs.mode }} ${CYCLE}" -m "Automated forward-desk cycle (official Kalshi public API + NWS). See data/season-2026/forward/."
+          SEASON=$(python3 -c "import json;print(json.load(open('data/seasons.json'))['activeSeason'])" 2>/dev/null || echo "2026")
+          CYCLE=$(python3 -c "import json,sys;print((json.load(open('data/season-'+sys.argv[1]+'/forward/state.json')).get('lastCycle') or {}).get('cycle','universe'))" "$SEASON" 2>/dev/null || echo "universe")
+          git commit -m "desk: ${{ steps.mode.outputs.mode }} ${CYCLE}" -m "Automated forward-desk cycle (official Kalshi public API + NWS/ESPN/openFDA signals). See data/season-${SEASON}/forward/."
           for attempt in 1 2 3 4 5; do
             if git push origin "HEAD:${BRANCH}"; then echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
             echo "push failed (attempt $attempt); rebasing"
