@@ -52,8 +52,13 @@ MAX_OPEN_POSITIONS_PER_STRATEGY = 8
 MAX_BOOKS_PER_CYCLE = 160
 BOOK_DEPTH = 40
 MAX_CANDIDATES_PER_STRATEGY = 2
-MAX_QUEUED_INTENTS = 3
+MAX_QUEUED_INTENTS = 1
 MAX_TECHNICAL_MARKETS = 8
+MAX_MICRO_MARKETS = 6
+EXIT_FLOOR_TOLERANCE = 0.03
+MARKETABLE_LIMIT_THROUGH = 0.05  # entries are IOC limits at min(rule bound, touch + 5c)
+RECENT_EVENTS = 200
+RECENT_INTENTS = 150
 QUOTE_LOG_LIMIT = 200
 FEE_TYPES_MODELED = {"quadratic", "quadratic_with_maker_fees", "quadratic_with_combo_maker_fees"}
 MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
@@ -173,6 +178,8 @@ def ensure_series(client: KalshiClient, index: dict, tickers: list[str], errors:
 
 
 def resolve_selector(index: dict, selector) -> list[str]:
+    """Series list for a strategy universe: explicit list, 'tracked', 'technical' or a filter
+    expression over the series index ('tag:X', 'prefix:X', 'contains:X', joined with '&')."""
     if isinstance(selector, list):
         return selector
     if selector == "tracked":
@@ -182,13 +189,25 @@ def resolve_selector(index: dict, selector) -> list[str]:
         return sorted(set(out))
     if selector == "technical":
         return list(FS.SERIES_ECON)
-    if selector.startswith("tag:"):
-        tag = selector[4:]
-        return sorted(t for t, s in index["series"].items() if s.get("status") == 200 and tag in (s.get("tags") or []))
-    if selector.startswith("prefix:"):
-        prefix = selector[7:]
-        return sorted(t for t, s in index["series"].items() if s.get("status") == 200 and t.startswith(prefix))
-    return []
+    clauses = [c.strip() for c in selector.split("&") if c.strip()]
+    if not clauses:
+        return []
+
+    def matches(ticker, row):
+        if row.get("status") != 200:
+            return False
+        for clause in clauses:
+            kind, _, value = clause.partition(":")
+            if kind == "tag" and value not in (row.get("tags") or []):
+                return False
+            if kind == "prefix" and not ticker.startswith(value):
+                return False
+            if kind == "contains" and value not in ticker:
+                return False
+            if kind not in ("tag", "prefix", "contains"):
+                return False
+        return True
+    return sorted(t for t, row in index["series"].items() if matches(t, row))
 
 
 def series_info(index: dict, series_ticker: str) -> dict:
@@ -311,6 +330,30 @@ def capture_candles(client, index, markets: dict, now_ts: int, errors) -> dict:
     return out
 
 
+MICRO_SERIES = ("KXBTC15M", "KXETH15M", "KXGOLD15M")
+
+
+def capture_micro_candles(client, index, markets: dict, now_ts: int, errors) -> dict:
+    """Official 1-minute candlesticks (last 20 minutes) for open 15-minute crypto/gold markets."""
+    out = {}
+    micro = [m for m in markets.values() if m["series_ticker"] in MICRO_SERIES]
+    micro.sort(key=lambda m: (m["close_ts"] or 0, m["ticker"]))
+    for m in micro[:MAX_MICRO_MARKETS]:
+        info = series_info(index, m["series_ticker"])
+        try:
+            payload, _raw, _url = client.candlesticks(m["series_ticker"], m["ticker"], now_ts - 20 * 60, now_ts, 1,
+                                                     exchange_index=info.get("exchange_index") or None)
+        except KalshiError as error:
+            errors.append(f"candles1m {m['ticker']}: {error}")
+            continue
+        bars = []
+        for bar in payload.get("candlesticks") or []:
+            price = bar.get("price") or {}
+            bars.append({"ts": bar.get("end_period_ts"), "close": fnum(price.get("close_dollars")), "volume": fnum(bar.get("volume_fp"))})
+        out[m["ticker"]] = bars
+    return out
+
+
 # ----------------------------------------------------------------------------- state
 def new_state(now_ts: int) -> dict:
     return {"schemaVersion": 1, "season": "2026", "startingCash": STARTING_CASH, "createdAt": iso(now_ts),
@@ -349,6 +392,7 @@ class Cycle:
         self.nws_fetcher = nws_fetcher
         self.nws_record = None
         self.candles = {}
+        self.candles1m = {}
         self.markets: dict[str, dict] = {}
         self.evidence_rows: list[dict] = []
         self._evidence_logged: set[str] = set()
@@ -359,6 +403,7 @@ class Cycle:
         self.markets = fetch_open_markets(self.client, self.index, tracked, self.errors)
         self.nws, self.nws_record = capture_nws(self.markets, self.cycle_id, self.now_ts, self.nws_fetcher, self.errors)
         self.candles = capture_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
+        self.candles1m = capture_micro_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
 
     def get_book(self, ticker: str) -> dict | None:
         if ticker in self.books:
@@ -437,7 +482,7 @@ class Cycle:
 
     # -- reconciliation -----------------------------------------------------------------
     def reconcile(self, strategy: dict, account: dict):
-        ctx = {"now_ts": self.now_ts, "candles": self.candles, "nws": getattr(self, "nws", {})}
+        ctx = {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m, "nws": getattr(self, "nws", {})}
         remaining = []
         for position in account["positions"]:
             ticker = position["ticker"]
@@ -486,6 +531,7 @@ class Cycle:
         self.events.append({
             "kind": "settlement", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"],
             "username": strategy["username"], "positionId": position["id"], "ticker": position["ticker"], "title": position["title"],
+            "subtitle": position.get("subtitle"), "series": position.get("seriesTicker"),
             "side": position["side"], "contracts": position["contracts"], "entryPrice": position["entryPrice"],
             "entryAt": position["entryAt"], "exitPrice": payout_per, "exitAt": iso(m["settlement_ts"]),
             "exitType": "settlement", "result": m["result"], "settlementValue": m["settlement_value"],
@@ -495,10 +541,12 @@ class Cycle:
         })
 
     def exit_position(self, strategy, account, position, book, reason) -> bool:
-        execution = execute(book, position["side"], "sell", position["contracts"])
+        best = book_quotes(book).get(f"{position['side']}_bid")
+        floor = None if best is None else round(max(0.0, best - EXIT_FLOOR_TOLERANCE), 4)
+        execution = execute(book, position["side"], "sell", position["contracts"], floor)
         if execution["filled"] + 1e-9 < position["contracts"] or execution["vwap"] is None:
             position["lastCloseError"] = {"at": iso(self.now_ts), "reason": reason,
-                                          "detail": f"only {execution['filled']} of {position['contracts']} contracts had verified bid liquidity"}
+                                          "detail": f"only {execution['filled']} of {position['contracts']} contracts had verified bid liquidity within {EXIT_FLOOR_TOLERANCE:.2f} of the best bid"}
             return False
         fee = taker_fee(execution["vwap"], execution["filled"], position["feeMultiplier"])
         proceeds = round(execution["notional"] - fee, 6)
@@ -514,6 +562,7 @@ class Cycle:
         self.events.append({
             "kind": "exit", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"],
             "username": strategy["username"], "positionId": position["id"], "ticker": position["ticker"], "title": position["title"],
+            "subtitle": position.get("subtitle"), "series": position.get("seriesTicker"),
             "side": position["side"], "contracts": position["contracts"], "entryPrice": position["entryPrice"],
             "entryAt": position["entryAt"], "exitPrice": execution["vwap"], "exitTouch": execution["touch"],
             "exitAt": self.book_meta[position["ticker"]]["at"], "exitType": "bid_exit", "exitReason": reason,
@@ -526,7 +575,7 @@ class Cycle:
     def candidates_for(self, strategy) -> list[tuple[dict, dict]]:
         series_list = set(resolve_selector(self.index, strategy["universe"]))
         held = {p["ticker"] for p in self.state["accounts"].get(strategy["id"], {}).get("positions", [])}
-        ctx = {"now_ts": self.now_ts, "candles": self.candles, "nws": getattr(self, "nws", {})}
+        ctx = {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m, "nws": getattr(self, "nws", {})}
         found = []
         pool = self.markets.values()
         if strategy.get("needs_book"):
@@ -556,8 +605,8 @@ class Cycle:
             if fills >= MAX_NEW_FILLS_PER_STRATEGY:
                 break
             intent = {"cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"], "username": strategy["username"],
-                      "ticker": m["ticker"], "title": m["title"], "series": m["series_ticker"], "side": signal["side"],
-                      "quotePrice": signal["price"], "reason": signal["reason"], "closeTime": iso(m["close_ts"]),
+                      "ticker": m["ticker"], "title": m["title"], "subtitle": m.get("yes_sub_title"), "series": m["series_ticker"], "side": signal["side"],
+                      "quotePrice": signal["price"], "limit": signal.get("limit"), "reason": signal["reason"], "closeTime": iso(m["close_ts"]),
                       "volume": m["volume"], "volume24h": m["volume_24h"], "status": "proposed", "positionId": None}
             if len(account["positions"]) >= MAX_OPEN_POSITIONS_PER_STRATEGY:
                 intent["status"] = "skipped_position_cap"
@@ -579,7 +628,7 @@ class Cycle:
             # The rule must still hold on the fresh book (the list quote can be stale).
             fresh = dict(m)
             fresh.update(book_quotes(book))
-            ctx = {"now_ts": self.now_ts, "candles": self.candles, "nws": getattr(self, "nws", {}), "book": book}
+            ctx = {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m, "nws": getattr(self, "nws", {}), "book": book}
             confirm = strategy["entry"](fresh, ctx)
             intent["bookQuotes"] = book_quotes(book)
             intent["bookAt"] = self.book_meta[m["ticker"]]["at"]
@@ -588,7 +637,9 @@ class Cycle:
                 self.intents.append(intent)
                 continue
             multiplier = fee_multiplier_for(self.index, m["series_ticker"])
-            execution = size_and_fill(book, signal["side"], account["cash"], strategy["fraction"], multiplier)
+            touch = book_quotes(book).get(f"{signal['side']}_ask")
+            limit = round(min(confirm.get("limit") or touch, touch + MARKETABLE_LIMIT_THROUGH), 4)
+            execution = size_and_fill(book, signal["side"], account["cash"], strategy["fraction"], multiplier, limit=limit)
             if execution is None:
                 intent["status"] = "no_liquidity_or_cash"
                 self.intents.append(intent)
@@ -605,6 +656,18 @@ class Cycle:
     def intents_for(self, strategy):
         return [i for i in self.intents if i["strategyId"] == strategy["id"]]
 
+    def dedupe_intents(self) -> list[dict]:
+        """Persist an intent only when it is new or changed since the previous cycle (fills always)."""
+        previous = self.state.get("intentFingerprints") or {}
+        current, keep = {}, []
+        for intent in self.intents:
+            key = f"{intent['strategyId']}|{intent['ticker']}|{intent['side']}|{intent['status']}"
+            current[key] = self.cycle_id
+            if intent["status"] == "filled" or key not in previous:
+                keep.append(intent)
+        self.state["intentFingerprints"] = current
+        return keep
+
     def open_position(self, strategy, account, m, signal, execution, multiplier) -> dict:
         cost = round(execution["notional"] + execution["fee"], 6)
         account["cash"] = round(account["cash"] - cost, 6)
@@ -617,10 +680,10 @@ class Cycle:
         position = {
             "id": f"{strategy['id']}-{safe(m['ticker'])}-{self.cycle_id}", "strategyId": strategy["id"], "username": strategy["username"],
             "ticker": m["ticker"], "eventTicker": m["event_ticker"], "seriesTicker": m["series_ticker"], "title": m["title"],
-            "side": signal["side"], "contracts": execution["filled"], "requestedContracts": execution["requested"],
+            "subtitle": m.get("yes_sub_title"), "side": signal["side"], "contracts": execution["filled"], "requestedContracts": execution["requested"],
             "unfilledContracts": execution["unfilled"], "entryPrice": execution["vwap"], "entryTouch": execution["touch"],
             "entryNotional": execution["notional"], "entryFee": execution["fee"], "entrySlippage": slip,
-            "levelsConsumed": len(execution["fills"]), "fills": execution["fills"][:10],
+            "levelsConsumed": len(execution["fills"]), "fills": execution["fills"][:5], "limitPrice": execution.get("limit"),
             "entryAt": self.book_meta[m["ticker"]]["at"], "entryCycle": self.cycle_id, "entryReason": signal["reason"],
             "closeTs": m["close_ts"], "closeTime": iso(m["close_ts"]), "exchangeIndex": m["exchange_index"],
             "feeMultiplier": multiplier, "quoteAtEntry": {k: m.get(k) for k in ("yes_bid", "yes_ask", "no_bid", "no_ask", "last", "previous", "volume", "volume_24h", "open_interest")},
@@ -632,12 +695,12 @@ class Cycle:
         account["positions"].append(position)
         self.events.append({
             "kind": "fill", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"], "username": strategy["username"],
-            "positionId": position["id"], "ticker": m["ticker"], "title": m["title"], "series": m["series_ticker"], "side": signal["side"],
-            "contracts": execution["filled"], "requestedContracts": execution["requested"], "unfilledContracts": execution["unfilled"],
+            "positionId": position["id"], "ticker": m["ticker"], "title": m["title"], "subtitle": m.get("yes_sub_title"), "series": m["series_ticker"],
+            "side": signal["side"], "contracts": execution["filled"], "requestedContracts": execution["requested"], "unfilledContracts": execution["unfilled"],
             "entryPrice": execution["vwap"], "entryTouch": execution["touch"], "entryNotional": execution["notional"],
             "entryFee": execution["fee"], "slippageEntry": slip, "levelsConsumed": len(execution["fills"]),
             "entryAt": position["entryAt"], "closeTime": position["closeTime"], "reason": signal["reason"], "evidence": evidence,
-            "feeModel": f"0.07*q*p*(1-p)*{multiplier:g} rounded up to $0.0001",
+            "limitPrice": execution.get("limit"), "feeMultiplier": multiplier,
         })
         return position
 
@@ -698,6 +761,8 @@ class Cycle:
             "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles),
             "errors": self.errors[:40], "errorCount": len(self.errors),
         }
+        self.persisted_intents = self.dedupe_intents()
+        summary["intentsPersisted"] = len(self.persisted_intents)
         self.state["cycles"] += 1
         self.state["lastCycle"] = summary
         self.state["files"] = {"trades": "trades.jsonl", "intents": f"intents/{self.month}.jsonl", "equity": f"equity/{self.month}.csv",
@@ -708,7 +773,7 @@ class Cycle:
     def persist(self, summary: dict):
         append_jsonl(os.path.join(FORWARD_DIR, "evidence", f"{self.day}.jsonl"), self.evidence_rows)
         append_jsonl(os.path.join(FORWARD_DIR, "trades.jsonl"), self.events)
-        append_jsonl(os.path.join(FORWARD_DIR, "intents", f"{self.month}.jsonl"), self.intents)
+        append_jsonl(os.path.join(FORWARD_DIR, "intents", f"{self.month}.jsonl"), self.persisted_intents)
         append_jsonl(os.path.join(FORWARD_DIR, "cycles", f"{self.month}.jsonl"), [summary])
         append_csv(os.path.join(FORWARD_DIR, "equity", f"{self.month}.csv"),
                    ["cycle", "at", "strategyId", "username", "cash", "openPositions", "markedPositions", "liquidationValue", "equity",
@@ -720,6 +785,37 @@ class Cycle:
             append_jsonl(os.path.join(FORWARD_DIR, "signals", "nws-central-park.jsonl"), [self.nws_record])
         write_json(os.path.join(FORWARD_DIR, "state.json"), self.state)
         write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state))
+        self.write_recent(summary)
+        self.write_curves()
+
+    def write_recent(self, summary: dict):
+        """Small, site-friendly window: latest events, intents and cycles (full history stays in the JSONL files)."""
+        path = os.path.join(FORWARD_DIR, "recent.json")
+        recent = read_json(path, {"events": [], "intents": [], "cycles": []})
+        recent["events"] = (self.events + recent.get("events", []))[:RECENT_EVENTS]
+        recent["intents"] = (self.persisted_intents + recent.get("intents", []))[:RECENT_INTENTS]
+        recent["cycles"] = ([summary] + recent.get("cycles", []))[:96]
+        recent["generatedAt"] = iso(self.now_ts)
+        recent["nws"] = self.nws_record and {k: self.nws_record[k] for k in ("at", "updateTime", "daytime", "mapped", "source")}
+        write_json(path, recent, compact=True)
+
+    def write_curves(self):
+        """Equity curves for the site: every cycle for the last 96 cycles + one point per UTC day for all history."""
+        path = os.path.join(FORWARD_DIR, "curves.json")
+        curves = read_json(path, {"recent": {}, "daily": {}})
+        for row in self.equity_rows:
+            cycle_id, at, strategy_id, _username, _cash, _open, _marked, _liq, equity = row[:9]
+            series = curves["recent"].setdefault(strategy_id, [])
+            series.append([at, equity])
+            del series[:-96]
+            daily = curves["daily"].setdefault(strategy_id, [])
+            day = at[:10]
+            if daily and daily[-1][0] == day:
+                daily[-1][1] = equity
+            else:
+                daily.append([day, equity])
+        curves["generatedAt"] = iso(self.now_ts)
+        write_json(path, curves, compact=True)
 
 
 def safe(text: str) -> str:

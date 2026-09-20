@@ -23,8 +23,8 @@ SERIES_CRYPTO = ["KXBTC", "KXBTC15M", "KXETH15M"]
 SERIES_GOLD = ["KXGOLD15M", "KXGOLDH"]
 SERIES_WEATHER = ["KXHIGHNY"]
 SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME"]
-SELECTOR_CEO = "tag:CEOs"        # resolved from data/universe/series-index.json (Companies category)
-SELECTOR_FDA = "prefix:KXFDA"    # resolved from data/universe/series-index.json (Health category)
+SELECTOR_CEO = "tag:CEOs&contains:CEO"   # Companies-category series tagged CEOs whose ticker names a CEO market
+SELECTOR_FDA = "prefix:KXFDA&tag:Medicine"  # FDA drug-decision series (excludes FDA-politics series)
 
 TRACKED_SERIES = SERIES_ECON + SERIES_CRYPTO + SERIES_GOLD + SERIES_WEATHER + SERIES_SPORTS
 TRACKED_SELECTORS = [SELECTOR_CEO, SELECTOR_FDA]
@@ -67,9 +67,13 @@ def _minutes_to_close(m, now_ts):
     return None if hours is None else hours * 60
 
 
-def _move(m):
+def _move(m, now_ts=None):
+    """last trade minus the last trade a day ago (official previous_price_dollars semantics).
+    Undefined for markets younger than 24h (no day-ago trade exists) or without a prior trade."""
     last, prev = m.get("last"), m.get("previous")
-    if last is None or prev is None or prev == 0 and last == 0:
+    if last is None or prev is None or prev <= 0 or last <= 0:
+        return None
+    if now_ts is not None and (m.get("open_ts") is None or now_ts - m["open_ts"] < DAY):
         return None
     return round(last - prev, 4)
 
@@ -83,18 +87,19 @@ def entry_book_edge(m, ctx):
     spread = _spread(m, side)
     if spread is None or spread < 0.02:
         return None
-    return {"side": side, "price": ask, "reason": f"{side.upper()} ask {ask:.2f} <= 0.45 with displayed spread {spread:.2f} >= 0.02"}
+    return {"side": side, "price": ask, "limit": 0.45, "reason": f"{side.upper()} ask {ask:.2f} <= 0.45 with displayed spread {spread:.2f} >= 0.02"}
 
 
 def entry_tick_momentum(m, ctx):
-    move = _move(m)
+    move = _move(m, ctx["now_ts"])
     if move is None or abs(move) < 0.03:
         return None
     side = "yes" if move > 0 else "no"
     ask = m.get(f"{side}_ask")
     if ask is None or not 0 < ask < 1:
         return None
-    return {"side": side, "price": ask, "reason": f"last {m['last']:.2f} vs previous {m['previous']:.2f} = {move:+.2f} (>= 3c) -> buy {side.upper()} at {ask:.2f}"}
+    return {"side": side, "price": ask, "limit": round(min(0.99, ask + 0.02), 4),
+            "reason": f"last trade {m['last']:.2f} vs a day ago {m['previous']:.2f} = {move:+.2f} (>= 3c) -> buy {side.upper()} at {ask:.2f} (limit +2c)"}
 
 
 def entry_expiry_tail(m, ctx):
@@ -105,7 +110,7 @@ def entry_expiry_tail(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"closes in {hours:.1f}h and {side.upper()} ask {ask:.2f} <= 0.15"}
+    return {"side": side, "price": ask, "limit": 0.15, "reason": f"closes in {hours:.1f}h and {side.upper()} ask {ask:.2f} <= 0.15"}
 
 
 def entry_depth_imbalance(m, ctx):
@@ -123,7 +128,7 @@ def entry_depth_imbalance(m, ctx):
     ask = m.get(f"{side}_ask")
     if ask is None or not 0 < ask < 1:
         return None
-    return {"side": side, "price": ask, "reason": f"displayed depth imbalance {imbalance * 100:+.1f}% toward {side.upper()} (YES {yes_depth:,.0f} / NO {no_depth:,.0f})"}
+    return {"side": side, "price": ask, "limit": round(min(0.99, ask + 0.02), 4), "reason": f"displayed depth imbalance {imbalance * 100:+.1f}% toward {side.upper()} (YES {yes_depth:,.0f} / NO {no_depth:,.0f}); limit +2c"}
 
 
 def entry_dip_hunter(m, ctx):
@@ -133,18 +138,19 @@ def entry_dip_hunter(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"{side.upper()} ask {ask:.2f} <= 0.05 on a market with volume {m['volume']:,.0f}"}
+    return {"side": side, "price": ask, "limit": 0.05, "reason": f"{side.upper()} ask {ask:.2f} <= 0.05 on a market with volume {m['volume']:,.0f}"}
 
 
 def entry_spike_surfer(m, ctx):
-    move = _move(m)
+    move = _move(m, ctx["now_ts"])
     if move is None or abs(move) < 0.20 or (m.get("volume_24h") or 0) < 1_000:
         return None
     side = "yes" if move > 0 else "no"
     ask = m.get(f"{side}_ask")
     if ask is None or not 0 < ask < 1:
         return None
-    return {"side": side, "price": ask, "reason": f"last-vs-previous move {move:+.2f} (>= 20c) with 24h volume {m['volume_24h']:,.0f} -> buy {side.upper()}"}
+    return {"side": side, "price": ask, "limit": round(min(0.99, ask + 0.02), 4),
+            "reason": f"24h move {move:+.2f} (>= 20c; last {m['last']:.2f} vs a day ago {m['previous']:.2f}) with 24h volume {m['volume_24h']:,.0f} -> buy {side.upper()} (limit +2c)"}
 
 
 def entry_sure_thing(m, ctx):
@@ -154,7 +160,7 @@ def entry_sure_thing(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"{side.upper()} ask {ask:.2f} in [0.90, 0.97] with volume {m['volume']:,.0f} >= 100k"}
+    return {"side": side, "price": ask, "limit": 0.97, "reason": f"{side.upper()} ask {ask:.2f} in [0.90, 0.97] with volume {m['volume']:,.0f} >= 100k"}
 
 
 def entry_yield_sniper(m, ctx):
@@ -167,7 +173,7 @@ def entry_yield_sniper(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"{side.upper()} ask {ask:.2f} in [0.97, 0.99], closes in {hours / 24:.1f} days (<= 21)"}
+    return {"side": side, "price": ask, "limit": 0.99, "reason": f"{side.upper()} ask {ask:.2f} in [0.97, 0.99], closes in {hours / 24:.1f} days (<= 21)"}
 
 
 def entry_ceo_fav(m, ctx):
@@ -175,7 +181,7 @@ def entry_ceo_fav(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"CEO-change market: favourite {side.upper()} ask {ask:.2f} in [0.80, 0.96]"}
+    return {"side": side, "price": ask, "limit": 0.96, "reason": f"CEO market: favourite {side.upper()} ask {ask:.2f} in [0.80, 0.96]"}
 
 
 def entry_fda_premium(m, ctx):
@@ -183,7 +189,7 @@ def entry_fda_premium(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"FDA market: favourite {side.upper()} ask {ask:.2f} in [0.85, 0.97]"}
+    return {"side": side, "price": ask, "limit": 0.97, "reason": f"FDA drug-decision market: favourite {side.upper()} ask {ask:.2f} in [0.85, 0.97]"}
 
 
 def entry_game_favourite(m, ctx):
@@ -194,7 +200,7 @@ def entry_game_favourite(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"game favourite {side.upper()} ask {ask:.2f} in [0.80, 0.95], closes in {hours:.1f}h, volume {m['volume']:,.0f}"}
+    return {"side": side, "price": ask, "limit": 0.95, "reason": f"game favourite {side.upper()} ask {ask:.2f} in [0.80, 0.95], closes in {hours:.1f}h, volume {m['volume']:,.0f}"}
 
 
 def entry_underdog_sweep(m, ctx):
@@ -205,7 +211,7 @@ def entry_underdog_sweep(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"underdog {side.upper()} ask {ask:.2f} <= 0.20, closes in {hours:.1f}h, volume {m['volume']:,.0f}"}
+    return {"side": side, "price": ask, "limit": 0.20, "reason": f"underdog {side.upper()} ask {ask:.2f} <= 0.20, closes in {hours:.1f}h, volume {m['volume']:,.0f}"}
 
 
 def entry_gold_leader(m, ctx):
@@ -216,7 +222,7 @@ def entry_gold_leader(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"gold 15-minute early leader {side.upper()} ask {ask:.3f} in [0.60, 0.80] with {minutes:.1f} min left"}
+    return {"side": side, "price": ask, "limit": 0.80, "reason": f"gold 15-minute early leader {side.upper()} ask {ask:.3f} in [0.60, 0.80] with {minutes:.1f} min left"}
 
 
 def entry_micro_tail(m, ctx):
@@ -227,7 +233,7 @@ def entry_micro_tail(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"15-minute tail {side.upper()} ask {ask:.3f} <= 0.10 with {minutes:.1f} min left"}
+    return {"side": side, "price": ask, "limit": 0.10, "reason": f"15-minute tail {side.upper()} ask {ask:.3f} <= 0.10 with {minutes:.1f} min left"}
 
 
 def entry_scalp_8095(m, ctx):
@@ -238,18 +244,35 @@ def entry_scalp_8095(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "reason": f"{side.upper()} ask {ask:.3f} in the 75-80c entry band (take profit at a 0.95 bid)"}
+    return {"side": side, "price": ask, "limit": 0.80, "reason": f"{side.upper()} ask {ask:.3f} in the 75-80c entry band (take profit at a 0.95 bid)"}
 
 
 def entry_panic_fade(m, ctx):
-    move = _move(m)
-    if move is None or abs(move) < 0.15:
+    """Fade a >= 15c dump/pump inside the micro market, read from its official 1-minute candles."""
+    bars = (ctx.get("candles1m") or {}).get(m.get("ticker"))
+    if not bars or len(bars) < 3:
         return None
-    side = "yes" if move < 0 else "no"  # fade the panic: buy the side that just got dumped
-    ask = m.get(f"{side}_ask")
+    closes = [b["close"] for b in bars if b.get("close") is not None]
+    if len(closes) < 3:
+        return None
+    recent = closes[-1]
+    window = closes[-6:-1]
+    hi, lo = max(window), min(window)
+    minutes = _minutes_to_close(m, ctx["now_ts"])
+    if minutes is None or minutes < 2:
+        return None
+    if hi - recent >= 0.15:
+        side, ask = "yes", m.get("yes_ask")
+        move = recent - hi
+    elif recent - lo >= 0.15:
+        side, ask = "no", m.get("no_ask")
+        move = recent - lo
+    else:
+        return None
     if ask is None or not 0 < ask < 1:
         return None
-    return {"side": side, "price": ask, "reason": f"panic fade: last-vs-previous {move:+.2f} (|move| >= 15c) -> buy the dumped side {side.upper()} at {ask:.3f}"}
+    return {"side": side, "price": ask, "limit": round(min(0.99, ask + 0.02), 4),
+            "reason": f"panic fade: 1-minute close moved {move:+.2f} vs the prior 5 minutes (|move| >= 15c) -> buy the dumped side {side.upper()} at {ask:.3f} (limit +2c), {minutes:.1f} min left"}
 
 
 def entry_longshot_fader(m, ctx):
@@ -259,9 +282,9 @@ def entry_longshot_fader(m, ctx):
     no_ask = m.get("no_ask")
     # Fade a 5-20c YES longshot by buying NO (NO ask 0.80-0.95), or the mirror image.
     if yes_ask is not None and 0.05 <= yes_ask <= 0.20 and no_ask is not None and 0.80 <= no_ask <= 0.95:
-        return {"side": "no", "price": no_ask, "reason": f"fade YES longshot at {yes_ask:.2f}: buy NO at {no_ask:.2f} (favourite-longshot bias)"}
+        return {"side": "no", "price": no_ask, "limit": 0.95, "reason": f"fade YES longshot at {yes_ask:.2f}: buy NO at {no_ask:.2f} (favourite-longshot bias)"}
     if no_ask is not None and 0.05 <= no_ask <= 0.20 and yes_ask is not None and 0.80 <= yes_ask <= 0.95:
-        return {"side": "yes", "price": yes_ask, "reason": f"fade NO longshot at {no_ask:.2f}: buy YES at {yes_ask:.2f} (favourite-longshot bias)"}
+        return {"side": "yes", "price": yes_ask, "limit": 0.95, "reason": f"fade NO longshot at {no_ask:.2f}: buy YES at {yes_ask:.2f} (favourite-longshot bias)"}
     return None
 
 
@@ -307,7 +330,7 @@ def entry_weather_bracket(m, ctx):
     ask = m.get("yes_ask")
     if ask is None or not 0 < ask <= 0.70:
         return None
-    return {"side": "yes", "price": ask,
+    return {"side": "yes", "price": ask, "limit": 0.70,
             "reason": f"NWS forecast high {forecast['high_f']}F ({forecast['period']}, issued {forecast['updated']}) falls in this bracket; YES ask {ask:.2f} <= 0.70"}
 
 
@@ -321,7 +344,7 @@ def entry_weather_fade(m, ctx):
     ask = m.get("no_ask")
     if ask is None or not 0 < ask <= 0.92:
         return None
-    return {"side": "no", "price": ask,
+    return {"side": "no", "price": ask, "limit": 0.92,
             "reason": f"bracket is {distance:.0f}F away from the NWS forecast high {forecast['high_f']}F (issued {forecast['updated']}); NO ask {ask:.2f} <= 0.92"}
 
 
@@ -340,7 +363,7 @@ def entry_sma_cross(m, ctx):
     ask = m.get("yes_ask")
     if ask is None or not 0 < ask < 1 or (m.get("volume_24h") or 0) <= 0:
         return None
-    return {"side": "yes", "price": ask, "reason": f"daily SMA5 {fast:.3f} > SMA10 {slow:.3f} and last {last:.2f} > SMA10 on verified candles ({len(closes)} bars); YES ask {ask:.2f}"}
+    return {"side": "yes", "price": ask, "limit": round(min(0.99, ask + 0.02), 4), "reason": f"daily SMA5 {fast:.3f} > SMA10 {slow:.3f} and last {last:.2f} > SMA10 on verified candles ({len(closes)} bars); YES ask {ask:.2f} (limit +2c)"}
 
 
 # ----------------------------------------------------------------------------- exit rules
@@ -385,11 +408,11 @@ STRATEGIES = [
      "universe": "tracked", "entry": entry_book_edge, "exit": exit_take_profit(multiple=1.5), "fraction": 0.5,
      "rule": "Buy the cheaper executable side when its ask is <= 45c and the displayed spread is >= 2c; sell at a bid >= 1.5x entry, else hold to settlement.",
      "why": "Price-dislocation hypothesis using only the live book. Pays the spread on entry; wins only if the cheap side re-rates or settles in the money."},
-    {"id": "tick-chaser", "username": "TickChaser", "name": "Last-Tick Momentum", "group": "momentum",
+    {"id": "tick-chaser", "username": "TickChaser", "name": "24h Momentum", "group": "momentum",
      "source": {"kind": "exchange mechanics", "label": "Kalshi market last/previous price fields", "url": "https://docs.kalshi.com/api-reference/market/get-market"},
      "universe": "tracked", "entry": entry_tick_momentum, "exit": exit_take_profit(add=0.05), "fraction": 0.5,
-     "rule": "When last - previous price is >= 3c in one direction, buy that direction at the live ask; sell at a bid 5c above entry, else hold to settlement.",
-     "why": "Momentum on the last official tick. Fails when the last trade is stale or the move was a one-off print."},
+     "rule": "When the last trade is >= 3c away from the last trade a day ago (official previous_price field; market must be >= 24h old), buy that direction at the ask with a +2c limit; sell at a bid 5c above entry, else hold to settlement.",
+     "why": "24-hour momentum on the official tape. Fails when the last trade is stale or the move was a one-off print."},
     {"id": "tail-sprint", "username": "TailSprint", "name": "Expiry Tail Sprint", "group": "expiry",
      "source": {"kind": "exchange mechanics", "label": "Kalshi close_time semantics", "url": "https://docs.kalshi.com/getting_started/market_lifecycle"},
      "universe": "tracked", "entry": entry_expiry_tail, "exit": exit_hold, "fraction": 0.5,
@@ -409,7 +432,7 @@ STRATEGIES = [
     {"id": "spike-surfer", "username": "SpikeSurfer", "name": "Release Spike Surfer", "group": "event",
      "source": {"kind": "committed backtest", "label": "Season 2026 backtest persona", "url": "data/season-2026/trades.json"},
      "universe": "tracked", "entry": entry_spike_surfer, "exit": exit_take_profit(add=0.01), "fraction": 0.5,
-     "rule": "When last - previous is >= 20c and 24h volume >= 1,000, buy the direction of the move; sell at the first bid above entry, else hold to settlement.",
+     "rule": "When the 24h move (last trade vs the last trade a day ago) is >= 20c and 24h volume >= 1,000 on a market >= 24h old, buy the direction of the move with a +2c limit; sell at the first bid above entry, else hold to settlement.",
      "why": "Chases information releases on the official tape. Wins when the print is real (NFL final drive); loses when the spike is a trap."},
     {"id": "sure-thing", "username": "SureThing", "name": "Favorite Holder", "group": "favorite",
      "source": {"kind": "literature", "label": "CEPR favourite-longshot analysis of 300k+ Kalshi contracts", "url": "https://cepr.org/voxeu/columns/economics-kalshi-prediction-market"},
@@ -430,7 +453,7 @@ STRATEGIES = [
     {"id": "ceo-fav", "username": "CEOExitFav", "name": "CEO-Change Favourite", "group": "companies",
      "source": {"kind": "MasterSite negative + exchange series", "label": "No CEO project exists in MasterSite (verified); Kalshi's CEO-change series (tag CEOs) are traded instead", "url": "https://buffedlizard55-lab.github.io/MasterSite/"},
      "universe": SELECTOR_CEO, "entry": entry_ceo_fav, "exit": exit_hold, "fraction": 0.5,
-     "rule": "On Kalshi CEO-change markets, buy the favourite side when its ask is 80-96c and hold to settlement.",
+     "rule": "On Kalshi CEO markets (Companies series tagged CEOs whose ticker names a CEO market), buy the favourite side when its ask is 80-96c and hold to settlement.",
      "why": "Executive departures are rare, dated events; the favourite (usually NO) tends to carry. Loses the full stake on a surprise exit."},
     {"id": "weather-bracket", "username": "WeatherCatalyst", "name": "NWS Forecast Bracket", "group": "weather",
      "source": {"kind": "MasterSite project + official feed", "label": "SFWeather (NWS pipeline) -> NWS gridpoint forecast for Central Park (OKX/34,45) -> KXHIGHNY", "url": "https://buffedlizard55-lab.github.io/SFWeather/"},
@@ -445,7 +468,7 @@ STRATEGIES = [
     {"id": "fda-premium", "username": "FDAReaction", "name": "FDA Decision Premium", "group": "biotech",
      "source": {"kind": "MasterSite project", "label": "DrugAnalysis - FDA Decisions & Biotech Reactions -> Kalshi KXFDA* series", "url": "https://buffedlizard55-lab.github.io/DrugAnalysis/"},
      "universe": SELECTOR_FDA, "entry": entry_fda_premium, "exit": exit_hold, "fraction": 0.5,
-     "rule": "On Kalshi FDA-decision markets, buy the favourite side when its ask is 85-97c and hold to settlement.",
+     "rule": "On Kalshi FDA drug-decision markets (KXFDA* series tagged Medicine), buy the favourite side when its ask is 85-97c and hold to settlement.",
      "why": "PDUFA outcomes are heavily favoured one way; the premium is the residual. An openFDA point-in-time adapter is the next step."},
     {"id": "game-favourite", "username": "GridironPulse", "name": "Game Favourite (NFL/NBA/NCAA/MLB)", "group": "sports",
      "source": {"kind": "MasterSite projects", "label": "NFL-scoreboard, NFLInjuryReport, NBAInjuryReport, Ncaa-football-alerts, MLB-Live-PBP -> Kalshi game series", "url": "https://buffedlizard55-lab.github.io/NFL-scoreboard/"},
@@ -474,8 +497,8 @@ STRATEGIES = [
      "why": "The social claim is a high win rate; the arithmetic says a 75c entry needs > 79% wins to break even after fees."},
     {"id": "panic-fade", "username": "PanicFader", "name": "Panic Fade (volatility reversion)", "group": "crypto",
      "source": {"kind": "community post", "label": "r/PredictionsMarkets 5,000-strategy KXBTC15M run: volatility reversion was the only profitable archetype (discovery only)", "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1szxy8h/backtested_5000_strategies_on_kalshi_15min_btc/"},
-     "universe": SERIES_CRYPTO + SERIES_GOLD, "entry": entry_panic_fade, "exit": exit_take_profit(add=0.05), "fraction": 0.5,
-     "rule": "When last - previous shows a >= 15c dump in one side, buy that dumped side at the ask; sell at a bid 5c above entry, else hold to settlement.",
+     "universe": SERIES_CRYPTO + SERIES_GOLD, "entry": entry_panic_fade, "exit": exit_take_profit(add=0.05), "fraction": 0.5, "needs_candles1m": True,
+     "rule": "On a 15-minute market's official 1-minute candles, when the latest close is >= 15c below (above) the prior five minutes' high (low), buy the dumped side at the ask with a +2c limit and >= 2 minutes left; sell at a bid 5c above entry, else hold to settlement.",
      "why": "Fades over-reactions inside micro markets. The community backtest is unverified; this forward test measures it on official prices."},
     {"id": "longshot-fader", "username": "LongshotFader", "name": "Favourite-Longshot Fader", "group": "favorite",
      "source": {"kind": "literature", "label": "Favorite-longshot bias evidence (CEPR / Polymarket paper) - longshots at 5-20c underperform", "url": "https://cepr.org/voxeu/columns/economics-kalshi-prediction-market"},

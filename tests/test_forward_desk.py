@@ -73,7 +73,8 @@ def build_fixtures(settled=False):
         market("KXHIGHNY-26SEP20-T78", "KXHIGHNY-26SEP20", close_wx, 0.00, 0.01, strike_type="greater", floor_strike=78, volume=1788),
     ]
     btc = [market("KXBTC15M-26SEP201515-15", "KXBTC15M-26SEP201515", close_15, 0.76, 0.78, last=0.78, prev=0.60, volume=90000, exchange_index=2)]
-    nfl = [market("KXNFLGAME-26SEP20AAABBB-AAA", "KXNFLGAME-26SEP20AAABBB", "2026-09-20T23:00:00Z", 0.88, 0.90, volume=250000)]
+    nfl = [market("KXNFLGAME-26SEP20AAABBB-AAA", "KXNFLGAME-26SEP20AAABBB", "2026-09-20T23:00:00Z", 0.88, 0.90, last=0.90, prev=0.80,
+                  volume=250000, open_time="2026-09-15T12:00:00Z")]
     fed = [market("KXFED-26OCT-T4.50", "KXFED-26OCT", "2026-10-28T18:00:00Z", 0.02, 0.03, volume=40000)]
     if not settled:
         fx["markets?series_ticker=KXHIGHNY&status=open&limit=200"] = {"cursor": "", "markets": wx}
@@ -142,9 +143,14 @@ class EngineTests(unittest.TestCase):
         ex = size_and_fill(b, "yes", 10.0, 0.5, 1.0)
         self.assertIsNotNone(ex)
         self.assertLessEqual(ex["notional"] + ex["fee"], 5.0 + 1e-9)
-        ex_big = size_and_fill(b, "yes", 1_000_000.0, 0.5, 1.0)
+        ex_touch = size_and_fill(b, "yes", 1_000_000.0, 0.5, 1.0)  # default limit = touch -> only the 0.06 level
+        self.assertEqual(ex_touch["filled"], 20)
+        self.assertGreater(ex_touch["unfilled"], 0)
+        ex_big = size_and_fill(b, "yes", 1_000_000.0, 0.5, 1.0, limit=0.10)
         self.assertEqual(ex_big["filled"], 25)
-        self.assertGreater(ex_big["unfilled"], 0)
+        self.assertAlmostEqual(ex_big["vwap"], (20 * 0.06 + 5 * 0.10) / 25, places=6)
+        ex_lim = execute(b, "yes", "buy", 100, limit=0.05)  # limit below the touch -> nothing fills
+        self.assertEqual(ex_lim["filled"], 0)
 
     def test_normalize_market_reads_fp_fields(self):
         m = normalize_market(market("X-1", "X", "2026-09-21T05:00:00Z", 0.70, 0.71, volume=3483.61, strike_type="less", cap_strike=71))
@@ -194,6 +200,11 @@ class DeskCycleTests(unittest.TestCase):
         self.assertEqual(by_strategy["game-favourite"][0]["ticker"], "KXNFLGAME-26SEP20AAABBB-AAA")
         # Scalp persona: BTC15M at 0.78 within 75-80c band with 10 minutes left.
         self.assertEqual(by_strategy["scalp-8095"][0]["entryTouch"], 0.78)
+        # 24h momentum: the NFL market is 5 days old with last 0.90 vs 0.80 a day ago -> TickChaser buys YES;
+        # the 15-minute BTC market has no day-ago trade, so momentum personas must ignore it.
+        tick = by_strategy["tick-chaser"]
+        self.assertEqual([t["ticker"] for t in tick], ["KXNFLGAME-26SEP20AAABBB-AAA"])
+        self.assertEqual(tick[0]["limitPrice"], 0.92)
         # Cheap tail personas: DipHunter picks the 1c T78 ticket or the 3c Fed ticket, sized to depth.
         self.assertIn("dip-hunter", by_strategy)
         # Ledger invariants per account: cash + entry notional + fees == starting cash (nothing realized yet).

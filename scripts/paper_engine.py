@@ -152,11 +152,15 @@ def depth(book: dict, side: str) -> float:
     return sum(qty for _, qty in book.get(side) or [])
 
 
-def execute(book: dict, side: str, action: str, requested: float) -> dict:
-    """Consume the ladder as a taker.  buy YES <- NO bids (price 1-p); sell YES -> YES bids."""
+def execute(book: dict, side: str, action: str, requested: float, limit: float | None = None) -> dict:
+    """Consume the ladder as a taker (immediate-or-cancel limit order).
+
+    buy YES <- NO bids (price 1-p); sell YES -> YES bids.  Levels priced worse than `limit`
+    (above it for buys, below it for sells) are never touched; the remainder stays unfilled.
+    """
     if side not in ("yes", "no") or action not in ("buy", "sell") or requested is None or requested <= 0:
         return {"fills": [], "requested": requested or 0, "filled": 0.0, "notional": 0.0, "vwap": None,
-                "unfilled": requested or 0, "touch": None, "slippage_per_contract": None}
+                "unfilled": requested or 0, "touch": None, "slippage_per_contract": None, "limit": limit}
     source_side = side if action == "sell" else ("no" if side == "yes" else "yes")
     ladder = sorted(book.get(source_side) or [], key=lambda level: -level[0])  # best first
     touch = None if not ladder else (ladder[0][0] if action == "sell" else round(1.0 - ladder[0][0], 4))
@@ -164,8 +168,10 @@ def execute(book: dict, side: str, action: str, requested: float) -> dict:
     for price, qty in ladder:
         if remaining <= 1e-9:
             break
-        take = min(remaining, qty)
         exec_price = price if action == "sell" else round(1.0 - price, 4)
+        if limit is not None and ((action == "buy" and exec_price > limit + 1e-9) or (action == "sell" and exec_price < limit - 1e-9)):
+            break
+        take = min(remaining, qty)
         fills.append({"level_price": price, "price": exec_price, "contracts": round(take, 2)})
         remaining -= take
         notional += take * exec_price
@@ -176,7 +182,7 @@ def execute(book: dict, side: str, action: str, requested: float) -> dict:
         slip = (vwap - touch) if action == "buy" else (touch - vwap)
     return {"fills": fills, "requested": float(requested), "filled": round(filled, 2), "notional": round(notional, 6),
             "vwap": None if vwap is None else round(vwap, 6), "unfilled": round(max(0.0, remaining), 2),
-            "touch": touch, "slippage_per_contract": None if slip is None else round(slip, 6)}
+            "touch": touch, "slippage_per_contract": None if slip is None else round(slip, 6), "limit": limit}
 
 
 def affordable_contracts(cash: float, price: float, multiplier: float = 1.0) -> int:
@@ -194,38 +200,55 @@ def affordable_contracts(cash: float, price: float, multiplier: float = 1.0) -> 
 
 
 def size_and_fill(book: dict, side: str, cash: float, fraction: float, multiplier: float,
-                  max_contracts: float | None = None) -> dict | None:
-    """Return the entry execution for a taker buy sized at `fraction` of cash, bounded by depth
-    (and an optional external cap).  The whole ladder can be consumed; slippage is recorded."""
+                  limit: float | None = None, max_contracts: float | None = None) -> dict | None:
+    """Entry execution for a taker buy sized at `fraction` of cash.
+
+    The order is an immediate-or-cancel limit at `limit` (defaults to the rule's own price bound,
+    or the touch when none is given): it consumes displayed levels up to the limit, and the
+    quantity is the largest one whose notional + exact fee fits the budget (binary search over the
+    ladder).  Depth beyond the budget or the limit is reported as `unfilled`.
+    """
     quotes = book_quotes(book)
     ask = quotes["yes_ask"] if side == "yes" else quotes["no_ask"]
     if ask is None or ask <= 0 or ask >= 1:
         return None
+    if limit is None:
+        limit = ask
+    if ask > limit + 1e-9:
+        return None
     budget = cash * fraction
-    wanted = affordable_contracts(budget, ask, multiplier)
+    if budget <= 0:
+        return None
+    ceiling = affordable_contracts(budget, ask, multiplier)  # upper bound: everything at the touch
     if max_contracts is not None:
-        wanted = min(wanted, int(max_contracts))
-    if wanted <= 0:
+        ceiling = min(ceiling, int(max_contracts))
+    if ceiling <= 0:
         return None
-    execution = execute(book, side, "buy", wanted)
-    if execution["filled"] <= 0 or execution["vwap"] is None:
+
+    def cost(q):
+        ex = execute(book, side, "buy", q, limit)
+        if ex["filled"] <= 0 or ex["vwap"] is None:
+            return None, ex
+        return ex["notional"] + taker_fee(ex["vwap"], ex["filled"], multiplier), ex
+
+    total, execution = cost(ceiling)
+    if total is None:
         return None
-    # Re-check affordability at the realized VWAP (worse than the touch when depth is thin):
-    # shrink to what the budget buys at that VWAP and repeat until stable (a few iterations).
-    fee = taker_fee(execution["vwap"], execution["filled"], multiplier)
-    guard = 0
-    while execution["notional"] + fee > budget + 1e-9 and guard < 50:
-        guard += 1
-        smaller = min(math.floor(execution["filled"]) - 1, affordable_contracts(budget, execution["vwap"], multiplier))
-        if smaller <= 0:
+    if total > budget + 1e-9:
+        low, high = 0, ceiling  # cost is monotonic in q; find the largest affordable q
+        while high - low > 1:
+            mid = (low + high) // 2
+            mid_total, _ = cost(mid)
+            if mid_total is not None and mid_total <= budget + 1e-9:
+                low = mid
+            else:
+                high = mid
+        if low <= 0:
             return None
-        execution = execute(book, side, "buy", smaller)
-        if execution["filled"] <= 0 or execution["vwap"] is None:
+        total, execution = cost(low)
+        if total is None or total > budget + 1e-9:
             return None
-        fee = taker_fee(execution["vwap"], execution["filled"], multiplier)
-    if execution["notional"] + fee > cash + 1e-9:
-        return None
-    execution["fee"] = fee
+    execution["fee"] = taker_fee(execution["vwap"], execution["filled"], multiplier)
     execution["side"] = side
     return execution
 
