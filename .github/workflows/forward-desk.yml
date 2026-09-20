@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  actions: write      # lets the cycle re-deploy Pages (GITHUB_TOKEN pushes do not fire push-triggered workflows)
 
 concurrency:
   group: forward-desk-${{ github.ref }}
@@ -72,6 +73,7 @@ jobs:
         run: python3 -m unittest tests.test_forward_desk
 
       - name: Commit and push the ledger
+        id: publish
         env:
           BRANCH: ${{ github.ref_name }}
         run: |
@@ -85,10 +87,16 @@ jobs:
           CYCLE=$(python3 -c "import json;print((json.load(open('data/season-2026/forward/state.json')).get('lastCycle') or {}).get('cycle','universe'))" 2>/dev/null || echo "universe")
           git commit -m "desk: ${{ steps.mode.outputs.mode }} ${CYCLE}" -m "Automated forward-desk cycle (official Kalshi public API + NWS). See data/season-2026/forward/."
           for attempt in 1 2 3 4 5; do
-            if git push origin "HEAD:${BRANCH}"; then exit 0; fi
+            if git push origin "HEAD:${BRANCH}"; then echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
             echo "push failed (attempt $attempt); rebasing"
             git fetch origin "${BRANCH}"
             git rebase "origin/${BRANCH}" || { git rebase --abort; exit 1; }
             sleep $((attempt * 5))
           done
           exit 1
+
+      - name: Re-deploy GitHub Pages with the new ledger (default branch only)
+        if: steps.publish.outputs.pushed == 'true' && github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref "${{ github.ref_name }}" || echo "pages dispatch skipped"
