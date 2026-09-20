@@ -36,7 +36,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     client = KalshiClient()
     catalog_path = os.path.join(UNIVERSE_DIR, "series-catalog.json")
-    catalog = read_json(catalog_path, {"schemaVersion": 1, "series": {}})
+    catalog = read_json(catalog_path, {"schemaVersion": 2, "series": {}})
+    if catalog.get("schemaVersion") != 2:
+        catalog = {"schemaVersion": 2, "series": {}}
     index = load_series_index()
     now = int(time.time())
     run = {"at": iso(now), "categories": {}, "inserted": []}
@@ -50,8 +52,14 @@ def main(argv=None):
         run["categories"][category] = {"count": len(rows), "sha256": client.calls[-1]["sha256"], "url": url, "bytes": len(raw)}
         for raw_series in rows:
             row = compact_series(raw_series)
-            row["seenAt"] = iso(now)
-            catalog["series"][row["ticker"]] = row
+            # Catalog rows are deliberately compact (13.6k series): settlement-source names only,
+            # no per-row timestamps; the full record is one GET /series/{ticker} away and the desk's
+            # series-index.json keeps the full compact record for every series it trades.
+            catalog["series"][row["ticker"]] = {
+                "t": row["title"], "c": row["category"], "g": row.get("tags") or [], "f": row["fee_type"],
+                "m": row["fee_multiplier"], "x": row["exchange_index"], "q": row["frequency"], "v": row["volume_fp"],
+                "s": [src.get("name") for src in row.get("settlement_sources") or []],
+            }
             tags = set(row.get("tags") or [])
             if tags & DESK_TAGS or row["ticker"].startswith(DESK_PREFIXES):
                 entry = dict(row)
@@ -60,6 +68,9 @@ def main(argv=None):
                 run["inserted"].append(row["ticker"])
     catalog["updatedAt"] = iso(now)
     catalog["count"] = len(catalog["series"])
+    catalog["fields"] = {"t": "title", "c": "category", "g": "tags", "f": "fee_type", "m": "fee_multiplier", "x": "exchange_index",
+                         "q": "frequency", "v": "volume_fp", "s": "settlement source names"}
+    catalog["source"] = f"{client.base_url}/series?category=<category>&include_volume=true"
     write_json(catalog_path, catalog, compact=True)
     save_series_index(index)
     run["catalogCount"] = catalog["count"]
