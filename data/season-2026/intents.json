@@ -1,0 +1,62 @@
+[
+  {
+    "id": "intent-bookrover-B90625",
+    "strategyId": "book-edge",
+    "username": "BookRocket",
+    "strategyName": "Book Edge Sweep",
+    "ticker": "KXBTC-26SEP2017-B90625",
+    "title": "Bitcoin $90,500-90,749.99 at 5 PM EDT Sep 20, 2026 (YES)",
+    "side": "yes",
+    "proposedPrice": 0.02,
+    "maxDisplayDepth": 180.0,
+    "spread": 0.02,
+    "reason": "Verified YES ask 0.02 <= 0.45 with a 2-cent displayed spread (YES bid 0.00 / ask 0.02, size 180).",
+    "observedAt": "2026-09-19 (UTC) session window 23:42-00:20Z",
+    "evidence": [
+      "market-records.json#KXBTC-26SEP2017-B90625",
+      "GET /trade-api/v2/markets?series_ticker=KXBTC&status=open&limit=3"
+    ],
+    "status": "proposed",
+    "note": "Upcoming trade the strategy wants to place. A fill is only recorded after a fresh verified order book is consumed (live desk, browser)."
+  },
+  {
+    "id": "intent-tailsprint-T90749.99",
+    "strategyId": "tail-sprint",
+    "username": "TailSprint",
+    "strategyName": "Expiry Tail Sprint",
+    "ticker": "KXBTC-26SEP2017-T90749.99",
+    "title": "Bitcoin >= $90,750 at 5 PM EDT Sep 20, 2026 (YES)",
+    "side": "yes",
+    "proposedPrice": 0.01,
+    "maxDisplayDepth": 5999.0,
+    "spread": 0.01,
+    "reason": "Market closes 2026-09-20T21:00:00Z (within 48h of collection); verified YES ask 0.01 <= 0.15 with 5,999 contracts of displayed depth (NO bid 0.99).",
+    "observedAt": "2026-09-19 (UTC) session window 23:42-00:20Z",
+    "evidence": [
+      "market-records.json#KXBTC-26SEP2017-T90749.99",
+      "orderbook-KXBTC-26SEP2017-T90749.99.csv"
+    ],
+    "status": "proposed",
+    "note": "Cheapest executable side of a near-expiry binary. Pure return-seeking tail exposure; settlement source is CF Benchmarks BRTI."
+  },
+  {
+    "id": "intent-diphunter-T90749.99",
+    "strategyId": "dip-hunter",
+    "username": "DipHunter",
+    "strategyName": "Cheap Dip Hunter",
+    "ticker": "KXBTC-26SEP2017-T90749.99",
+    "title": "Bitcoin >= $90,750 at 5 PM EDT Sep 20, 2026 (YES)",
+    "side": "yes",
+    "proposedPrice": 0.01,
+    "maxDisplayDepth": 5999.0,
+    "spread": 0.01,
+    "reason": "Live rule of the backtested DipHunter: ask 0.01 <= 0.05 at a verified depth of 5,999 contracts.",
+    "observedAt": "2026-09-19 (UTC) session window 23:42-00:20Z",
+    "evidence": [
+      "market-records.json#KXBTC-26SEP2017-T90749.99",
+      "orderbook-KXBTC-26SEP2017-T90749.99.csv"
+    ],
+    "status": "proposed",
+    "note": "Same market as TailSprint; two different return-seeking theses on one verified book."
+  }
+]

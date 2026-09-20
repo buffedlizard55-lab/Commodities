@@ -21,6 +21,7 @@ import {
 
 const STORAGE_PREFIX = 'research-exchange-paper-v1';
 const SEASON_YEAR = new Date().getUTCFullYear();
+const SEASON_BASE = 'data/season-2026/';
 const state = {
   seasonYear: SEASON_YEAR,
   markets: [],
@@ -35,6 +36,7 @@ const state = {
   trades: [],
   intents: [],
   observations: [],
+  season: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -368,7 +370,8 @@ function renderCompetition() {
   if (!body) return;
   body.innerHTML = rows.map((row, index) => {
     const { strategy, summary } = row;
-    const evidence = summary.trades ? ['live fill', ''] : strategy.mode === 'live-book' ? ['awaiting fill', 'none'] : ['source-gated', 'blocked'];
+    const btRow = strategy.mode === 'backtest' ? seasonBacktestSummary(strategy) : null;
+    const evidence = summary.trades ? ['live fill', ''] : strategy.mode === 'backtest' ? (btRow ? ['committed backtest', ''] : ['backtest row missing', 'none']) : strategy.mode === 'live-book' ? ['awaiting fill', 'none'] : ['source-gated', 'blocked'];
     const returnClass = summary.returnPct > 0 ? 'return-positive' : summary.returnPct < 0 ? 'return-negative' : '';
     return `<tr><td class="rank">${index + 1}</td><td><div class="persona-cell"><span class="avatar">${escapeHtml(strategy.username.slice(0, 2).toUpperCase())}</span><div><strong>${escapeHtml(strategy.username)}</strong><small>${escapeHtml(strategy.name)}</small></div></div></td><td><b>${formatDollars(summary.equity)}</b></td><td class="${returnClass}">${formatReturn(summary.returnPct)}</td><td class="${summary.realized > 0 ? 'return-positive' : summary.realized < 0 ? 'return-negative' : ''}">${formatDollars(summary.realized)}</td><td>${summary.trades}</td><td><span class="evidence-pill ${evidence[1]}">${escapeHtml(evidence[0])}</span></td></tr>`;
   }).join('');
@@ -416,13 +419,37 @@ function renderSelectedMarket() {
   container.innerHTML = `<div class="detail-head"><h3 class="market-title">${escapeHtml(market.title)}</h3><p class="market-subtitle">${escapeHtml(market.ticker)} · event ${escapeHtml(market.eventTicker || 'not returned')}</p></div><div class="quote-grid">${quote('YES bid', quotes.yesBid)}${quote('YES ask', quotes.yesAsk, market.yesAskDerived && !book)}${quote('NO bid', quotes.noBid)}${quote('NO ask', quotes.noAsk, market.noAskDerived && !book)}</div>${bookLines}<div class="subsection-title">Upcoming strategy intents</div><div class="intent-list">${intentHtml}</div><div class="subsection-title">Current live-book signals</div><div class="intent-list">${strategyHtml}</div><div class="detail-meta" style="margin-top:13px"><div><span>Close time</span><b>${escapeHtml(formatDate(market.closeTime))}</b></div><div><span>Volume</span><b>${escapeHtml(formatContracts(market.volume))}</b></div></div>`;
 }
 
+function seasonBacktestSummary(strategy) {
+  if (!state.season) return null;
+  return state.season.leaderboard.find((row) => row.username === strategy.username) ?? null;
+}
+
 function renderStrategies() {
-  const filtered = strategies.filter((strategy) => state.activeFilter === 'all' || (state.activeFilter === 'live-book' ? strategy.mode === 'live-book' : strategy.mode !== 'live-book'));
+  const matches = (strategy) => {
+    if (state.activeFilter === 'all') return true;
+    if (state.activeFilter === 'live-book') return strategy.mode === 'live-book';
+    if (state.activeFilter === 'backtest') return strategy.mode === 'backtest';
+    return strategy.mode !== 'live-book' && strategy.mode !== 'backtest';
+  };
+  const filtered = strategies.filter(matches);
   $('#strategy-count').textContent = String(strategies.length);
   $('#strategy-grid').innerHTML = filtered.map((strategy) => {
-    const summary = summaryForStrategy(strategy);
-    const status = strategy.mode === 'live-book' ? 'live-book eligible' : 'source-gated';
-    return `<article class="strategy-card ${strategy.mode === 'live-book' ? 'is-live' : 'is-blocked'}"><div class="strategy-top"><span class="strategy-avatar">${escapeHtml(strategy.username.slice(0, 2).toUpperCase())}</span><span class="evidence-pill ${strategy.mode === 'live-book' ? '' : 'blocked'}">${escapeHtml(status)}</span></div><h3>${escapeHtml(strategy.name)}</h3><div class="strategy-username">@${escapeHtml(strategy.username)}</div><p><b>Rule:</b> ${escapeHtml(strategy.rule)}<br><br><b>Why:</b> ${escapeHtml(strategy.why)}</p><div class="strategy-foot"><small>${escapeHtml(strategyExplanation(summary, strategy))}</small><b>${formatReturn(summary.returnPct)}</b></div></article>`;
+    const isBacktest = strategy.mode === 'backtest';
+    const isLive = strategy.mode === 'live-book';
+    const status = isLive ? 'live-book eligible' : isBacktest ? 'backtested · committed' : 'source-gated';
+    const pillClass = isLive || isBacktest ? '' : 'blocked';
+    let foot;
+    if (isBacktest) {
+      const bt = seasonBacktestSummary(strategy);
+      const note = bt ? `${bt.trades} verified trade(s) · $${bt.feesPaid.toFixed(2)} fees + $${bt.slippagePaid.toFixed(2)} spread` : 'no committed backtest row';
+      const ret = bt ? formatReturn(bt.returnPct) : '—';
+      const retClass = bt ? (bt.returnPct > 0 ? 'return-positive' : bt.returnPct < 0 ? 'return-negative' : '') : '';
+      foot = `<div class="strategy-foot"><small>${escapeHtml(note)}</small><b class="${retClass}">${escapeHtml(ret)}</b></div>`;
+    } else {
+      const summary = summaryForStrategy(strategy);
+      foot = `<div class="strategy-foot"><small>${escapeHtml(strategyExplanation(summary, strategy))}</small><b>${formatReturn(summary.returnPct)}</b></div>`;
+    }
+    return `<article class="strategy-card ${isLive || isBacktest ? 'is-live' : 'is-blocked'}"><div class="strategy-top"><span class="strategy-avatar">${escapeHtml(strategy.username.slice(0, 2).toUpperCase())}</span><span class="evidence-pill ${pillClass}">${escapeHtml(status)}</span></div><h3>${escapeHtml(strategy.name)}</h3><div class="strategy-username">@${escapeHtml(strategy.username)}</div><p><b>Rule:</b> ${escapeHtml(strategy.rule)}<br><br><b>Why:</b> ${escapeHtml(strategy.why)}</p>${foot}</article>`;
   }).join('');
 }
 
@@ -571,5 +598,6 @@ loadLocalState();
 renderSources();
 renderAll();
 bindEvents();
+loadSeasonMemory();
 loadMarkets({ announce: false });
 window.setInterval(() => { if (state.apiStatus !== 'loading') loadMarkets({ announce: false }); }, 30_000);

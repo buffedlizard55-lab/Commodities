@@ -1,75 +1,165 @@
-# Research Exchange · Commodities
+# Commodities · Kalshi Research Exchange
 
-Evidence-first Kalshi paper-trading competition and forward-testing lab. The published site is a dependency-free static app in `index.html`, `styles.css`, `src/`, and `data/`. `.github/workflows/pages.yml` publishes the repository root through the official GitHub Pages artifact/deploy actions after Pages is enabled for the repository.
+An evidence-first paper-trading lab for Kalshi event contracts: return-seeking strategy
+personas, a **committed backtest on verified official Kalshi price data**, and a **live
+forward-test desk** that simulates upcoming trades against the public API at runtime.
 
-## What is implemented
+Everything on this page traces to a stored, hash-bound source file or a documented official
+endpoint. No synthetic quotes, no reconstructed bars, no silent fallbacks.
 
-- **Live public market-data read:** the browser requests Kalshi's documented REST endpoints for open markets and a selected market's order book. The getting-started orderbook guide says that read needs no authentication; the current API-reference page displays auth headers, so this app uses no key and visibly fail-closes if production rejects the public read.
-- **Fail-closed data boundary:** if the official endpoint cannot be reached, the site shows an empty state. It never inserts demo prices, invented market rows, or a synthetic leaderboard result.
-- **Upcoming trade desk:** live-book strategies can create a timestamped proposed intent from observed market fields. A paper fill consumes the current YES/NO order-book depth level by level, recording requested size, filled size, VWAP, source levels, liquidity consumed, reciprocal-ask derivation, and modeled slippage.
-- **Explicit real-trade simulation section:** the Live Desk explains exactly what can be simulated with a public read and what cannot: authentication, order submission, queue position, maker fills, and a real Kalshi fill are not claimed.
-- **Competition leaderboard:** 2026 UTC-season accounts start with $10,000 of paper cash. Equity is calculated from realized PnL plus a conservative live-bid liquidation mark. The roster sorts by return, but a strategy with no verified fill has no return claim.
-- **Strategy roster:** 17 named usernames cover live order-book hypotheses plus source-gated research ideas for weather, SEC Form 4, FDA, NFL/NBA injuries, NCAA/NFL/MLB scores, SportsPred, gold, PinePilot, The Leap, and market making. Source-gated ideas cannot fabricate signals when their primary-source adapter is absent.
-- **Ledger and memory:** fills, exits, proposed intents, and compact verified market observations are stored under a versioned browser `localStorage` key. JSON and CSV exports are available. This is browser-local memory, not a shared database.
-- **Research boundary:** this build does not bundle a verified historical tape and therefore makes no backtest claim. It forward-tests runtime observations and links to Kalshi's official historical endpoints for the next server-side collection/replay pass.
-- **Manual-review sources:** `data/source-registry.json` lists official Kalshi docs, government/sports primary sources, the MasterSite project links, competition references, and explicit irregularities. User project pages and social/community posts are never treated as exchange-price or settlement evidence.
+> Simulation only. This site never submits orders to Kalshi and never asks for API keys.
 
-## Run locally
+## What is in the repository
 
-A static server is required because the site uses ES modules and JSON modules:
-
-```bash
-python3 -m http.server 4173
-# open http://localhost:4173/
+```
+index.html, styles.css, src/        GitHub Pages site (published from the repo root)
+  src/engine.js                     pure accounting / orderbook / fee / settlement helpers
+  src/app.js                        live UI: market list, books, intents, paper fills, ledger
+scripts/
+  verify_data.py                    50 assertions over every stored data file + SHA-256 manifest
+  regen_candles.py                  structural regeneration of the candle CSVs (transcription guard)
+  build_competition.py              deterministic backtest + competition memory builder
+data/
+  strategies.json                   22 personas: 4 live-book, 5 committed-backtest, 1 quote-plan, 12 source-gated
+  source-registry.json              official sources, statuses, and irregularities IRR-01..14
+  season-2026/                      COMMITTED SEASON MEMORY (this is the durable store)
+    MANIFEST.md                     retrieval log: exact URLs, window, cross-checks, known gaps
+    SHA256SUMS.txt                  hash binding for every file in this directory
+    candles-*.csv                   verified Kalshi candlesticks (44 + 72 + 14 backtest bars, 27 context bars)
+    market-records.json             verified market rows incl. result + settlement timestamps
+    orderbook-*.csv                 verified live order book (KXBTC-26SEP2017-T90749.99)
+    trade-tape-sample.csv           verified official trade tape (25 fills, all markets)
+    series-records.json             fee type/multiplier + settlement sources (KXFED/KXCPI/KXBTC)
+    cutoff.json                     live/historical tier boundary read (2026-07-21T00:00:00Z)
+    competition.json                season metadata, markets, verified bar counts, fee model
+    trades.json                     every backtest trade (verified entry/exit prices, dates, fees, slippage)
+    leaderboard.json                computed standings ($10,000 per account)
+    intents.json                    upcoming (proposed) forward trades from the 2026-09-19 live snapshot
+    explanations.json               per-strategy "why it worked / didn't" analysis
+tests/
+  engine.test.mjs                   dependency-free tests for the live-desk engine
+  season-memory.test.mjs            invariants of the committed season memory
 ```
 
-The official Kalshi API may be unreachable from a local network or a GitHub Pages browser because of network policy or CORS. That is an expected, visible failure state; it is not replaced with fake data.
+## Season 2026 — committed backtest (verified tape only)
 
-## Tests
+Collected **2026-09-19 (UTC)** from the official, unauthenticated endpoints:
 
-The pure accounting/order-book helpers have a dependency-free Node test suite:
+| Market | Window | Bars | Verified outcome |
+|---|---|---|---|
+| `KXCPI-26AUG-T0.8` — "CPI rise more than 0.8% in Aug 2026?" | 2026-07-24 → 2026-09-12 (daily) | 44 | **no** @ 2026-09-11T13:28:53.706257Z |
+| `KXFED-26SEP-T4.75` — "Fed rate above 4.75% after Sep 16, 2026?" | 2026-06-20 → 2026-09-16 (daily) | 72 | **no** @ 2026-09-16T18:20:58.459351Z |
+| `KXNFLGAME-26SEP17DETBUF-BUF` — "Buffalo wins" (DET @ BUF) | 2026-09-17 12:00Z → 09-18 01:00Z (hourly) | 14 | **yes** @ 2026-09-18T03:34:55.133992Z |
+
+Committed leaderboard (start $10,000/account; taker fee `0.07·q·p·(1-p)` rounded up to $0.0001;
+entries at the bar's verified ask, exits at the verified bid, settlements at the official result):
+
+| Rank | Username | Strategy | Return |
+|---|---|---|---|
+| 1 | SpikeSurfer | Release Spike Surfer | +2.46% |
+| 2 | SureThing | Favorite Holder | +2.46% |
+| 3 | YieldSniper | Certainty Carry | +0.002% |
+| 4 | DipHunter | Cheap Dip Hunter | −0.013% |
+| 5 | CrossChaser | Momentum Cross | −0.493% |
+
+The honest story: the profitable strategies all entered **after** the verified tape confirmed the
+move (a 26¢ jump with ~13× volume on the final NFL drive; a liquid 95¢ favorite; a 99¢ NO ask with
+18.5 days to settlement). The losers paid the spread on range noise (CrossChaser) or held cheap
+lottery tickets on a one-sided book to a zero settlement (DipHunter). Full per-trade detail,
+fees and slippage are in `data/season-2026/trades.json`; per-strategy analysis in
+`explanations.json`.
+
+### How to reproduce
 
 ```bash
-npm test
+python3 scripts/verify_data.py      # 50 assertions; rewrites SHA256SUMS.txt
+python3 scripts/build_competition.py # recomputes trades.json / leaderboard.json / intents.json / explanations.json
+npm test                            # node --test (engine + season-memory invariants)
 ```
 
-The tests cover reciprocal YES/NO asks, depth consumption, VWAP/slippage, fee arithmetic, affordability, and closed-trade PnL. UI/API integration still needs to run in a browser against the official endpoint.
+The site reads the committed JSON/CSV at runtime; if the files are missing it renders an explicit
+"committed data unavailable" state instead of inventing rows.
+
+## Live forward-test desk (the separate real-trade section)
+
+- Loads open contracts from `GET https://external-api.kalshi.com/trade-api/v2/markets?status=open`
+  (cursor-paginated, capped at 20 pages) and per-market books from
+  `GET /markets/{ticker}/orderbook?depth=100`.
+- Binary-book mechanics as documented by Kalshi: the book returns YES/NO **bids**; a YES ask is
+  derived as `1 − best NO bid` (and NO ask as `1 − best YES bid`) and is visibly labelled "derived".
+- **Upcoming trades:** each eligible strategy can emit a *proposed* intent from a fresh verified
+  response (price, depth, reason, timestamp, source URL). An intent is **not** a fill.
+- **Simulated fills:** only after a fresh order-book read; depth is consumed level by level into a
+  VWAP, with slippage vs the displayed quote and the modeled fee. Exits require **full verified
+  liquidity**; otherwise the trade stays open with a recorded close error.
+- **Settlement** happens only when the official market record returns `result` plus a settlement
+  timestamp — never inferred from a final quote.
+- Fail-closed: any network/API/CORS failure leaves panels empty and the error visible. No demo
+  prices, no localStorage-only "memory" for backtest claims.
+
+Upcoming forward trades **committed** from the 2026-09-19 snapshot (see `intents.json`):
+BookRocket → `KXBTC-26SEP2017-B90625` YES @ 0.02 (180 displayed), TailSprint and DipHunter →
+`KXBTC-26SEP2017-T90749.99` YES @ 0.01 (5,999 displayed; closes 2026-09-20T21:00:00Z).
 
 ## Verification contract
 
-1. A market row is accepted only from a successful `GET /trade-api/v2/markets?status=open` response. A live response read on 2026-09-19 used `status: "active"` for those rows, so the app accepts only the explicit `open` or `active` labels and keeps the raw status.
-2. A paper fill is accepted only after a fresh `GET /trade-api/v2/markets/{ticker}/orderbook` response.
-3. A displayed midpoint is a mark; it is never logged as an entry or exit.
-4. A YES ask is `1 - best NO bid`; a NO ask is `1 - best YES bid`, matching Kalshi's documented binary-book representation. Derived values are visibly labelled.
-5. The standard quadratic taker-fee estimate is implemented from the published formula and centicent rounding documentation. Series-specific overrides and membership-specific balance rounding remain flagged for review.
-6. An exit is recorded only when the current verified bid book can fully consume the open position. Partial liquidity is not silently treated as a full exit.
-7. No result is marked settled from a quote. When an open paper position disappears from the open-market list, the app checks the official market endpoint and settles only on an explicit YES/NO result with a returned date field.
+1. **Raw data is stored, hash-bound, and cross-checked.** `SHA256SUMS.txt` + `scripts/verify_data.py`
+   (volume sums equal the market-record volume *exactly*; open-interest continuity; monotonic
+   bar timestamps; price bounds; settlement fields match the market records).
+2. **Fills come from verified quotes only.** Backtest entries use the stored bar's
+   `yes_ask_close` (or `1 − yes_bid_close` for NO); exits use `yes_bid_close`; settlements use the
+   official result and `settlement_ts`. Midpoints are marks, never fills.
+3. **No look-ahead.** Signals are computed from bars up to and including the decision bar; fills
+   are timestamped at that bar's `end_period_ts`.
+4. **Fees are modeled and labelled.** Standard quadratic taker fee with documented rounding;
+   settlement carries no modeled fee (flagged assumption IRR-11); maker-fee differences for
+   `quadratic_with_maker_fees` series are not modeled (flagged).
+5. **Social sources are discovery-only.** Reddit/YouTube/X/Facebook/contest sites can inspire a
+   hypothesis; none of them can verify a Kalshi price, fill, settlement or date.
+6. **Transparency of collection method (IRR-12).** This build was collected from a sandbox without
+   direct egress to `kalshi.com`; responses were read server-side and transcribed into the committed
+   files. The mitigations above are in place, and a future collector with direct API access should
+   re-fetch the same URLs and diff byte-for-byte.
 
-## Three review passes completed
+## Known limitations and next work (for the next session)
 
-- **Pass 1 — implementation:** created the static site, public market/order-book adapter, paper execution engine, strategy roster, browser ledger, exports, source registry, and tests.
-- **Pass 2 — bug/edge review:** added fail-closed API handling, XSS-safe rendering, reciprocal order-book asks, quantity-aware depth consumption, affordability including fees, conservative live-bid marks, partial-exit protection, local-storage caps, and unresolved-source flags.
-- **Pass 3 — requirements re-check:** separated hypothesis/source gates from exchange evidence, removed any implied backtest result, made the real-trade simulation boundary explicit, included all requested project references, and documented the one-year/shared-database/authentication limitations.
-
-## Known limitations and next work
-
-- **No live order entry:** real orders require authenticated RSA-PSS requests and secure server-side key handling. Do not put a private key in a GitHub Page. A future backend must add explicit paper/live mode separation, auth, rate limits, audit logs, and user consent.
-- **No shared one-year competition database:** browser storage is per device. A durable competition needs a scheduled collector or server with raw response retention, immutable timestamps, schema migrations, deduplication, and public export snapshots.
-- **No historical replay in this release:** the next research pass should collect official Kalshi candlesticks/trades, honor the historical cutoff, model maker queue/fill rules, and publish a replay report only after raw files and hashes are committed.
-- **Market-specific fees:** the default estimate is not a promise of the fee for every series. Fetch and retain series fee changes before a future exact-fee comparison.
-- **Market making is only a quote plan:** a public REST snapshot cannot prove queue priority or a maker fill. A future authenticated WebSocket/collector should record book deltas and actual public trades before counting a maker fill.
-- **External signal adapters are gated:** NWS, SEC EDGAR, FDA, NCAA, MLB, NFL and NBA inputs need source-specific timestamped adapters and exact contract joins. Until then, the roster is honest about being a research hypothesis.
-- **The requested “CEO” label was not an identifiable entry in the retrieved MasterSite directory.** It is recorded as unresolved instead of guessing a URL or strategy.
+- **Collector with direct egress.** Re-fetch every URL in `MANIFEST.md` from an environment with
+  network access, store the raw bytes, and replace the transcribed CSVs with byte-identical files
+  (keeps the same hashes contract).
+- **Deeper history.** Extend the KXFED window back to the 2025-08 open (the full-history endpoint
+  works; only the first chunk was captured this session) and add more CPI/Fed meetings and more
+  settled NFL games to grow the backtest sample.
+- **Per-market trade tape.** Confirm the market filter parameter name on `GET /markets/trades`
+  (the captured call ignored `market_ticker`; see IRR-14) and store per-market tick data.
+- **Gold/commodity feed.** FRED and Stooq were unreachable from this environment (IRR-13). Wire an
+  official free feed (e.g. LBMA via a reachable mirror, or EIA for oil) before MetalMomentum can
+  enter the roster.
+- **Settlement fee check.** Verify against Kalshi settlement documentation whether settlement
+  incurs any fee (IRR-11) and adjust the model if so.
+- **Source-gated strategies.** NWS, SEC EDGAR, FDA, NFL/NBA injury, NCAA/NFL/MLB scoreboards and
+  SportsPred each need a versioned adapter (primary-source response → exact contract mapping)
+  before they can emit a signal. The "CEO" MasterSite reference remains unresolved (IRR-08).
+- **Season durability.** The committed `data/season-2026/` is the durable record; browser
+  localStorage holds only the live-desk ledger. A scheduled collector should keep extending the
+  season archive as markets settle.
+- **Reference-competition follow-through.** Trade Ideas, CandleCharts and The Leap remain
+  discovery references; no claim here borrows their results.
+- **Discovery-only hypothesis log (social research, 2026-09-20).** CEPR's analysis of 300k+ Kalshi
+  contracts (favourite-longshot bias: 5–20¢ contracts underperform, 80–95¢ favorites overperform,
+  taker longshot losses ~32%) matches the committed results (SureThing/YieldSniper positive,
+  DipHunter negative). A community 5,000-strategy run on KXBTC15M found volatility-reversion
+  ("panic fade") as the only profitable archetype — the most concrete next backtest candidate once
+  KXBTC15M candle history is archived. A "+39% shock-timing bot" claim was refuted by its own
+  follow-up out-of-sample backtest. All social numbers stay hypotheses (registry:
+  `cepr-kalshi-bias`, `reddit-btc15m-backtest`, `reddit-shock-timing-refuted`,
+  `medium-pm-synthesis`, `pith-optimal-mm`).
 
 ## Primary review links
 
-- [Kalshi market-data quick start](https://docs.kalshi.com/getting_started/quick_start_market_data)
-- [Kalshi market order book](https://docs.kalshi.com/api-reference/market/get-market-orderbook)
-- [Kalshi unauthenticated orderbook response guide](https://docs.kalshi.com/getting_started/orderbook_responses)
-- [Kalshi historical data](https://docs.kalshi.com/getting_started/historical_data)
-- [Kalshi historical candlesticks](https://docs.kalshi.com/api-reference/historical/get-historical-market-candlesticks)
-- [Kalshi fee schedule](https://kalshi.com/fee-schedule)
-- [Kalshi authenticated requests](https://docs.kalshi.com/getting_started/quick_start_authenticated_requests)
-- [MasterSite directory](https://buffedlizard55-lab.github.io/MasterSite/)
-
-This project is a paper-trading research tool, not financial advice. It does not send live orders.
+- Kalshi Trade API docs index: <https://docs.kalshi.com/llms.txt>
+- Live candlesticks: <https://docs.kalshi.com/api-reference/market/get-market-candlesticks>
+- Historical data & cutoff: <https://docs.kalshi.com/getting_started/historical_data>
+- Orderbook semantics: <https://docs.kalshi.com/getting_started/orderbook_responses>
+- Fee rounding: <https://docs.kalshi.com/getting_started/fee_rounding>
+- Settlement: <https://docs.kalshi.com/getting_started/market_settlement>
+- Settlement sources for the backtested markets: Fed — <https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm>, CPI — <https://www.bls.gov/cpi/>, BTC — <https://www.cfbenchmarks.com/data/indices/BRTI>

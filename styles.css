@@ -203,6 +203,20 @@ tbody tr:hover { background: #fbfdfc; }
 .irregularities li { color: #8c6b41; font-size: 10px; line-height: 1.5; margin: 7px 0; }
 .social-note { padding: 15px 17px; background: #f0f4f2; color: var(--muted); border-radius: 12px; font-size: 10px; line-height: 1.5; margin-top: 13px; }
 .social-note strong { color: var(--deep-2); }
+.backtest-section { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.backtest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 8px 0 26px; align-items: start; }
+.backtest-grid .panel { margin: 0; }
+.backtest-grid .table-shell { margin-top: 0; }
+.explain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.explain-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px 16px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 4px 14px rgba(20, 42, 39, .05); }
+.explain-card header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.explain-user { font-size: 12px; font-weight: 700; color: var(--green-dark); }
+.explain-card p { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+.file-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.file-chip { display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; text-decoration: none; transition: .15s ease; }
+.file-chip:hover { border-color: var(--green); transform: translateY(-1px); }
+.file-chip .file-name { font-size: 11px; font-weight: 650; color: var(--ink); }
+.file-chip small { font-size: 9.5px; color: var(--soft); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .site-footer { margin-top: 85px; background: var(--deep); color: #fff; }
 .footer-inner { min-height: 90px; display: flex; align-items: center; gap: 20px; }
 .footer-inner b { font-size: 12px; }
@@ -214,6 +228,7 @@ tbody tr:hover { background: #fbfdfc; }
   .hero { gap: 35px; grid-template-columns: 1fr; padding-top: 50px; }
   .hero-aside { grid-template-columns: 1fr 1fr; }
   .strategy-grid { grid-template-columns: 1fr 1fr; }
+  .backtest-grid { grid-template-columns: 1fr; }
   .source-layout { grid-template-columns: 1fr; }
   .split-section { grid-template-columns: 1fr; gap: 23px; }
   .split-section h2 { max-width: none; }

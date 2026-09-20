@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "season": "2026",
+  "description": "Return-seeking paper-trading competition. Each username is a deterministic strategy. Backtest trades were filled ONLY against verified Kalshi candlestick prices and the official settlement records stored in this directory (see MANIFEST.md). Starting capital $10,000 per account.",
+  "seasonWindow": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2027-01-01T00:00:00Z"
+  },
+  "dataCollectedAt": "2026-09-19 (UTC) session window 23:42-00:20Z",
+  "startingCashPerAccount": 10000.0,
+  "settlementFeeAssumption": "no fee at settlement (IRR-11; to be verified against Kalshi settlement documentation in a future pass)",
+  "takerFeeModel": "0.07 * q * p * (1-p), rounded up to nearest $0.0001 (Kalshi published formula + fee-rounding docs)",
+  "sizingRule": "50% of equity per entry, capped at 25% of the bar's verified volume",
+  "markets": {
+    "KXCPI-26AUG-T0.8": {
+      "title": "Will CPI rise more than 0.8% in August 2026?",
+      "result": "no",
+      "settlementTs": "2026-09-11T13:28:53.706257Z",
+      "frequency": "daily",
+      "bars": 44
+    },
+    "KXFED-26SEP-T4.75": {
+      "title": "Fed rate above 4.75% after Sep 16, 2026 meeting?",
+      "result": "no",
+      "settlementTs": "2026-09-16T18:20:58.459351Z",
+      "frequency": "daily",
+      "bars": 72
+    },
+    "KXNFLGAME-26SEP17DETBUF-BUF": {
+      "title": "Buffalo wins (DET Lions @ BUF Bills, Sep 17, 2026)",
+      "result": "yes",
+      "settlementTs": "2026-09-18T03:34:55.133992Z",
+      "frequency": "hourly",
+      "bars": 14
+    }
+  },
+  "verifiedBars": 130,
+  "coldOpenContextBars": 27,
+  "participants": 5
+}

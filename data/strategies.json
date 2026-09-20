@@ -60,6 +60,66 @@
     "signal": "maker"
   },
   {
+    "id": "backtest-cross-chaser",
+    "username": "CrossChaser",
+    "name": "Momentum Cross (Pine-style)",
+    "mode": "backtest",
+    "tag": "technical",
+    "status": "backtested",
+    "rule": "Long when last price > slow SMA and fast SMA > slow SMA (daily 5/10, hourly 3/6); exit when last price < slow SMA at the verified bid; else hold to official settlement.",
+    "why": "Classic trend-following on a verified tape. The committed result shows both failure modes: 1-tick range crosses that stop out against the spread, and the genuine breakout that paid.",
+    "evidence": "data/season-2026/trades.json (cross-chaser rows) · verified candlesticks, no look-ahead",
+    "signal": "backtest"
+  },
+  {
+    "id": "backtest-dip-hunter",
+    "username": "DipHunter",
+    "name": "Cheap Dip Hunter",
+    "mode": "backtest",
+    "tag": "lottery",
+    "status": "backtested",
+    "rule": "Buy YES at the verified ask when ask <= 0.05 on a bar with volume; exit at the first verified bid >= 2x entry, else hold to settlement.",
+    "why": "Return-seeking lottery tickets: pay pennies, need a double or a 100% payoff. The committed tape shows why it bleeds — one-sided books keep the YES bid at zero, so exits never verify and cheap tickets settle at zero.",
+    "evidence": "data/season-2026/trades.json (dip-hunter rows) · verified candlesticks, no look-ahead",
+    "signal": "backtest"
+  },
+  {
+    "id": "backtest-spike-surfer",
+    "username": "SpikeSurfer",
+    "name": "Release Spike Surfer",
+    "mode": "backtest",
+    "tag": "event",
+    "status": "backtested",
+    "rule": "Buy in the direction of a bar whose |last - previous last| >= 0.20 AND volume >= 3x the average of the prior 10 volume bars; exit at the first verified bid above entry, else hold to settlement.",
+    "why": "Chases information releases when the verified tape shows both a jump and heavy official volume. The committed window contained exactly one qualifying spike (the NFL final-drive bar) and it paid; the CPI release spike failed the 3x volume gate, which is the documented trap-avoidance.",
+    "evidence": "data/season-2026/trades.json (spike-surfer rows) · verified candlesticks, no look-ahead",
+    "signal": "backtest"
+  },
+  {
+    "id": "backtest-sure-thing",
+    "username": "SureThing",
+    "name": "Favorite Holder",
+    "mode": "backtest",
+    "tag": "favorite",
+    "status": "backtested",
+    "rule": "Buy YES at the verified ask when bar close >= 0.90 and bar volume >= 100,000 contracts; hold to official settlement.",
+    "why": "Favorite-longshot-bias play: heavy favorites on event markets are often slightly under-priced. Only enters when the verified tape proves a liquid 90+ cent favorite — in the committed window that happened once (NFL 95 cents) and settled to $1.",
+    "evidence": "data/season-2026/trades.json (sure-thing rows) · verified candlesticks, no look-ahead",
+    "signal": "backtest"
+  },
+  {
+    "id": "backtest-yield-sniper",
+    "username": "YieldSniper",
+    "name": "Certainty Carry",
+    "mode": "backtest",
+    "tag": "carry",
+    "status": "backtested",
+    "rule": "Buy NO at the verified NO ask (1 - YES bid) when NO ask is in [0.97, 0.99] (YES bid 0.01-0.03), the bar has volume, and official settlement is within 21 days; hold to settlement. NO asks below 0.97 are lottery tickets and are rejected.",
+    "why": "Earns the residual on near-certain outcomes with a hard time horizon. The committed tape produced one qualifying bar (CPI, NO ask 0.99, 18.5 days to settlement) that settled to $1 for a small positive PnL; the NFL 32-cent NO ask is correctly rejected as not carry.",
+    "evidence": "data/season-2026/trades.json (yield-sniper rows) · verified candlesticks, no look-ahead",
+    "signal": "backtest"
+  },
+  {
     "id": "weather-edge",
     "username": "WeatherCatalyst",
     "name": "NWS Forecast Edge",
