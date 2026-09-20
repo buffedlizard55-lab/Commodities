@@ -1,58 +1,159 @@
 # Commodities · Kalshi Research Exchange
 
-An evidence-first paper-trading lab for Kalshi event contracts: return-seeking strategy
-personas, a **committed backtest on verified official Kalshi price data**, and a **live
-forward-test desk** that simulates upcoming trades against the public API at runtime.
+An evidence-first paper-trading lab for Kalshi event contracts:
 
-Everything on this page traces to a stored, hash-bound source file or a documented official
-endpoint. No synthetic quotes, no reconstructed bars, no silent fallbacks.
+* an **automated forward-test desk** — 20 return-seeking strategy personas that trade open Kalshi
+  contracts on paper twice an hour from a scheduled, read-only collector (GitHub Actions), with
+  every fill, exit, settlement, intent, mark and order book committed to this repository;
+* a **committed backtest on verified official Kalshi price data** (unchanged: 3 settled markets,
+  130 verified bars, 5 personas);
+* a **browser live desk** where you can inspect any open contract and simulate a fill yourself.
 
-> Simulation only. This site never submits orders to Kalshi and never asks for API keys.
+Everything on the site traces to a stored, hash-bound file or a documented official endpoint.
+No synthetic quotes, no reconstructed bars, no silent fallbacks.
+
+> Simulation only. Nothing in this project submits orders to Kalshi; no API key exists anywhere in it.
+
+Site: <https://buffedlizard55-lab.github.io/Commodities/> · Collector runs:
+<https://github.com/buffedlizard55-lab/Commodities/actions/workflows/forward-desk.yml>
 
 ## What is in the repository
 
 ```
 index.html, styles.css, src/        GitHub Pages site (published from the repo root)
-  src/engine.js                     pure accounting / orderbook / fee / settlement helpers
-  src/app.js                        live UI: market list, books, intents, paper fills, ledger
+  src/engine.js                     pure accounting / orderbook / fee / settlement helpers (browser)
+  src/season.js                     renders the committed forward desk + committed backtest
+  src/app.js                        browser live desk: market list, books, intents, paper fills, local ledger
 scripts/
-  verify_data.py                    51 assertions over every stored data file + SHA-256 manifest
-  regen_candles.py                  structural regeneration of the candle CSVs (transcription guard)
-  build_competition.py              deterministic backtest + competition memory builder
+  forward_desk.py                   ONE collector cycle: scan universe -> intents -> book fills -> settle -> ledger
+  forward_strategies.py             the 20 forward personas (rule functions + provenance) and 4 gated ones
+  paper_engine.py                   pure fill/fee/mark arithmetic shared by the collector and the tests
+  kalshi_client.py                  stdlib read-only client (pacing, backoff, call log) + offline fixture client
+  discover_universe.py              weekly GET /series catalog (13,607 series) -> data/universe/
+  verify_data.py                    51 season assertions + forward-ledger invariants + SHA-256 manifest
+  build_competition.py              deterministic backtest + committed competition memory
+  candles_from_raw.py, regen_candles.py   raw-response -> CSV regeneration and diff guards
+.github/workflows/forward-desk.yml  cron 7,37 * * * * (desk cycle) + Monday 06:17 UTC (universe) + manual dispatch
 data/
-  strategies.json                   22 personas: 4 live-book, 5 committed-backtest, 1 quote-plan, 12 source-gated
-  source-registry.json              official sources, statuses, and irregularities IRR-01..14
-  season-2026/                      COMMITTED SEASON MEMORY (this is the durable store)
-    MANIFEST.md                     retrieval log: exact URLs, window, cross-checks, known gaps
-    SHA256SUMS.txt                  hash binding for every file in this directory
-    candles-*.csv                   verified Kalshi candlesticks (44 + 72 + 14 backtest bars, 27 context bars)
-    market-records.json             verified market rows incl. result + settlement timestamps
-    orderbook-*.csv                 verified live order book (KXBTC-26SEP2017-T90749.99)
-    trade-tape-sample.csv           verified official trade tape (25 fills, all markets)
-    series-records.json             fee type/multiplier + settlement sources (KXFED/KXCPI/KXBTC)
-    cutoff.json                     live/historical tier boundary read (2026-07-21T00:00:00Z)
-    competition.json                season metadata, markets, verified bar counts, fee model
-    trades.json                     every backtest trade (verified entry/exit prices, dates, fees, slippage)
-    leaderboard.json                computed standings ($10,000 per account)
-    intents.json                    upcoming (proposed) forward trades from the 2026-09-19 live snapshot
-    explanations.json               per-strategy "why it worked / didn't" analysis
+  strategies.json                   persona roster (browser live-book, backtest, forward-desk, gated)
+  source-registry.json              63 official/primary sources + irregularities IRR-01..IRR-24
+  universe/                         series-catalog.json (compact, all categories), series-index.json (fees, shards, tags)
+  season-2026/                      COMMITTED SEASON MEMORY (durable store)
+    forward/                        <- the automated desk writes here every cycle
+      state.json                    cash + open positions per strategy, last cycle summary, file index
+      leaderboard.json              ranked board with rule / why / provenance / fill & mark policy strings
+      trades.jsonl                  append-only fills, bid exits and settlements (evidence-bound)
+      intents/YYYY-MM.jsonl         every intended trade with its status (filled / queued / not confirmed / no depth)
+      evidence/YYYY-MM-DD.jsonl     verbatim order-book responses (self-hashing) + settlement record projections
+      equity/YYYY-MM.csv            per-cycle per-strategy cash, marks, equity, realized, fees, slippage
+      quotes/YYYY-MM-DD.csv         quotes seen for held / traded contracts at each cycle
+      cycles/YYYY-MM.jsonl          one row per collector run (timing, API calls, counts, errors)
+      signals/nws-central-park.jsonl  point-in-time NWS forecast used by the weather personas
+      recent.json, curves.json      small windows for the site (latest events/intents/cycles, equity curves)
+    MANIFEST.md, SHA256SUMS.txt     retrieval log + hash binding for the committed backtest files
+    candles-*.csv, raw/, ...        verified backtest inputs (see MANIFEST.md)
+    competition.json, trades.json, leaderboard.json, intents.json, explanations.json   backtest outputs
 tests/
-  engine.test.mjs                   dependency-free tests for the live-desk engine
-  season-memory.test.mjs            invariants of the committed season memory
+  test_forward_desk.py              offline two-cycle lifecycle, IOC-limit fills, partial-exit refusal, evidence hashes
+  engine.test.mjs, season-memory.test.mjs   browser engine + committed-memory invariants (node --test)
+```
+
+## The forward-test desk (automated, separate section on the site)
+
+**Can a strategy place an upcoming trade and simulate a real trading experience?**
+*Yes, on paper and automatically:* each cycle every persona scans the tracked open contracts,
+records its **intent** (contract, side, price, limit, reason), the desk fetches the **fresh
+official order book** and fills as an immediate-or-cancel limit order against displayed depth.
+*No, it is not a live order:* queue position, latency and market impact are not simulated as
+facts (IRR-22).
+
+Each cycle (`scripts/forward_desk.py --live`, ~100–150 official reads, ~30 s):
+
+1. **Universe.** Open markets of the tracked series — econ `KXFED KXCPI KXCPIYOY KXFEDDECISION`,
+   crypto `KXBTC KXBTC15M KXETH15M`, gold `KXGOLD15M KXGOLDH`, weather `KXHIGHNY`, games
+   `KXNFLGAME KXNBAGAME KXNCAAFGAME KXMLBGAME`, plus every Companies series tagged `CEOs` whose
+   ticker names a CEO market and every `KXFDA*` series tagged `Medicine` (from the weekly series
+   catalog). Fee type / multiplier / exchange shard come from each series record (e.g.
+   `KXMLBGAME` multiplier 0.5, shard 3).
+2. **Signals.** Kalshi market fields (asks/bids, last, *last trade a day ago*, volume, close time,
+   strike bounds), the **NWS point forecast for Central Park** (archived with its hash), official
+   **daily candlesticks** (SMA persona) and **1-minute candlesticks** of open 15-minute markets
+   (panic-fade persona).
+3. **Reconcile.** Positions whose market shows an official `result` + `settlement_ts` settle at
+   $1/$0 with no fee; rule exits sell the **whole** position into the bid ladder within 3¢ of the
+   best bid or not at all (partial exits are refused and logged).
+4. **Enter.** Ranked candidates per persona (most active first); the rule must hold again on the
+   fresh book; size = 50% of free cash, IOC limit = min(rule bound, touch + 5¢); the ladder is
+   consumed level by level (VWAP, levels, slippage vs touch, exact fee, unfilled remainder). At most
+   2 new fills per persona per cycle and 8 open positions per persona (operational caps, not risk
+   management).
+5. **Mark & record.** Equity = cash + Σ contracts × (best bid, else last official trade, else 0);
+   bid-only liquidation equity is reported alongside (IRR-23). Personas without a fill are
+   *unranked*. Everything is appended to the ledger files above and committed by the workflow.
+
+Fee model: `0.07 · q · p · (1 − p) · series multiplier`, rounded up to $0.0001 (documented
+approximation, IRR-11). Series with a non-quadratic fee type are never traded.
+
+Rules may be tightened during the season when the ledger exposes a flaw (e.g. IRR-25: favourite
+bands now also require a displayed spread ≤ 5¢). Every change is a commit to
+`scripts/forward_strategies.py`; positions opened under an earlier rule stay in the ledger and the
+cycle ids make before/after results distinguishable. Nothing is ever re-simulated or deleted.
+
+### Personas (20 active, 4 gated)
+
+| Username | Rule (short) | Source of the idea |
+|---|---|---|
+| BookRocket, TickChaser, TailSprint, DepthDiver | cheap-side sweep · 24h momentum · ≤15¢ tails inside 48h · depth imbalance | exchange mechanics (prior roster, now automated) |
+| DipHunter, SpikeSurfer, SureThing, YieldSniper | ≤5¢ tickets · 20¢ 24h jumps · 90–97¢ favourites (vol ≥100k) · 97–99¢ carry ≤21 days | committed backtest personas, forward twins |
+| PinePilotX | SMA5/SMA10 cross on official daily candles | MasterSite **PinePilot** |
+| CEOExitFav | favourite 80–96¢ on Kalshi CEO series | MasterSite has **no CEO project** (verified) → Kalshi CEO series |
+| WeatherCatalyst, WeatherFader | YES on the NWS-forecast bracket ≤70¢ · NO on brackets ≥4°F away ≤92¢ | MasterSite **SFWeather** → NWS API → `KXHIGHNY` |
+| FDAReaction | favourite 85–97¢ on FDA drug-decision series | MasterSite **DrugAnalysis** → `KXFDA*` (Medicine) |
+| GridironPulse, SportsPredLab | 80–95¢ game favourite within 12h · 2–20¢ underdog sweep | MasterSite **NFL/NBA injury, NCAA/NFL/MLB scoreboards, SportsPred** → `KX*GAME` |
+| MetalMomentum | 60–80¢ leader with 5–12 min left on gold 15-minute markets | MasterSite **GOLD** is a ring-buyer directory → Kalshi `KXGOLD15M` (Pyth-settled) |
+| TailSprint15, HighProbScalp, PanicFader | ≤10¢ 15-minute tails · 75–80¢ in / 95¢ out · 1-minute-candle panic fade | r/KalshiBTCUporDown15, r/PredictionsMarkets (discovery only) |
+| LongshotFader | buy the 80–95¢ side against a 5–20¢ longshot (vol ≥5k) | CEPR favourite-longshot evidence |
+| *gated:* Form4Flash, LeapMapper, SpreadSmith, TipoffTriage | — | no Kalshi mapping / unverifiable maker fills / no official feed |
+
+Full rule text, "why it should (or should not) work", provenance links and live results are in
+`data/season-2026/forward/leaderboard.json` and on the site's Season board. The site's
+"Where the ideas came from" table maps each requested MasterSite source to what was built.
+
+### Reading the ledger
+
+* `trades.jsonl` — one line per **fill** (`entryPrice` VWAP, `entryTouch`, `limitPrice`,
+  `levelsConsumed`, `unfilledContracts`, `entryFee`, `slippageEntry`, `reason`, `evidence`),
+  **exit** (`exitPrice`, `exitReason`, `exitFee`, `pnl`) or **settlement** (`result`, `exitAt` =
+  official `settlement_ts`, `pnl`). `evidence.file` + `evidence.sha256` locate the verbatim
+  order-book response (or the settlement-record projection) in `evidence/YYYY-MM-DD.jsonl`;
+  `evidence.url` is the official endpoint.
+* `intents/` — every intended trade, including the ones that did **not** fill and why
+  (`not_confirmed_on_book`, `no_liquidity_or_cash`, `queued`, `skipped_position_cap`).
+* `state.json` — current positions with `lastMark` (bid, last, mark value) and `quoteAtEntry`.
+* `scripts/verify_data.py` re-checks on every run: cash identity
+  (`cash = start + realized − open cost`), event counts, realized/fees vs events, evidence hash
+  binding and order-book self-hashes.
+
+### Run it yourself
+
+```bash
+python3 scripts/forward_desk.py --live                 # one real cycle (needs network egress)
+python3 scripts/forward_desk.py --fixtures DIR --now 2026-09-20T15:00:00Z --out /tmp/out   # offline replay
+python3 -m unittest tests.test_forward_desk             # 8 offline tests
+python3 scripts/discover_universe.py                    # refresh data/universe/
+python3 scripts/verify_data.py && npm test              # invariants + hashes + browser engine tests
 ```
 
 ## Season 2026 — committed backtest (verified tape only)
 
-Collected **2026-09-19 (UTC)** from the official, unauthenticated endpoints:
+Collected **2026-09-19 (UTC)** from the official, unauthenticated endpoints (re-fetched verbatim
+2026-09-20, `data/season-2026/raw/`):
 
 | Market | Window | Bars | Verified outcome |
 |---|---|---|---|
 | `KXCPI-26AUG-T0.8` — "CPI rise more than 0.8% in Aug 2026?" | 2026-07-24 → 2026-09-12 (daily) | 44 | **no** @ 2026-09-11T13:28:53.706257Z |
 | `KXFED-26SEP-T4.75` — "Fed rate above 4.75% after Sep 16, 2026?" | 2026-06-20 → 2026-09-16 (daily) | 72 | **no** @ 2026-09-16T18:20:58.459351Z |
 | `KXNFLGAME-26SEP17DETBUF-BUF` — "Buffalo wins" (DET @ BUF) | 2026-09-17 12:00Z → 09-18 01:00Z (hourly) | 14 | **yes** @ 2026-09-18T03:34:55.133992Z |
-
-Committed leaderboard (start $10,000/account; taker fee `0.07·q·p·(1-p)` rounded up to $0.0001;
-entries at the bar's verified ask, exits at the verified bid, settlements at the official result):
 
 | Rank | Username | Strategy | Return |
 |---|---|---|---|
@@ -62,123 +163,78 @@ entries at the bar's verified ask, exits at the verified bid, settlements at the
 | 4 | DipHunter | Cheap Dip Hunter | −0.013% |
 | 5 | CrossChaser | Momentum Cross | −0.493% |
 
-The honest story: the profitable strategies all entered **after** the verified tape confirmed the
-move (a 26¢ jump with ~13× volume on the final NFL drive; a liquid 95¢ favorite; a 99¢ NO ask with
-18.5 days to settlement). The losers paid the spread on range noise (CrossChaser) or held cheap
-lottery tickets on a one-sided book to a zero settlement (DipHunter). Full per-trade detail,
-fees and slippage are in `data/season-2026/trades.json`; per-strategy analysis in
-`explanations.json`.
-
-### How to reproduce
+The profitable strategies all entered **after** the verified tape confirmed the move; the losers
+paid the spread on range noise or held cheap tickets on a one-sided book to a zero settlement.
+This pass fixed the informational slippage column only (IRR-20: settlement exits no longer carry a
+fake "slippage"; the entry half-spread is side-aware) — equity, returns and PnL are unchanged.
 
 ```bash
-python3 scripts/verify_data.py      # 51 assertions; rewrites SHA256SUMS.txt
-python3 scripts/build_competition.py # recomputes trades.json / leaderboard.json / intents.json / explanations.json
-npm test                            # node --test (engine + season-memory invariants)
+python3 scripts/verify_data.py       # 51 assertions + forward ledger; rewrites SHA256SUMS.txt
+python3 scripts/build_competition.py # recomputes trades / leaderboard / intents / explanations
+npm test                             # node --test (engine + season-memory invariants)
 ```
 
-The site reads the committed JSON/CSV at runtime; if the files are missing it renders an explicit
-"committed data unavailable" state instead of inventing rows.
+## Browser live desk (manual)
 
-## Live forward-test desk (the separate real-trade section)
-
-- Loads open contracts from `GET https://external-api.kalshi.com/trade-api/v2/markets?status=open`
-  (cursor-paginated, capped at 20 pages) and per-market books from
-  `GET /markets/{ticker}/orderbook?depth=100`.
-- Binary-book mechanics as documented by Kalshi: the book returns YES/NO **bids**; a YES ask is
-  derived as `1 − best NO bid` (and NO ask as `1 − best YES bid`) and is visibly labelled "derived".
-- **Upcoming trades:** each eligible strategy can emit a *proposed* intent from a fresh verified
-  response (price, depth, reason, timestamp, source URL). An intent is **not** a fill.
-- **Simulated fills:** only after a fresh order-book read; depth is consumed level by level into a
-  VWAP, with slippage vs the displayed quote and the modeled fee. Exits require **full verified
-  liquidity**; otherwise the trade stays open with a recorded close error.
-- **Settlement** happens only when the official market record returns `result` plus a settlement
-  timestamp — never inferred from a final quote.
-- Fail-closed: any network/API/CORS failure leaves panels empty and the error visible. No demo
-  prices, no localStorage-only "memory" for backtest claims.
-
-Upcoming forward trades **committed** from the 2026-09-19 snapshot (see `intents.json`):
-BookRocket → `KXBTC-26SEP2017-B90625` YES @ 0.02 (180 displayed), TailSprint and DipHunter →
-`KXBTC-26SEP2017-T90749.99` YES @ 0.01 (5,999 displayed; closes 2026-09-20T21:00:00Z).
+Loads open contracts from `GET /markets?status=open`, per-market books from
+`GET /markets/{ticker}/orderbook`, lets you simulate a taker fill for any live-book persona, exits
+only with full verified liquidity, settles only from the official record, and keeps its ledger in
+this browser's local storage (separate from the committed season). Fail-closed on any API error.
 
 ## Verification contract
 
-1. **Raw data is stored, hash-bound, and cross-checked.** `SHA256SUMS.txt` + `scripts/verify_data.py`
-   (volume sums equal the market-record volume *exactly*; open-interest continuity; monotonic
-   bar timestamps; price bounds; settlement fields match the market records).
-2. **Fills come from verified quotes only.** Backtest entries use the stored bar's
-   `yes_ask_close` (or `1 − yes_bid_close` for NO); exits use `yes_bid_close`; settlements use the
-   official result and `settlement_ts`. Midpoints are marks, never fills.
-3. **No look-ahead.** Signals are computed from bars up to and including the decision bar; fills
-   are timestamped at that bar's `end_period_ts`.
-4. **Fees are modeled and labelled.** Standard quadratic taker fee with documented rounding;
-   settlement carries no modeled fee (flagged assumption IRR-11); maker-fee differences for
-   `quadratic_with_maker_fees` series are not modeled (flagged).
+1. **Raw data is stored, hash-bound and cross-checked** (`SHA256SUMS.txt`, `evidence/*.jsonl`
+   self-hashes, `verify_data.py`).
+2. **Fills come from verified quotes only** — a captured order book (forward), a stored bar's
+   verified ask/bid (backtest); settlements from the official `result` + `settlement_ts`.
+   Midpoints and last trades are marks, never fills.
+3. **No look-ahead; no inferred results.** A finalized market without a yes/no result is held and
+   flagged, never guessed.
+4. **Fees are modeled and labelled**; series with unknown fee types are not traded.
 5. **Social sources are discovery-only.** Reddit/YouTube/X/Facebook/contest sites can inspire a
-   hypothesis; none of them can verify a Kalshi price, fill, settlement or date.
-6. **Transparency of collection method (IRR-12).** This build was collected from a sandbox without
-   direct egress to `kalshi.com`; responses were read server-side and transcribed into the committed
-   files. The mitigations above are in place, and a future collector with direct API access should
-   re-fetch the same URLs and diff byte-for-byte.
+   hypothesis; none of them verifies a Kalshi price, fill, settlement or date.
+6. **Method transparency.** Sandbox sessions have no direct egress to kalshi.com; the collector runs
+   on GitHub's runners with direct API access and stores what it received verbatim (IRR-12 closed).
 
 ## Known limitations and next work (for the next session)
 
-- **Collector with direct egress — RESOLVED 2026-09-20 (IRR-12).** Every `MANIFEST.md` URL was
-  re-fetched via the sandbox fetch tool; raw responses are stored verbatim in
-  `data/season-2026/raw/` (SHA-256 bound) and all three candle CSVs were field-by-field diffed
-  against the raw (`scripts/candles_from_raw.py --diff`). The diff caught one one-bar
-  transcription shift in the NFL CSV (IRR-15a), which was regenerated mechanically from the
-  canonical raw; PnL/fees/leaderboard are unchanged, and one fill's entry-bar attribution was
-  corrected to the bar on which its price was actually verified. FRED/Stooq remain unreachable
-  from the sandbox (IRR-13) — Kalshi endpoints work through the fetch tool.
-- **Deeper history.** The KXFED full-history fetch is 14 chunks; only the zero-volume prefix
-  (chunks 0-1, 2025-08-07→2025-09-28) is archived so far — archive the middle, and page settled
-  KXGOLDH markets (cursor pagination) to find the first *liquid* gold event (none traded yet).
-  Add more CPI/Fed meetings and settled NFL games to grow the sample.
-- **Per-market trade tape — RESOLVED 2026-09-20 (IRR-14).** The filter parameter is `ticker`:
-  `GET /markets/trades?ticker=<TICKER>&limit=N`, verified against KXBTC-26SEP2017-T90749.99
-  (1 trade = market volume; raw stored).
-- **Gold/commodity feed — RESOLVED 2026-09-20 (IRR-13, with gap).** The official LBMA JSON feed
-  (`prices.lbma.org.uk/json/gold_am.json`) is reachable; 2026-06-15→2026-09-18 AM fixes are
-  stored in `data/season-2026/raw/lbma-gold-am-2026.json`. Kalshi's own gold series `KXGOLDH`
-  (hourly 1-minute-candle strike binaries, Pyth-settled, exchange shard 2) was discovered and
-  verified — but recent events show zero volume, so MetalMomentum stays gated on Kalshi gold
-  liquidity. FRED's CSV endpoint and Stooq are still unreachable from the sandbox.
-- **Settlement fee check — RESOLVED 2026-09-20 (IRR-11).** Official docs: "Settlement fees are
-  zero for simple yes/no determinations" (sub-cent scalar settlement may differ; payouts rounded
-  to whole cents). All backtested markets are simple yes/no → the no-settlement-fee model is
-  confirmed. Fee docs: 6-decimal granularity with a per-fill rounding fee onto the member balance
-  grid; the model's $0.0001 round-up is the direct-member grid approximation (documented).
-- **Exchange sharding (new, 2026-09-20).** Kalshi sharded matching engines by category: shard 2 =
-  crypto + commodities (since 2026-09-10). Market-data calls for sharded series require
-  `exchange_index=2` (e.g. `KXGOLDH`; `/series/KXGOLDH/markets` 404s without it).
-- **Source-gated strategies.** NWS, SEC EDGAR, FDA, NFL/NBA injury, NCAA/NFL/MLB scoreboards and
-  SportsPred each need a versioned adapter (primary-source response → exact contract mapping)
-  before they can emit a signal. The "CEO" MasterSite reference remains unresolved (IRR-08).
-- **Season durability.** The committed `data/season-2026/` is the durable record; browser
-  localStorage holds only the live-desk ledger. A scheduled collector should keep extending the
-  season archive as markets settle.
-- **Reference-competition follow-through.** Trade Ideas, CandleCharts and The Leap remain
-  discovery references; no claim here borrows their results.
-- **Discovery-only hypothesis log (social research, 2026-09-20).** CEPR's analysis of 300k+ Kalshi
-  contracts (favourite-longshot bias: 5–20¢ contracts underperform, 80–95¢ favorites overperform,
-  taker longshot losses ~32%) matches the committed results (SureThing/YieldSniper positive,
-  DipHunter negative). A community 5,000-strategy run on KXBTC15M found volatility-reversion
-  ("panic fade") as the only profitable archetype — the most concrete next backtest candidate once
-  KXBTC15M candle history is archived. A "+39% shock-timing bot" claim was refuted by its own
-  follow-up out-of-sample backtest. All social numbers stay hypotheses (registry:
-  `cepr-kalshi-bias`, `reddit-btc15m-backtest`, `reddit-shock-timing-refuted`,
-  `medium-pm-synthesis`, `pith-optimal-mm`).
+* **Previous-session items still open.** KXFED full-history chunks 2–13 are not archived; the
+  committed backtest sample is unchanged (3 markets) — the collector's `forward/candles/` archive
+  is now the path to a larger verified sample (it already holds the LSU/Ole Miss game candles).
+* **Season rollover.** `state.json` is Season 2026; on 2027-01-01 start `data/season-2027/`
+  (new accounts at $10,000) and keep 2026 frozen.
+* **Let the season run and audit it.** The desk started counting at cycle `20260920T032126Z`
+  (IRR-17). After a few days: compare settlements against `GET /markets/{ticker}` by hand for a
+  sample, check `cycles/*.jsonl` for skipped/late schedules (GitHub cron is best-effort and stops
+  after 60 days without repository activity), and review `intents/` for rules that never confirm on
+  the book.
+* **Storage compaction (IRR-24).** Add a monthly job that gzips `evidence/` and `quotes/` files
+  older than 30 days (keeping the hashes in place) so the repo and Pages artifact stay small.
+* **More archived history for backtests.** Extend `build_competition.py` to run over any set of
+  archived candle CSVs, and let the collector archive candlesticks for markets it traded once they
+  settle (`KXGOLD15M`, `KXBTC15M`, game markets) — that turns the forward sample into a
+  reproducible backtest set.
+* **Signal adapters still missing.** ESPN scoreboard snapshots for in-game score triggers (ESPN is
+  a listed settlement source for `KXNCAAFGAME`); openFDA for PDUFA dates; other NWS cities
+  (`KXHIGHCHI/LAX/MIA/…`) after reading each series' station in `rules_primary`; index/commodity
+  range series for LeapMapper from `data/universe/series-catalog.json`.
+* **Maker behaviour.** SpreadSmith stays gated until a defensible resting-fill model exists (would
+  need trade-tape matching against posted quotes, still not a verified fill).
+* **Execution realism.** IOC limits at touch + 5¢ and displayed depth are assumptions (IRR-22);
+  compare the desk's fills with the official trade tape (`/markets/trades?ticker=`) at the same
+  timestamps to estimate how optimistic they are.
+* **Site polish.** Per-strategy pages (full history from `equity/` and `trades.jsonl`), filters
+  by series, and a daily summary generated by the collector.
 
 ## Primary review links
 
-- Kalshi Trade API docs index: <https://docs.kalshi.com/llms.txt>
-- Live candlesticks: <https://docs.kalshi.com/api-reference/market/get-market-candlesticks>
-- Historical data & cutoff: <https://docs.kalshi.com/getting_started/historical_data>
-- Orderbook semantics: <https://docs.kalshi.com/getting_started/orderbook_responses>
-- Fee rounding: <https://docs.kalshi.com/getting_started/fee_rounding>
-- Settlement: <https://docs.kalshi.com/getting_started/market_settlement>
-- Exchange sharding (shard 2 = crypto + commodities): <https://docs.kalshi.com/getting_started/exchange_sharding>
-- Kalshi gold series (shard 2): `GET /markets?series_ticker=KXGOLDH&exchange_index=2` on <https://external-api.kalshi.com>
-- LBMA gold price (official JSON feed): <https://prices.lbma.org.uk/json/gold_am.json>
-- Settlement sources for the backtested markets: Fed — <https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm>, CPI — <https://www.bls.gov/cpi/>, BTC — <https://www.cfbenchmarks.com/data/indices/BRTI>, KXGOLDH — <https://app.pyth.com/explore/Metal.Index.1OZGOLD%2FUSD>
+* Kalshi Trade API docs index: <https://docs.kalshi.com/llms.txt>
+* Series list: <https://docs.kalshi.com/api-reference/market/get-series-list> · Market record: <https://docs.kalshi.com/api-reference/market/get-market>
+* Order book semantics: <https://docs.kalshi.com/getting_started/orderbook_responses>
+* Candlesticks: <https://docs.kalshi.com/api-reference/market/get-market-candlesticks>
+* Fee rounding: <https://docs.kalshi.com/getting_started/fee_rounding> · Settlement: <https://docs.kalshi.com/getting_started/market_settlement>
+* Rate limits: <https://docs.kalshi.com/getting_started/rate_limits> · Sharding: <https://docs.kalshi.com/getting_started/exchange_sharding>
+* NWS API (Central Park point): <https://api.weather.gov/points/40.7789,-73.9692>
+* Kalshi gold 15-minute (shard 2): `GET /markets?series_ticker=KXGOLD15M&exchange_index=2` on <https://external-api.kalshi.com>
+* MasterSite directory reviewed for strategy sources: <https://buffedlizard55-lab.github.io/MasterSite/>
+* Settlement sources for the backtested markets: Fed — <https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm>, CPI — <https://www.bls.gov/cpi/>, BTC — <https://www.cfbenchmarks.com/data/indices/BRTI>, gold — <https://app.pyth.com/explore/Metal.Index.1OZGOLD%2FUSD>

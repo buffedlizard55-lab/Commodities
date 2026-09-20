@@ -248,3 +248,29 @@ tbody tr:hover { background: #fbfdfc; }
   .footer-inner p { order: 3; flex-basis: 100%; }
   .search-box { width: 130px; }
 }
+
+/* ---- forward desk (season board + ledger) ---- */
+.live-pill.ok { background: #e6f4ec; color: var(--green-dark); }
+.muted-inline { color: var(--soft); font-size: 10px; }
+.board-row { cursor: pointer; }
+.board-row:hover td { background: #f6faf7; }
+.board-detail td { background: #f8fbf9; border-bottom: 1px solid var(--line); }
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; padding: 6px 2px; }
+.detail-grid span { display: block; color: var(--soft); text-transform: uppercase; letter-spacing: .08em; font-size: 9px; margin-bottom: 4px; }
+.detail-grid p { margin: 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+.policy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 6px; }
+.policy-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
+.policy-card span { display: block; color: var(--soft); text-transform: uppercase; letter-spacing: .08em; font-size: 9px; margin-bottom: 5px; }
+.policy-card p { margin: 0; font-size: 10.5px; line-height: 1.5; color: var(--muted); }
+.spark { display: block; }
+.spark.up polyline { stroke: var(--green); }
+.spark.down polyline { stroke: #c2553e; }
+.spark-empty { color: var(--soft); font-size: 10px; }
+.evidence-pill.win { background: #e6f4ec; color: var(--green-dark); }
+.evidence-pill.loss { background: #fbeae6; color: #b4432e; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; color: var(--soft); }
+.reason { display: block; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--soft); }
+#forward-ledger-table td, #forward-leaderboard td { vertical-align: top; }
+#mastersite-map td { vertical-align: top; font-size: 11px; }
+@media (max-width: 860px) { .policy-grid { grid-template-columns: 1fr; } }
+.detail-grid .span-2 { grid-column: 1 / -1; }

@@ -17,12 +17,13 @@ Accounting conventions (all documented, none invented):
 - Exit fill price   = the bar's verified yes_bid_close (taker selling).
 - Settlement exit   = official market result (1.00 / 0.00) at the official settlement_ts.
 - Fee               = Kalshi standard quadratic taker fee 0.07 * q * p * (1-p),
-  rounded UP to the nearest $0.0001 (documented fee-rounding rule). No fee at settlement
-  (flagged assumption IRR-11).
+  rounded UP to the nearest $0.0001 (documented fee-rounding rule). No fee on a simple yes/no
+  settlement (official market_settlement.md; IRR-11 resolved).
 - Sizing            = 50% of current equity, capped at 25% of that bar's verified volume
   (liquidity constraint). No bar volume -> no entry (no verified liquidity).
-- Slippage reported = half-spread paid: entry_slip = (fill - mid)*q, exit_slip = (mid - fill)*q,
-  mid = (yes_bid_close + yes_ask_close)/2 from the same verified bar.
+- Slippage reported = half-spread paid, side-aware: entry_slip = (fill - mid_side)*q from the entry
+  bar, exit_slip = (mid_side - fill)*q from the exit bar, mid_side = mid of the held side where
+  mid = (yes_bid_close + yes_ask_close)/2; settlement exits cross no spread (0).
 - No look-ahead: a strategy decides using only bars up to and including bar i, and fills
   are timestamped at bar i's end_period_ts.
 """
@@ -143,6 +144,16 @@ STRATEGIES = [
 ]
 
 
+def entry_half_spread(pos):
+    """Half-spread paid at entry, side-aware: (fill - mid of the held side) * q from the ENTRY bar."""
+    if pos["entry_bid"] is None or pos["entry_ask"] is None:
+        return None
+    mid = (pos["entry_bid"] + pos["entry_ask"]) / 2
+    if pos["side"] == "no":
+        mid = 1.0 - mid
+    return (pos["entry_price"] - mid) * pos["contracts"]
+
+
 def run_strategy(sid, market, bars):
     trades = []
     cash = STARTING_CASH
@@ -155,9 +166,10 @@ def run_strategy(sid, market, bars):
         nonlocal cash, pos, trade_no
         payout = exit_price * pos["contracts"] - exit_fee
         pnl = payout - (pos["cost_notional"] + pos["entry_fee"])
-        mid = (pos["entry_bid"] + pos["entry_ask"]) / 2 if pos["entry_bid"] is not None and pos["entry_ask"] is not None else None
+        slip_in = entry_half_spread(pos)
         exit_mid = (bar["bid"] + bar["ask"]) / 2 if bar["bid"] is not None and bar["ask"] is not None else None
-        slip_in = (pos["entry_price"] - mid) * pos["contracts"] if mid is not None else None
+        if exit_mid is not None and pos["side"] == "no":
+            exit_mid = 1.0 - exit_mid
         slip_out = (exit_mid - exit_price) * pos["contracts"] if exit_mid is not None else None
         cash += payout
         trades.append({
@@ -261,10 +273,8 @@ def run_strategy(sid, market, bars):
     if pos is not None:
         won = (MARKETS[market]["result"] == "yes") == (pos["side"] == "yes")
         payout_per = 1.0 if won else 0.0
-        bar = bars[-1]
-        mid = (bar["bid"] + bar["ask"]) / 2 if bar["bid"] is not None and bar["ask"] is not None else None
-        slip_in = (pos["entry_price"] - mid) * pos["contracts"] if mid is not None else None
-        slip_out = (mid - payout_per) * pos["contracts"] if mid is not None else None
+        slip_in = entry_half_spread(pos)
+        slip_out = 0.0  # settlement pays $1/$0 at the official result: there is no spread to cross
         pnl = payout_per * pos["contracts"] - (pos["cost_notional"] + pos["entry_fee"])
         cash += payout_per * pos["contracts"]
         trades.append({
@@ -288,7 +298,7 @@ def run_strategy(sid, market, bars):
             "feesTotal": round(pos["entry_fee"], 6),
             "slippageEntry": round(slip_in, 6) if slip_in is not None else None,
             "slippageExit": round(slip_out, 6) if slip_out is not None else None,
-            "note": f"held to official settlement (result={MARKETS[market]['result']}); no fee at settlement (assumption IRR-11)",
+            "note": f"held to official settlement (result={MARKETS[market]['result']}); no fee on a simple yes/no settlement (market_settlement.md, IRR-11 resolved)",
         })
 
     return cash, trades
@@ -346,7 +356,7 @@ def main():
         "seasonWindow": {"start": "2026-01-01T00:00:00Z", "end": "2027-01-01T00:00:00Z"},
         "dataCollectedAt": "2026-09-19 (UTC) session window 23:42-00:20Z",
         "startingCashPerAccount": STARTING_CASH,
-        "settlementFeeAssumption": "no fee at settlement (IRR-11; to be verified against Kalshi settlement documentation in a future pass)",
+        "settlementFeeAssumption": "no fee on simple yes/no settlements (official market_settlement.md; IRR-11 resolved 2026-09-20). Settlement slippage is recorded as 0: a $1/$0 payout crosses no spread",
         "takerFeeModel": "0.07 * q * p * (1-p), rounded up to nearest $0.0001 (Kalshi published formula + fee-rounding docs)",
         "sizingRule": "50% of equity per entry, capped at 25% of the bar's verified volume",
         "markets": {k: {"title": v["title"], "result": v["result"], "settlementTs": v["settlement_ts"],

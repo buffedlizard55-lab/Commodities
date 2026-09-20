@@ -12,12 +12,14 @@ import {
   formatContracts,
   formatDate,
   formatDollars,
+  normalizeMarket,
   normalizeMarkets,
   normalizeOrderBook,
   settlePaperTrade,
   strategyExplanation,
   tradesToCsv,
 } from './engine.js';
+import { loadSeasonMemory, loadForwardDesk, bindForwardEvents, forwardRowFor, forwardGated, forwardRows } from './season.js';
 
 const STORAGE_PREFIX = 'research-exchange-paper-v1';
 const SEASON_YEAR = new Date().getUTCFullYear();
@@ -424,32 +426,53 @@ function seasonBacktestSummary(strategy) {
   return state.season.leaderboard.find((row) => row.username === strategy.username) ?? null;
 }
 
+function rosterEntries() {
+  // One card per username.  Forward-desk personas (committed leaderboard.json) are authoritative;
+  // legacy personas from data/strategies.json fill in browser-only, backtest-only and gated rows.
+  const entries = new Map();
+  const gated = forwardGated();
+  for (const strategy of strategies) {
+    const forwardRow = forwardRowFor(strategy.username);
+    const gate = gated.find((g) => g.username === strategy.username);
+    entries.set(strategy.username, { ...strategy, forwardRow, gate, kind: forwardRow ? 'forward' : gate ? 'blocked' : strategy.mode === 'live-book' ? 'live-book' : strategy.mode === 'backtest' ? 'backtest' : 'blocked' });
+  }
+  for (const row of forwardRows()) if (!entries.has(row.username)) entries.set(row.username, { id: row.strategyId, username: row.username, name: row.name, rule: row.rule, why: row.why, source: row.source, forwardRow: row, kind: 'forward' });
+  for (const gate of gated) if (!entries.has(gate.username)) entries.set(gate.username, { id: gate.id, username: gate.username, name: gate.name, rule: gate.blocker, why: gate.source?.label ?? '', source: gate.source, gate, kind: 'blocked' });
+  return [...entries.values()];
+}
+
 function renderStrategies() {
-  const matches = (strategy) => {
-    if (state.activeFilter === 'all') return true;
-    if (state.activeFilter === 'live-book') return strategy.mode === 'live-book';
-    if (state.activeFilter === 'backtest') return strategy.mode === 'backtest';
-    return strategy.mode !== 'live-book' && strategy.mode !== 'backtest';
-  };
-  const filtered = strategies.filter(matches);
-  $('#strategy-count').textContent = String(strategies.length);
-  $('#strategy-grid').innerHTML = filtered.map((strategy) => {
-    const isBacktest = strategy.mode === 'backtest';
-    const isLive = strategy.mode === 'live-book';
-    const status = isLive ? 'live-book eligible' : isBacktest ? 'backtested · committed' : 'source-gated';
-    const pillClass = isLive || isBacktest ? '' : 'blocked';
+  const entries = rosterEntries();
+  const matches = (entry) => state.activeFilter === 'all' || entry.kind === state.activeFilter || (state.activeFilter === 'live-book' && entry.mode === 'live-book');
+  const filtered = entries.filter(matches);
+  $('#strategy-count').textContent = String(entries.length);
+  const order = { forward: 0, 'live-book': 1, backtest: 2, blocked: 3 };
+  filtered.sort((a, b) => (order[a.kind] - order[b.kind]) || ((b.forwardRow?.returnPct ?? -1e9) - (a.forwardRow?.returnPct ?? -1e9)) || a.username.localeCompare(b.username));
+  $('#strategy-grid').innerHTML = filtered.map((entry) => {
+    const { kind, forwardRow } = entry;
+    const status = kind === 'forward' ? (forwardRow.fills ? `forward desk · rank ${forwardRow.rank}` : 'forward desk · unranked') : kind === 'live-book' ? 'browser live-book' : kind === 'backtest' ? 'backtested · committed' : 'source-gated';
+    const pillClass = kind === 'blocked' ? 'blocked' : '';
     let foot;
-    if (isBacktest) {
-      const bt = seasonBacktestSummary(strategy);
+    if (kind === 'forward') {
+      const note = `${forwardRow.fills} fill(s) · ${forwardRow.openPositions} open · ${forwardRow.settlements} settled · $${forwardRow.feesPaid.toFixed(2)} fees + $${forwardRow.slippagePaid.toFixed(2)} slippage`;
+      foot = `<div class="strategy-foot"><small>${escapeHtml(note)}</small><b class="${forwardRow.returnPct > 0 ? 'return-positive' : forwardRow.returnPct < 0 ? 'return-negative' : ''}">${forwardRow.fills ? formatReturn(forwardRow.returnPct) : '—'}</b></div>`;
+    } else if (kind === 'backtest') {
+      const bt = seasonBacktestSummary(entry);
       const note = bt ? `${bt.trades} verified trade(s) · $${bt.feesPaid.toFixed(2)} fees + $${bt.slippagePaid.toFixed(2)} spread` : 'no committed backtest row';
       const ret = bt ? formatReturn(bt.returnPct) : '—';
       const retClass = bt ? (bt.returnPct > 0 ? 'return-positive' : bt.returnPct < 0 ? 'return-negative' : '') : '';
       foot = `<div class="strategy-foot"><small>${escapeHtml(note)}</small><b class="${retClass}">${escapeHtml(ret)}</b></div>`;
+    } else if (kind === 'live-book') {
+      const summary = summaryForStrategy(entry);
+      foot = `<div class="strategy-foot"><small>${escapeHtml(strategyExplanation(summary, entry))}</small><b>${formatReturn(summary.returnPct)}</b></div>`;
     } else {
-      const summary = summaryForStrategy(strategy);
-      foot = `<div class="strategy-foot"><small>${escapeHtml(strategyExplanation(summary, strategy))}</small><b>${formatReturn(summary.returnPct)}</b></div>`;
+      foot = `<div class="strategy-foot"><small>${escapeHtml(entry.gate?.blocker ?? entry.status ?? 'blocked until a primary source adapter exists')}</small><b>—</b></div>`;
     }
-    return `<article class="strategy-card ${isLive || isBacktest ? 'is-live' : 'is-blocked'}"><div class="strategy-top"><span class="strategy-avatar">${escapeHtml(strategy.username.slice(0, 2).toUpperCase())}</span><span class="evidence-pill ${pillClass}">${escapeHtml(status)}</span></div><h3>${escapeHtml(strategy.name)}</h3><div class="strategy-username">@${escapeHtml(strategy.username)}</div><p><b>Rule:</b> ${escapeHtml(strategy.rule)}<br><br><b>Why:</b> ${escapeHtml(strategy.why)}</p>${foot}</article>`;
+    const source = entry.source?.url ? `<a class="text-link" href="${escapeHtml(entry.source.url)}" target="_blank" rel="noreferrer">${escapeHtml(entry.source.kind ?? 'source')} ↗</a>` : '';
+    const label = kind === 'blocked' && entry.gate ? 'Blocker' : 'Why';
+    const why = kind === 'blocked' && entry.gate ? entry.gate.blocker : entry.why;
+    const rule = kind === 'blocked' && entry.gate ? (entry.rule === entry.gate.blocker ? '' : entry.rule) : entry.rule;
+    return `<article class="strategy-card ${kind === 'blocked' ? 'is-blocked' : 'is-live'}"><div class="strategy-top"><span class="strategy-avatar">${escapeHtml(entry.username.slice(0, 2).toUpperCase())}</span><span class="evidence-pill ${pillClass}">${escapeHtml(status)}</span></div><h3>${escapeHtml(entry.name)}</h3><div class="strategy-username">@${escapeHtml(entry.username)} ${source}</div><p>${rule ? `<b>Rule:</b> ${escapeHtml(rule)}<br><br>` : ''}<b>${label}:</b> ${escapeHtml(why)}</p>${foot}</article>`;
   }).join('');
 }
 
@@ -598,6 +621,9 @@ loadLocalState();
 renderSources();
 renderAll();
 bindEvents();
-loadSeasonMemory();
+bindForwardEvents();
+loadSeasonMemory(state, () => { renderCompetition(); renderStrategies(); });
+loadForwardDesk().then(() => renderStrategies());
 loadMarkets({ announce: false });
 window.setInterval(() => { if (state.apiStatus !== 'loading') loadMarkets({ announce: false }); }, 30_000);
+window.setInterval(() => { loadForwardDesk().then(() => renderStrategies()); }, 300_000);
