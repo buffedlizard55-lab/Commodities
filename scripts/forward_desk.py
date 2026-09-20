@@ -55,6 +55,7 @@ MAX_CANDIDATES_PER_STRATEGY = 2
 MAX_QUEUED_INTENTS = 1
 MAX_TECHNICAL_MARKETS = 8
 MAX_MICRO_MARKETS = 6
+MAX_CANDLE_ARCHIVES_PER_CYCLE = 10
 EXIT_FLOOR_TOLERANCE = 0.03
 MARKETABLE_LIMIT_THROUGH = 0.05  # entries are IOC limits at min(rule bound, touch + 5c)
 RECENT_EVENTS = 200
@@ -365,7 +366,8 @@ def account_for(state: dict, strategy: dict) -> dict:
     if account is None:
         account = {"strategyId": strategy["id"], "username": strategy["username"], "cash": STARTING_CASH, "positions": [],
                    "realizedPnl": 0.0, "feesPaid": 0.0, "slippagePaid": 0.0, "fills": 0, "exits": 0, "settlements": 0,
-                   "wins": 0, "losses": 0, "unfilledContracts": 0.0}
+                   "wins": 0, "losses": 0, "unfilledContracts": 0.0, "requestedContracts": 0.0, "filledContracts": 0.0,
+                   "notionalFilled": 0.0, "bestTradePnl": None, "worstTradePnl": None, "grossWins": 0.0, "grossLosses": 0.0}
         state["accounts"][strategy["id"]] = account
     account["username"] = strategy["username"]
     return account
@@ -396,6 +398,8 @@ class Cycle:
         self.markets: dict[str, dict] = {}
         self.evidence_rows: list[dict] = []
         self._evidence_logged: set[str] = set()
+        self.settled_tickers: list[tuple] = []
+        self.archived: list[dict] = []
 
     # -- data ---------------------------------------------------------------------------
     def load_universe(self):
@@ -532,6 +536,15 @@ class Cycle:
         return {"bid": bid, "last": last, "value": liquidation, "markPrice": mark_price,
                 "markValue": 0.0 if mark_price is None else round(mark_price * contracts, 4), "at": iso(self.now_ts), "source": source}
 
+    @staticmethod
+    def book_close(account, pnl):
+        account["wins" if pnl > 0 else "losses"] += 1
+        account["grossWins"] = round(account.get("grossWins", 0.0) + max(pnl, 0.0), 6)
+        account["grossLosses"] = round(account.get("grossLosses", 0.0) + min(pnl, 0.0), 6)
+        best, worst = account.get("bestTradePnl"), account.get("worstTradePnl")
+        account["bestTradePnl"] = round(pnl, 6) if best is None or pnl > best else best
+        account["worstTradePnl"] = round(pnl, 6) if worst is None or pnl < worst else worst
+
     def settle(self, strategy, account, position, record):
         m = record["market"]
         won = (m["result"] == position["side"])
@@ -541,7 +554,8 @@ class Cycle:
         account["cash"] = round(account["cash"] + payout, 6)
         account["realizedPnl"] = round(account["realizedPnl"] + pnl, 6)
         account["settlements"] += 1
-        account["wins" if pnl > 0 else "losses"] += 1
+        self.book_close(account, pnl)
+        self.settled_tickers.append((position["seriesTicker"], position["ticker"], position.get("exchangeIndex")))
         evidence = self.evidence_market(position["ticker"], record)
         self.events.append({
             "kind": "settlement", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"],
@@ -572,7 +586,7 @@ class Cycle:
         slip = round((execution["slippage_per_contract"] or 0.0) * execution["filled"], 6)
         account["slippagePaid"] = round(account["slippagePaid"] + slip, 6)
         account["exits"] += 1
-        account["wins" if pnl > 0 else "losses"] += 1
+        self.book_close(account, pnl)
         evidence = self.evidence_book(position["ticker"])
         self.events.append({
             "kind": "exit", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"],
@@ -691,6 +705,9 @@ class Cycle:
         account["slippagePaid"] = round(account["slippagePaid"] + slip, 6)
         account["fills"] += 1
         account["unfilledContracts"] = round(account["unfilledContracts"] + execution["unfilled"], 2)
+        account["requestedContracts"] = round(account.get("requestedContracts", 0.0) + execution["requested"], 2)
+        account["filledContracts"] = round(account.get("filledContracts", 0.0) + execution["filled"], 2)
+        account["notionalFilled"] = round(account.get("notionalFilled", 0.0) + execution["notional"], 6)
         evidence = self.evidence_book(m["ticker"])
         position = {
             "id": f"{strategy['id']}-{safe(m['ticker'])}-{self.cycle_id}", "strategyId": strategy["id"], "username": strategy["username"],
@@ -717,6 +734,44 @@ class Cycle:
             "limitPrice": execution.get("limit"), "feeMultiplier": multiplier,
         })
         return position
+
+    # -- candle archive for settled traded markets (grows the verified backtest sample) ----
+    def archive_settled_candles(self):
+        seen = set()
+        for series_ticker, ticker, exchange_index in self.settled_tickers:
+            if ticker in seen or len(self.archived) >= MAX_CANDLE_ARCHIVES_PER_CYCLE:
+                continue
+            seen.add(ticker)
+            record = self.market_records.get(ticker)
+            m = record["market"] if record else None
+            if not m or not m.get("open_ts"):
+                continue
+            end_ts = m.get("settlement_ts") or m.get("close_ts") or self.now_ts
+            start_ts = m["open_ts"]
+            period = 1 if (end_ts - start_ts) <= 2 * 3600 else (60 if (end_ts - start_ts) <= 14 * 86400 else 1440)
+            try:
+                payload, raw, url = self.client.candlesticks(series_ticker, ticker, start_ts - 60, end_ts + 60, period,
+                                                             exchange_index=exchange_index or None)
+            except KalshiError as error:
+                self.errors.append(f"archive {ticker}: {error}")
+                continue
+            bars = payload.get("candlesticks") or []
+            rows = []
+            for bar in bars:
+                price, yes_bid, yes_ask = bar.get("price") or {}, bar.get("yes_bid") or {}, bar.get("yes_ask") or {}
+                rows.append([bar.get("end_period_ts"), fnum(price.get("open_dollars")), fnum(price.get("high_dollars")),
+                             fnum(price.get("low_dollars")), fnum(price.get("close_dollars")), fnum(yes_bid.get("close_dollars")),
+                             fnum(yes_ask.get("close_dollars")), fnum(bar.get("volume_fp")), fnum(bar.get("open_interest_fp"))])
+            rel = f"candles/{safe(series_ticker)}/{safe(ticker)}-p{period}.csv"
+            path = os.path.join(FORWARD_DIR, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", newline="") as fh:
+                writer = csv.writer(fh, lineterminator="\n")
+                writer.writerow(["end_period_ts", "open", "high", "low", "close", "yes_bid_close", "yes_ask_close", "volume", "open_interest"])
+                writer.writerows(rows)
+            self.archived.append({"cycle": self.cycle_id, "ticker": ticker, "series": series_ticker, "file": rel, "period": period,
+                                  "bars": len(rows), "url": url, "sha256": sha256_bytes(raw), "result": m.get("result"),
+                                  "settlementTs": iso(m.get("settlement_ts")), "openTs": iso(start_ts), "closeTs": iso(m.get("close_ts"))})
 
     # -- accounting ---------------------------------------------------------------------
     def mark_and_record(self, strategy, account):
@@ -767,6 +822,7 @@ class Cycle:
                 self.enter(strategy, account)
         for strategy in FS.STRATEGIES:
             self.mark_and_record(strategy, account_for(self.state, strategy))
+        self.archive_settled_candles()
         self.log_quotes()
         summary = {
             "cycle": self.cycle_id, "at": iso(self.now_ts), "durationSec": round(time.time() - started, 1),
@@ -776,7 +832,7 @@ class Cycle:
             "intents": len(self.intents), "fills": sum(1 for e in self.events if e["kind"] == "fill"),
             "exits": sum(1 for e in self.events if e["kind"] == "exit"),
             "settlements": sum(1 for e in self.events if e["kind"] == "settlement"),
-            "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles),
+            "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles), "candlesArchived": len(self.archived),
             "errors": self.errors[:40], "errorCount": len(self.errors),
         }
         self.persisted_intents = self.dedupe_intents()
@@ -793,6 +849,7 @@ class Cycle:
         append_jsonl(os.path.join(FORWARD_DIR, "trades.jsonl"), self.events)
         append_jsonl(os.path.join(FORWARD_DIR, "intents", f"{self.month}.jsonl"), self.persisted_intents)
         append_jsonl(os.path.join(FORWARD_DIR, "cycles", f"{self.month}.jsonl"), [summary])
+        append_jsonl(os.path.join(FORWARD_DIR, "candles", "index.jsonl"), self.archived)
         append_csv(os.path.join(FORWARD_DIR, "equity", f"{self.month}.csv"),
                    ["cycle", "at", "strategyId", "username", "cash", "openPositions", "markedPositions", "liquidationValue", "equity",
                     "realizedPnl", "feesPaid", "slippagePaid", "markValue"], self.equity_rows)
@@ -840,6 +897,38 @@ def safe(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "-", text)
 
 
+def analysis_for(strategy: dict, account: dict, equity: float) -> str:
+    """Result narrative derived only from the account's own verified ledger counters."""
+    if not account["fills"]:
+        return (f"{strategy['username']} has not filled yet: its rule either never triggered on the tracked universe or was not "
+                f"confirmed on a fresh order book. Unranked until a verified fill exists.")
+    parts = []
+    requested = account.get("requestedContracts") or 0.0
+    filled = account.get("filledContracts") or 0.0
+    fill_ratio = (filled / requested * 100) if requested else 0.0
+    avg_px = (account.get("notionalFilled") or 0.0) / filled if filled else None
+    parts.append(f"{account['fills']} verified fill(s), {filled:,.0f} of {requested:,.0f} requested contracts filled "
+                 f"({fill_ratio:.0f}%; the rest exceeded displayed depth within the limit)" + (f", average entry ${avg_px:.3f}" if avg_px else "") + ".")
+    closed = account["exits"] + account["settlements"]
+    if closed:
+        parts.append(f"{closed} closed ({account['settlements']} official settlement(s), {account['exits']} bid exit(s)): "
+                     f"{account['wins']} win(s) / {account['losses']} loss(es), realized ${account['realizedPnl']:,.2f} "
+                     f"(gross +${account.get('grossWins', 0.0):,.2f} / -${abs(account.get('grossLosses', 0.0)):,.2f}); "
+                     f"best trade ${account.get('bestTradePnl') or 0:,.2f}, worst ${account.get('worstTradePnl') or 0:,.2f}.")
+    else:
+        parts.append("Nothing has closed yet, so realized PnL is $0.00 and the return is entirely a mark against displayed bids / last trades.")
+    drag = account["feesPaid"] + account["slippagePaid"]
+    parts.append(f"Cost drag so far: ${account['feesPaid']:,.2f} taker fees + ${account['slippagePaid']:,.2f} slippage versus the touch "
+                 f"= {drag / STARTING_CASH * 100:.2f}% of starting cash.")
+    ret = (equity / STARTING_CASH - 1) * 100
+    if account["positions"]:
+        parts.append(f"{len(account['positions'])} open position(s) marked at ${account.get('lastMarkValue', 0.0):,.2f} "
+                     f"(liquidation ${account.get('lastLiquidationValue', 0.0):,.2f}); equity {ret:+.2f}%.")
+    verdict = ("working so far" if ret > 0.5 else "roughly flat" if ret > -0.5 else "losing so far")
+    parts.append(f"Verdict: {verdict}. {strategy['why']}")
+    return " ".join(parts)
+
+
 def build_leaderboard(state: dict) -> dict:
     rows = []
     for strategy in FS.STRATEGIES:
@@ -859,7 +948,9 @@ def build_leaderboard(state: dict) -> dict:
             "feesPaid": round(account["feesPaid"], 4), "slippagePaid": round(account["slippagePaid"], 4),
             "fills": account["fills"], "exits": account["exits"], "settlements": account["settlements"],
             "wins": account["wins"], "losses": account["losses"], "unfilledContracts": account["unfilledContracts"],
+            "bestTradePnl": account.get("bestTradePnl"), "worstTradePnl": account.get("worstTradePnl"),
             "evidenceState": ("verified forward fills" if account["fills"] else "no fill yet (rule never confirmed on a fresh book)"),
+            "analysis": analysis_for(strategy, account, equity),
         })
     ranked = sorted([r for r in rows if r["fills"] > 0], key=lambda r: (-r["returnPct"], r["username"]))
     unranked = sorted([r for r in rows if r["fills"] == 0], key=lambda r: r["username"])

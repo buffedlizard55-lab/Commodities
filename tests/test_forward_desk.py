@@ -95,6 +95,11 @@ def build_fixtures(settled=False):
                          "yes_bid_dollars": "0.0000", "no_bid_dollars": "0.0000"})
             fx[f"markets/{row['ticker']}"] = {"market": done}
             fx[f"markets/{row['ticker']}?exchange_index=2"] = {"market": done}
+        # hourly candles for the settled NFL market (archived by the desk once the position settles)
+        nfl_open = parse_ts("2026-09-15T12:00:00Z"); nfl_settle = parse_ts("2026-09-21T15:00:00Z")
+        fx[f"series/KXNFLGAME/markets/KXNFLGAME-26SEP20AAABBB-AAA/candlesticks?start_ts={nfl_open - 60}&end_ts={nfl_settle + 60}&period_interval=60"] = {
+            "candlesticks": [{"end_period_ts": nfl_open + 3600 * i, "price": {"open_dollars": "0.8000", "high_dollars": "0.9000", "low_dollars": "0.8000", "close_dollars": "0.8800"},
+                              "yes_bid": {"close_dollars": "0.8700"}, "yes_ask": {"close_dollars": "0.8900"}, "volume_fp": "100.00", "open_interest_fp": "1000.00"} for i in range(1, 4)]}
     # order books (YES bids / NO bids, ascending, best last)
     fx[f"markets/KXHIGHNY-26SEP20-B72.5/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.50, 200), (0.55, 300)], [(0.35, 150), (0.40, 400)])   # yes ask 0.60
     fx[f"markets/KXHIGHNY-26SEP20-T71/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.04, 500)], [(0.90, 50), (0.94, 2000)])              # yes ask 0.06
@@ -247,6 +252,13 @@ class DeskCycleTests(unittest.TestCase):
         self.assertTrue(all(r["projection"]["result"] in ("yes", "no") for r in markets))
         board = FD.read_json(os.path.join(self.tmp, "leaderboard.json"))
         self.assertEqual(board["rows"][0]["rank"], 1)
+        self.assertTrue(all("analysis" in r and r["analysis"] for r in board["rows"]))
+        # settled NFL market's official candles were archived once (period 60) and indexed with the response hash
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "candles/KXNFLGAME/KXNFLGAME-26SEP20AAABBB-AAA-p60.csv")))
+        with open(os.path.join(self.tmp, "candles/index.jsonl")) as fh:
+            archived = [json.loads(l) for l in fh]
+        self.assertEqual([a["ticker"] for a in archived], ["KXNFLGAME-26SEP20AAABBB-AAA"])
+        self.assertEqual(archived[0]["bars"], 3)
         self.assertEqual(sum(r["fills"] for r in board["rows"]), len(fills))
         # attribution: equity == cash when flat, and cash == start + realized
         for row in board["rows"]:
