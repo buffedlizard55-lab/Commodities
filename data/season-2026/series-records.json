@@ -1,5 +1,5 @@
 {
-  "retrieved": "2026-09-19T23:45Z/2026-09-20T00:20Z window (UTC)",
+  "retrieved": "2026-09-19T23:45Z/2026-09-20T00:20Z window (UTC); KXGOLDH verified 2026-09-20",
   "series": [
     {
       "source": "https://external-api.kalshi.com/trade-api/v2/series/KXFED",
@@ -10,7 +10,10 @@
       "fee_multiplier": 1,
       "frequency": "custom",
       "settlement_sources": [
-        { "name": "Federal Reserve Board of Governors", "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" }
+        {
+          "name": "Federal Reserve Board of Governors",
+          "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+        }
       ],
       "contract_terms_url": "https://assets.kalshi.com/contract_terms/FED.pdf",
       "last_updated_ts": "2026-02-26T08:50:31.901806Z"
@@ -24,7 +27,10 @@
       "fee_multiplier": 1,
       "frequency": "monthly",
       "settlement_sources": [
-        { "name": "Bureau of Labor Statistics", "url": "https://www.bls.gov/cpi/" }
+        {
+          "name": "Bureau of Labor Statistics",
+          "url": "https://www.bls.gov/cpi/"
+        }
       ],
       "contract_terms_url": "https://assets.kalshi.com/contract_terms/CPI.pdf",
       "last_updated_ts": "2026-08-10T17:09:44.417619Z"
@@ -38,11 +44,32 @@
       "fee_multiplier": 1,
       "frequency": "hourly",
       "settlement_sources": [
-        { "name": "CF Benchmarks", "url": "https://www.cfbenchmarks.com/data/indices/BRTI" }
+        {
+          "name": "CF Benchmarks",
+          "url": "https://www.cfbenchmarks.com/data/indices/BRTI"
+        }
       ],
       "contract_terms_url": "https://assets.kalshi.com/contract_terms/BTC.pdf",
       "last_updated_ts": "2026-08-24T16:04:33.39179Z",
       "note": "Settlement value is the 60-second simple average of CF Benchmarks BRTI before 5 PM EDT."
+    },
+    {
+      "source": "https://external-api.kalshi.com/trade-api/v2/series?category=Commodities&limit=100 (exchange sharding; KXGOLDH markets at /markets?series_ticker=KXGOLDH&exchange_index=2)",
+      "ticker": "KXGOLDH",
+      "title": "Gold Hourly",
+      "category": "Commodities",
+      "fee_type": "quadratic",
+      "fee_multiplier": 1,
+      "frequency": "hourly",
+      "exchange_index": 2,
+      "settlement_sources": [
+        {
+          "name": "Pyth - Gold",
+          "url": "https://app.pyth.com/explore/Metal.Index.1OZGOLD/USD"
+        }
+      ],
+      "contract_terms_url": "https://assets.kalshi.com/contract_terms/COMMODITIES.pdf",
+      "last_updated_ts": "2026-09-18T05:53:28.115197Z"
     }
   ]
 }

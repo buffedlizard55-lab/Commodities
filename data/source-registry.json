@@ -1,58 +1,476 @@
 {
   "schemaVersion": 1,
-  "registryDate": "2026-09-19",
+  "registryDate": "2026-09-20",
   "verificationRule": "A live fill is accepted only from a Kalshi market-data response captured by this application. Project pages and external sources below are research references or gates; they never become exchange-price evidence by themselves.",
   "sources": [
-    {"id":"kalshi-markets","name":"Kalshi public markets API","url":"https://external-api.kalshi.com/trade-api/v2/markets?status=open","kind":"primary exchange","use":"Live open-market metadata and quote fields","status":"runtime","note":"The UI displays no market rows when this official endpoint cannot be read."},
-    {"id":"kalshi-orderbook","name":"Kalshi market orderbook API reference","url":"https://docs.kalshi.com/api-reference/market/get-market-orderbook","kind":"primary exchange","use":"Bid levels, quantities, executable paper VWAP and slippage","status":"documented with auth note","note":"The API reference currently shows auth headers while Kalshi's getting-started orderbook page says no authentication is required; the app makes no credentialed request and fail-closes if the public read is rejected."},
-    {"id":"kalshi-orderbook-responses","name":"Kalshi orderbook response guide","url":"https://docs.kalshi.com/getting_started/orderbook_responses","kind":"primary exchange","use":"No-auth read workflow and reciprocal YES/NO ask rule","status":"documented","note":"Kalshi explicitly describes the public request, YES/NO bid arrays and reciprocal implied asks on this page."},
-    {"id":"kalshi-market-data-quickstart","name":"Kalshi market-data quick start","url":"https://docs.kalshi.com/getting_started/quick_start_market_data","kind":"primary exchange","use":"Endpoint and public market-data workflow","status":"documented","note":"Manual review link for the exact market and order-book calls used by the app."},
-    {"id":"kalshi-historical","name":"Kalshi historical data","url":"https://docs.kalshi.com/getting_started/historical_data","kind":"primary exchange","use":"Live vs historical tier split and cutoff handling","status":"documented","note":"Cutoff read live on 2026-09-19: all four timestamps 2026-07-21T00:00:00Z (see data/season-2026/cutoff.json)."},
-    {"id":"kalshi-live-candles","name":"Kalshi market candlesticks (live tier)","url":"https://docs.kalshi.com/api-reference/market/get-market-candlesticks","kind":"primary exchange","use":"Verified backtest bars for markets settled after the cutoff","status":"verified 2026-09-19","note":"GET /series/{series_ticker}/markets/{ticker}/candlesticks with start_ts, end_ts, period_interval in {1,60,1440}. The committed backtest used exactly this endpoint."},
-    {"id":"kalshi-cutoff-live","name":"Kalshi historical cutoff (live read)","url":"https://external-api.kalshi.com/trade-api/v2/historical/cutoff","kind":"primary exchange","use":"Boundary between live and historical tiers","status":"verified 2026-09-19","note":"market_settled_ts = trades_created_ts = orders_updated_ts = market_positions_last_updated_ts = 2026-07-21T00:00:00Z."},
-    {"id":"kalshi-series-records","name":"Kalshi series records KXFED / KXCPI / KXBTC","url":"https://external-api.kalshi.com/trade-api/v2/series/KXFED","kind":"primary exchange","use":"Fee type/multiplier, settlement sources, contract terms","status":"verified 2026-09-19","note":"KXFED and KXCPI: quadratic_with_maker_fees x1 (Fed/BLM settlement sources). KXBTC: quadratic x1 (CF Benchmarks BRTI). Stored in data/season-2026/series-records.json; siblings at /series/KXCPI and /series/KXBTC."},
-    {"id":"fred-gold","name":"FRED GOLDAMGBD228NLBM","url":"https://fred.stlouisfed.org/series/GOLDAMGBD228NLBM","kind":"official benchmark publisher","use":"Intended gold feed for MetalMomentum","status":"unavailable 2026-09-19","note":"The CSV download URL returned an error page from this environment; no gold data was stored or used (IRR-13)."},
-    {"id":"stooq-gold","name":"Stooq XAU/USD daily CSV","url":"https://stooq.com/q/d/l/?s=xauusd&i=d","kind":"free public quote","use":"Fallback gold feed attempt","status":"blocked 2026-09-19","note":"'Access denied' from this environment (IRR-13). Kept for manual review; never used as pricing."},
-    {"id":"kalshi-candles","name":"Kalshi historical candlesticks","url":"https://docs.kalshi.com/api-reference/historical/get-historical-market-candlesticks","kind":"primary exchange","use":"Future line-by-line historical replay","status":"documented","note":"The endpoint requires ticker, start and end timestamps plus a documented period interval."},
-    {"id":"kalshi-fees","name":"Kalshi fee schedule","url":"https://kalshi.com/fee-schedule","kind":"primary exchange","use":"Standard quadratic taker-fee assumption and market-specific review","status":"manual review","note":"Series-specific fee overrides may exist; the UI labels fee estimates and never claims a live fee."},
-    {"id":"kalshi-fee-rounding","name":"Kalshi fee rounding documentation","url":"https://docs.kalshi.com/getting_started/fee_rounding","kind":"primary exchange","use":"Centicent fee-rounding reference","status":"documented","note":"Exact exchange balance rounding can differ by membership type and is not a live order result here."},
-    {"id":"kalshi-auth","name":"Kalshi authenticated requests","url":"https://docs.kalshi.com/getting_started/quick_start_authenticated_requests","kind":"primary exchange","use":"Why live order placement is intentionally disabled","status":"documented","note":"RSA-PSS credentials are never requested or stored by this static site."},
-    {"id":"kalshi-orders","name":"Kalshi create-order documentation","url":"https://docs.kalshi.com/api-reference/orders/create-order-v2","kind":"primary exchange","use":"Manual review for future server-side order-entry work","status":"documented","note":"Not called by this paper simulator."},
-    {"id":"kalshi-settlement","name":"Kalshi market settlement","url":"https://docs.kalshi.com/getting_started/market_settlement","kind":"primary exchange","use":"Official settlement reconciliation","status":"documented","note":"Settlement must be read from the official market result/terms, not inferred from a final quote."},
-    {"id":"nws-api","name":"National Weather Service API","url":"https://www.weather.gov/documentation/services-web-api","kind":"official government","use":"Source gate for WeatherCatalyst","status":"research gate","note":"A forecast must match contract location, variable and window before it can be used."},
-    {"id":"sec-edgar","name":"SEC EDGAR company filings","url":"https://www.sec.gov/edgar/search/","kind":"official government","use":"Source gate for Form4Flash","status":"research gate","note":"A Form 4 verifies a filing; it does not verify a Kalshi event or price."},
-    {"id":"fda-drugs","name":"FDA Drugs@FDA","url":"https://www.accessdata.fda.gov/scripts/cder/daf/","kind":"official government","use":"Source gate for FDAReaction","status":"research gate","note":"The FDA record must be joined to exact market terms and date."},
-    {"id":"fda-calendar","name":"FDA advisory committee calendar","url":"https://www.fda.gov/advisory-committees/advisory-committee-calendar","kind":"official government","use":"Research calendar only","status":"research gate","note":"Calendar dates are not a prediction and do not substitute for a market quote."},
-    {"id":"ncaa-scoreboard","name":"NCAA official scoreboard","url":"https://www.ncaa.com/scoreboard/football/fbs","kind":"official sports","use":"Source gate for CampusCloser","status":"research gate","note":"Scores can verify game state; Kalshi remains the only execution-price source."},
-    {"id":"mlb-stats-api","name":"MLB Stats API","url":"https://statsapi.mlb.com/api/v1/schedule","kind":"official sports","use":"Source gate for DiamondDelta","status":"research gate","note":"Use only after matching the exact game and contract settlement condition."},
-    {"id":"nfl-official","name":"NFL official site","url":"https://www.nfl.com/","kind":"official sports","use":"Manual review for SundayStatus and GridironPulse","status":"research gate","note":"The user's NFLInjuryReport documents that official values are used where nfl.com publishes them; a fallback source is not official confirmation."},
-    {"id":"nba-official","name":"NBA official injury-report landing area","url":"https://official.nba.com/nba-injury-report-2025-26-season/","kind":"official sports","use":"Manual review for TipoffTriage","status":"manual review","note":"The MasterSite audit flags no machine-readable official NBA live feed; no NBA signal is generated here."},
-    {"id":"eia-api","name":"U.S. Energy Information Administration API","url":"https://www.eia.gov/opendata/documentation.php","kind":"official government","use":"Possible future commodity context, not current execution pricing","status":"research gate","note":"Not called by this static app; a future adapter must document key/access and publication lag before use."},
-    {"id":"lbma-gold","name":"LBMA gold price and data","url":"https://www.lbma.org.uk/prices-and-data/lbma-gold-price","kind":"official benchmark publisher","use":"Manual source review for MetalMomentum","status":"research gate","note":"The user's GOLD directory is not treated as a commodity price oracle."},
-    {"id":"mastersite","name":"MasterSite project directory","url":"https://buffedlizard55-lab.github.io/MasterSite/","kind":"user project directory","use":"Review of related repositories and flags","status":"reviewed 2026-09-19","note":"Descriptions are user-project evidence and are not official exchange or settlement sources."},
-    {"id":"sf-weather-project","name":"SFWeather project","url":"https://buffedlizard55-lab.github.io/SFWeather/","kind":"user project","use":"Weather hypothesis discovery","status":"manual review","note":"MasterSite says it uses NWS/NCEI/CPC; this app still requires the primary NWS response for a trade signal."},
-    {"id":"insider-project","name":"Insider Trades project","url":"https://buffedlizard55-lab.github.io/Insider-trades/","kind":"user project","use":"Form 4 hypothesis discovery","status":"manual review","note":"MasterSite describes local SEC Form 4 data; the SEC filing remains the primary evidence."},
-    {"id":"leap-project","name":"TradingView The Leap project","url":"https://buffedlizard55-lab.github.io/TradingViewTheLeap/","kind":"user project","use":"Competition research and hypothesis discovery","status":"manual review","note":"A separate contest cannot be presented as a Kalshi backtest or result."},
-    {"id":"leap-official","name":"TradingView The Leap official page","url":"https://www.tradingview.com/the-leap/","kind":"official contest page","use":"Manual review of contest rules","status":"research reference","note":"Contest results and rules do not establish Kalshi pricing."},
-    {"id":"kalshi-project","name":"KalshiPaperSim project","url":"https://buffedlizard55-lab.github.io/KalshiPaperSim/","kind":"user project","use":"Reverse-engineering reference","status":"manual review","note":"A separate project is not copied as data; this repository implements an independent evidence boundary."},
-    {"id":"price-kalshi-project","name":"PriceKalshiHistorical project","url":"https://buffedlizard55-lab.github.io/PriceKalshiHistorical/","kind":"user project","use":"Historical simulator research reference","status":"manual review","note":"No external captured result is imported into this ledger."},
-    {"id":"drug-project","name":"DrugAnalysis project","url":"https://buffedlizard55-lab.github.io/DrugAnalysis/","kind":"user project","use":"FDA strategy research reference","status":"manual review","note":"MasterSite flags secondary calendar/compiled rows for manual primary-source verification."},
-    {"id":"nfl-injury-project","name":"NFLInjuryReport project","url":"https://buffedlizard55-lab.github.io/NFLInjuryReport/","kind":"user project","use":"NFL injury hypothesis discovery","status":"manual review","note":"The project documents a forward-collected scorecard and missed-alert limitations."},
-    {"id":"nba-injury-project","name":"NBAInjuryReport project","url":"https://buffedlizard55-lab.github.io/NBAInjuryReport/","kind":"user project","use":"NBA injury hypothesis discovery","status":"manual review","note":"MasterSite explicitly labels ESPN data as not official NBA confirmation."},
-    {"id":"ncaa-project","name":"NCAA Football alerts project","url":"https://buffedlizard55-lab.github.io/Ncaa-football-alerts/","kind":"user project","use":"NCAA scoreboard hypothesis discovery","status":"manual review","note":"Use the official NCAA source for any future signal."},
-    {"id":"nfl-score-project","name":"NFL scoreboard project","url":"https://buffedlizard55-lab.github.io/NFL-scoreboard/","kind":"user project","use":"NFL score hypothesis discovery","status":"manual review","note":"A project output is not itself a primary settlement source."},
-    {"id":"mlb-score-project","name":"MLB Live PBP project","url":"https://buffedlizard55-lab.github.io/MLB-Live-PBP/","kind":"user project","use":"MLB game-state hypothesis discovery","status":"manual review","note":"MasterSite describes official MLB Gameday feed data; verify the primary response before use."},
-    {"id":"sports-pred-project","name":"SportsPred project","url":"https://buffedlizard55-lab.github.io/SportsPred/","kind":"user project","use":"Cross-sport hypothesis discovery","status":"manual review","note":"Model output is not accepted as official pricing or settlement evidence."},
-    {"id":"gold-project","name":"GOLD project","url":"https://buffedlizard55-lab.github.io/GOLD/","kind":"user project","use":"Gold research reference","status":"manual review","note":"MasterSite describes a buyer's directory, not a live commodity benchmark feed."},
-    {"id":"pinepilot-project","name":"PinePilot project","url":"https://buffedlizard55-lab.github.io/Tradingview-pinescript-editor/","kind":"user project","use":"Rule discovery and future replay","status":"manual review","note":"Pine calculations are not treated as historical Kalshi prices."},
-    {"id":"ceo-unresolved","name":"CEO project reference","url":"https://buffedlizard55-lab.github.io/MasterSite/","kind":"unresolved user reference","use":"Owner review required","status":"not located","note":"The requested label CEO was not an identifiable entry in the retrieved MasterSite directory. No URL is invented and no CEO signal is enabled."},
-    {"id":"trade-ideas","name":"Trade Ideas competition","url":"https://www.trade-ideas.com/stock-trading-competition/","kind":"competition reference","use":"Reverse-engineering research only","status":"manual review","note":"This is not a Kalshi data source."},
-    {"id":"candlecharts","name":"CandleCharts contest","url":"https://specials.candlecharts.com/contest/","kind":"competition reference","use":"Reverse-engineering research only","status":"manual review","note":"This is not a Kalshi data source."},
-    {"id":"cepr-kalshi-bias","name":"CEPR — The economics of the Kalshi prediction market (300k+ contracts)","url":"https://cepr.org/voxeu/columns/economics-kalshi-prediction-market","kind":"academic research (discovery-only)","use":"Supports the favorite-longshot roster design: 5-20c contracts underperform their price, 80-95c favorites overperform; taker longshot losses far larger than maker losses","status":"discovery only 2026-09-20","note":"Research context for SureThing/YieldSniper and the documented DipHunter failure mode. It does not verify any price, fill or settlement in this repository."},
-    {"id":"reddit-btc15m-backtest","name":"r/PredictionsMarkets — 5,000 strategies backtested on Kalshi 15-min BTC markets","url":"https://www.reddit.com/r/PredictionsMarkets/comments/1szxy8h/backtested_5000_strategies_on_kalshi_15min_btc/","kind":"community research (discovery-only)","use":"Hypothesis for a future season: volatility-reversion ('panic fade') was the only profitable archetype; tight 2c high-turnover targets are fee/slippage traps; 0.10-0.40 mean-reversion entries were 0-for-432","status":"discovery only 2026-09-20","note":"The KXBTC15M series was independently observed on the verified official trade tape (trade-tape-sample.csv). No numbers from the post are used; a future session must re-verify against the official KXBTC15M tape before any claim."},
-    {"id":"reddit-shock-timing-refuted","name":"r/PredictionsMarkets — 'Shock-timing' World Cup bot (+39% claim) and its backtest refutation","url":"https://www.reddit.com/r/PredictionsMarkets/comments/1u3rn8s/i_built_a_39_kalshi_trading_bot_to_exploit_world/","kind":"community research (discovery-only)","use":"Example of a community return claim failing out-of-sample re-testing (panic-fade and sell-the-bounce variants lose); kept to calibrate skepticism toward social results","status":"discovery only 2026-09-20","note":"Discovery reference only. Neither the +39% claim nor the refutation is accepted as evidence; both are social posts."},
-    {"id":"medium-pm-synthesis","name":"Academic synthesis of prediction-market strategy literature","url":"https://medium.com/@FrenzyCapital/trading-strategies-for-prediction-markets-4025a050e2e2","kind":"research synthesis (discovery-only)","use":"Framing: buying NO on overpriced longshots is the long-only expression of the favorite-longshot edge; passive liquidity provision on Kalshi shows aggregate positive returns (with event-risk caveats)","status":"discovery only 2026-09-20","note":"Discovery context for the YieldSniper thesis and the maker-side research path (SpreadSmith remains gated)."},
-    {"id":"pith-optimal-mm","name":"Optimal Market Making in Prediction Markets (stochastic control)","url":"https://pith.science/paper/2607.17991","kind":"academic research (discovery-only)","use":"Theoretical quoting rules for binary-settlement market making (spread/skew vs inventory and time-to-resolution); a public referee note flags one unsupported downside-protection claim","status":"discovery only 2026-09-20","note":"Research path for future maker-fee-aware quote modeling; not a price or fill source."}
+    {
+      "id": "kalshi-markets",
+      "name": "Kalshi public markets API",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets?status=open",
+      "kind": "primary exchange",
+      "use": "Live open-market metadata and quote fields",
+      "status": "runtime",
+      "note": "The UI displays no market rows when this official endpoint cannot be read."
+    },
+    {
+      "id": "kalshi-orderbook",
+      "name": "Kalshi market orderbook API reference",
+      "url": "https://docs.kalshi.com/api-reference/market/get-market-orderbook",
+      "kind": "primary exchange",
+      "use": "Bid levels, quantities, executable paper VWAP and slippage",
+      "status": "documented with auth note",
+      "note": "The API reference currently shows auth headers while Kalshi's getting-started orderbook page says no authentication is required; the app makes no credentialed request and fail-closes if the public read is rejected."
+    },
+    {
+      "id": "kalshi-orderbook-responses",
+      "name": "Kalshi orderbook response guide",
+      "url": "https://docs.kalshi.com/getting_started/orderbook_responses",
+      "kind": "primary exchange",
+      "use": "No-auth read workflow and reciprocal YES/NO ask rule",
+      "status": "documented",
+      "note": "Kalshi explicitly describes the public request, YES/NO bid arrays and reciprocal implied asks on this page."
+    },
+    {
+      "id": "kalshi-market-data-quickstart",
+      "name": "Kalshi market-data quick start",
+      "url": "https://docs.kalshi.com/getting_started/quick_start_market_data",
+      "kind": "primary exchange",
+      "use": "Endpoint and public market-data workflow",
+      "status": "documented",
+      "note": "Manual review link for the exact market and order-book calls used by the app."
+    },
+    {
+      "id": "kalshi-historical",
+      "name": "Kalshi historical data",
+      "url": "https://docs.kalshi.com/getting_started/historical_data",
+      "kind": "primary exchange",
+      "use": "Live vs historical tier split and cutoff handling",
+      "status": "documented",
+      "note": "Cutoff read live on 2026-09-19: all four timestamps 2026-07-21T00:00:00Z (see data/season-2026/cutoff.json)."
+    },
+    {
+      "id": "kalshi-live-candles",
+      "name": "Kalshi market candlesticks (live tier)",
+      "url": "https://docs.kalshi.com/api-reference/market/get-market-candlesticks",
+      "kind": "primary exchange",
+      "use": "Verified backtest bars for markets settled after the cutoff",
+      "status": "verified 2026-09-19",
+      "note": "GET /series/{series_ticker}/markets/{ticker}/candlesticks with start_ts, end_ts, period_interval in {1,60,1440}. The committed backtest used exactly this endpoint."
+    },
+    {
+      "id": "kalshi-cutoff-live",
+      "name": "Kalshi historical cutoff (live read)",
+      "url": "https://external-api.kalshi.com/trade-api/v2/historical/cutoff",
+      "kind": "primary exchange",
+      "use": "Boundary between live and historical tiers",
+      "status": "verified 2026-09-19",
+      "note": "market_settled_ts = trades_created_ts = orders_updated_ts = market_positions_last_updated_ts = 2026-07-21T00:00:00Z."
+    },
+    {
+      "id": "kalshi-series-records",
+      "name": "Kalshi series records KXFED / KXCPI / KXBTC",
+      "url": "https://external-api.kalshi.com/trade-api/v2/series/KXFED",
+      "kind": "primary exchange",
+      "use": "Fee type/multiplier, settlement sources, contract terms",
+      "status": "verified 2026-09-19",
+      "note": "KXFED and KXCPI: quadratic_with_maker_fees x1 (Fed/BLM settlement sources). KXBTC: quadratic x1 (CF Benchmarks BRTI). Stored in data/season-2026/series-records.json; siblings at /series/KXCPI and /series/KXBTC."
+    },
+    {
+      "id": "fred-gold",
+      "name": "FRED GOLDAMGBD228NLBM",
+      "url": "https://fred.stlouisfed.org/series/GOLDAMGBD228NLBM",
+      "kind": "official benchmark publisher",
+      "use": "Intended gold feed for MetalMomentum",
+      "status": "blocked 2026-09-20",
+      "note": "CSV endpoint returned an error page from this sandbox on 2026-09-19 and again on 2026-09-20 (both via curl and the sandbox fetch tool). FRED is not used; the official LBMA JSON feed (id lbma-gold) became the verified gold reference instead."
+    },
+    {
+      "id": "stooq-gold",
+      "name": "Stooq XAU/USD daily CSV",
+      "url": "https://stooq.com/q/d/l/?s=xauusd&i=d",
+      "kind": "free public quote",
+      "use": "Fallback gold feed attempt",
+      "status": "blocked 2026-09-20",
+      "note": "No sandbox egress to stooq.com (connection blocked, 2026-09-20). Never used as pricing."
+    },
+    {
+      "id": "kalshi-candles",
+      "name": "Kalshi historical candlesticks",
+      "url": "https://docs.kalshi.com/api-reference/historical/get-historical-market-candlesticks",
+      "kind": "primary exchange",
+      "use": "Future line-by-line historical replay",
+      "status": "documented",
+      "note": "The endpoint requires ticker, start and end timestamps plus a documented period interval."
+    },
+    {
+      "id": "kalshi-fees",
+      "name": "Kalshi fee schedule",
+      "url": "https://kalshi.com/fee-schedule",
+      "kind": "primary exchange",
+      "use": "Standard quadratic taker-fee assumption and market-specific review",
+      "status": "manual review",
+      "note": "Series-specific fee overrides may exist; the UI labels fee estimates and never claims a live fee."
+    },
+    {
+      "id": "kalshi-fee-rounding",
+      "name": "Kalshi fee rounding documentation",
+      "url": "https://docs.kalshi.com/getting_started/fee_rounding",
+      "kind": "primary exchange",
+      "use": "Centicent fee-rounding reference",
+      "status": "verified 2026-09-20",
+      "note": "fee_rounding.md: fees at 6-decimal dollar granularity; trade_fee = ceil_6dp(model fee) plus a per-fill rounding fee restoring the member balance grid ($0.0001 direct members, $0.01 non-direct). The backtest model's round-up to $0.0001 is the direct-member-grid approximation (documented in IRR-11)."
+    },
+    {
+      "id": "kalshi-auth",
+      "name": "Kalshi authenticated requests",
+      "url": "https://docs.kalshi.com/getting_started/quick_start_authenticated_requests",
+      "kind": "primary exchange",
+      "use": "Why live order placement is intentionally disabled",
+      "status": "documented",
+      "note": "RSA-PSS credentials are never requested or stored by this static site."
+    },
+    {
+      "id": "kalshi-orders",
+      "name": "Kalshi create-order documentation",
+      "url": "https://docs.kalshi.com/api-reference/orders/create-order-v2",
+      "kind": "primary exchange",
+      "use": "Manual review for future server-side order-entry work",
+      "status": "documented",
+      "note": "Not called by this paper simulator."
+    },
+    {
+      "id": "kalshi-settlement",
+      "name": "Kalshi market settlement",
+      "url": "https://docs.kalshi.com/getting_started/market_settlement",
+      "kind": "primary exchange",
+      "use": "Official settlement reconciliation",
+      "status": "verified 2026-09-20",
+      "note": "market_settlement.md: 'Settlement fees are zero for simple yes/no determinations but may apply for sub-cent scalar settlement'; payout (CollateralAmountChange) rounded to whole cents. All season-2026 backtest markets are simple yes/no, so the no-settlement-fee model is officially confirmed (IRR-11 resolved)."
+    },
+    {
+      "id": "nws-api",
+      "name": "National Weather Service API",
+      "url": "https://www.weather.gov/documentation/services-web-api",
+      "kind": "official government",
+      "use": "Source gate for WeatherCatalyst",
+      "status": "research gate",
+      "note": "A forecast must match contract location, variable and window before it can be used."
+    },
+    {
+      "id": "sec-edgar",
+      "name": "SEC EDGAR company filings",
+      "url": "https://www.sec.gov/edgar/search/",
+      "kind": "official government",
+      "use": "Source gate for Form4Flash",
+      "status": "research gate",
+      "note": "A Form 4 verifies a filing; it does not verify a Kalshi event or price."
+    },
+    {
+      "id": "fda-drugs",
+      "name": "FDA Drugs@FDA",
+      "url": "https://www.accessdata.fda.gov/scripts/cder/daf/",
+      "kind": "official government",
+      "use": "Source gate for FDAReaction",
+      "status": "research gate",
+      "note": "The FDA record must be joined to exact market terms and date."
+    },
+    {
+      "id": "fda-calendar",
+      "name": "FDA advisory committee calendar",
+      "url": "https://www.fda.gov/advisory-committees/advisory-committee-calendar",
+      "kind": "official government",
+      "use": "Research calendar only",
+      "status": "research gate",
+      "note": "Calendar dates are not a prediction and do not substitute for a market quote."
+    },
+    {
+      "id": "ncaa-scoreboard",
+      "name": "NCAA official scoreboard",
+      "url": "https://www.ncaa.com/scoreboard/football/fbs",
+      "kind": "official sports",
+      "use": "Source gate for CampusCloser",
+      "status": "research gate",
+      "note": "Scores can verify game state; Kalshi remains the only execution-price source."
+    },
+    {
+      "id": "mlb-stats-api",
+      "name": "MLB Stats API",
+      "url": "https://statsapi.mlb.com/api/v1/schedule",
+      "kind": "official sports",
+      "use": "Source gate for DiamondDelta",
+      "status": "research gate",
+      "note": "Use only after matching the exact game and contract settlement condition."
+    },
+    {
+      "id": "nfl-official",
+      "name": "NFL official site",
+      "url": "https://www.nfl.com/",
+      "kind": "official sports",
+      "use": "Manual review for SundayStatus and GridironPulse",
+      "status": "research gate",
+      "note": "The user's NFLInjuryReport documents that official values are used where nfl.com publishes them; a fallback source is not official confirmation."
+    },
+    {
+      "id": "nba-official",
+      "name": "NBA official injury-report landing area",
+      "url": "https://official.nba.com/nba-injury-report-2025-26-season/",
+      "kind": "official sports",
+      "use": "Manual review for TipoffTriage",
+      "status": "manual review",
+      "note": "The MasterSite audit flags no machine-readable official NBA live feed; no NBA signal is generated here."
+    },
+    {
+      "id": "eia-api",
+      "name": "U.S. Energy Information Administration API",
+      "url": "https://www.eia.gov/opendata/documentation.php",
+      "kind": "official government",
+      "use": "Possible future commodity context, not current execution pricing",
+      "status": "research gate",
+      "note": "Not called by this static app; a future adapter must document key/access and publication lag before use."
+    },
+    {
+      "id": "lbma-gold",
+      "name": "LBMA gold price and data",
+      "url": "https://prices.lbma.org.uk/json/gold_am.json",
+      "kind": "official benchmark publisher",
+      "use": "Verified gold price reference for MetalMomentum (LBMA AM auction, USD/GBP/EUR per troy ounce)",
+      "status": "verified 2026-09-20",
+      "note": "Official LBMA JSON reachable from this sandbox via the fetch tool (2026-09-20). Rows 2026-06-15..2026-09-18 stored verbatim in data/season-2026/raw/lbma-gold-am-2026.json (SHA-256 bound). Cross-check: Kalshi KXGOLDH-26SEP1920 settled at 4376.42 (Pyth, 2026-09-19 20:00 ET) vs LBMA 2026-09-18 AM 4387.00 - independent sources agree on level and direction."
+    },
+    {
+      "id": "mastersite",
+      "name": "MasterSite project directory",
+      "url": "https://buffedlizard55-lab.github.io/MasterSite/",
+      "kind": "user project directory",
+      "use": "Review of related repositories and flags",
+      "status": "reviewed 2026-09-19",
+      "note": "Descriptions are user-project evidence and are not official exchange or settlement sources."
+    },
+    {
+      "id": "sf-weather-project",
+      "name": "SFWeather project",
+      "url": "https://buffedlizard55-lab.github.io/SFWeather/",
+      "kind": "user project",
+      "use": "Weather hypothesis discovery",
+      "status": "manual review",
+      "note": "MasterSite says it uses NWS/NCEI/CPC; this app still requires the primary NWS response for a trade signal."
+    },
+    {
+      "id": "insider-project",
+      "name": "Insider Trades project",
+      "url": "https://buffedlizard55-lab.github.io/Insider-trades/",
+      "kind": "user project",
+      "use": "Form 4 hypothesis discovery",
+      "status": "manual review",
+      "note": "MasterSite describes local SEC Form 4 data; the SEC filing remains the primary evidence."
+    },
+    {
+      "id": "leap-project",
+      "name": "TradingView The Leap project",
+      "url": "https://buffedlizard55-lab.github.io/TradingViewTheLeap/",
+      "kind": "user project",
+      "use": "Competition research and hypothesis discovery",
+      "status": "manual review",
+      "note": "A separate contest cannot be presented as a Kalshi backtest or result."
+    },
+    {
+      "id": "leap-official",
+      "name": "TradingView The Leap official page",
+      "url": "https://www.tradingview.com/the-leap/",
+      "kind": "official contest page",
+      "use": "Manual review of contest rules",
+      "status": "research reference",
+      "note": "Contest results and rules do not establish Kalshi pricing."
+    },
+    {
+      "id": "kalshi-project",
+      "name": "KalshiPaperSim project",
+      "url": "https://buffedlizard55-lab.github.io/KalshiPaperSim/",
+      "kind": "user project",
+      "use": "Reverse-engineering reference",
+      "status": "manual review",
+      "note": "A separate project is not copied as data; this repository implements an independent evidence boundary."
+    },
+    {
+      "id": "price-kalshi-project",
+      "name": "PriceKalshiHistorical project",
+      "url": "https://buffedlizard55-lab.github.io/PriceKalshiHistorical/",
+      "kind": "user project",
+      "use": "Historical simulator research reference",
+      "status": "manual review",
+      "note": "No external captured result is imported into this ledger."
+    },
+    {
+      "id": "drug-project",
+      "name": "DrugAnalysis project",
+      "url": "https://buffedlizard55-lab.github.io/DrugAnalysis/",
+      "kind": "user project",
+      "use": "FDA strategy research reference",
+      "status": "manual review",
+      "note": "MasterSite flags secondary calendar/compiled rows for manual primary-source verification."
+    },
+    {
+      "id": "nfl-injury-project",
+      "name": "NFLInjuryReport project",
+      "url": "https://buffedlizard55-lab.github.io/NFLInjuryReport/",
+      "kind": "user project",
+      "use": "NFL injury hypothesis discovery",
+      "status": "manual review",
+      "note": "The project documents a forward-collected scorecard and missed-alert limitations."
+    },
+    {
+      "id": "nba-injury-project",
+      "name": "NBAInjuryReport project",
+      "url": "https://buffedlizard55-lab.github.io/NBAInjuryReport/",
+      "kind": "user project",
+      "use": "NBA injury hypothesis discovery",
+      "status": "manual review",
+      "note": "MasterSite explicitly labels ESPN data as not official NBA confirmation."
+    },
+    {
+      "id": "ncaa-project",
+      "name": "NCAA Football alerts project",
+      "url": "https://buffedlizard55-lab.github.io/Ncaa-football-alerts/",
+      "kind": "user project",
+      "use": "NCAA scoreboard hypothesis discovery",
+      "status": "manual review",
+      "note": "Use the official NCAA source for any future signal."
+    },
+    {
+      "id": "nfl-score-project",
+      "name": "NFL scoreboard project",
+      "url": "https://buffedlizard55-lab.github.io/NFL-scoreboard/",
+      "kind": "user project",
+      "use": "NFL score hypothesis discovery",
+      "status": "manual review",
+      "note": "A project output is not itself a primary settlement source."
+    },
+    {
+      "id": "mlb-score-project",
+      "name": "MLB Live PBP project",
+      "url": "https://buffedlizard55-lab.github.io/MLB-Live-PBP/",
+      "kind": "user project",
+      "use": "MLB game-state hypothesis discovery",
+      "status": "manual review",
+      "note": "MasterSite describes official MLB Gameday feed data; verify the primary response before use."
+    },
+    {
+      "id": "sports-pred-project",
+      "name": "SportsPred project",
+      "url": "https://buffedlizard55-lab.github.io/SportsPred/",
+      "kind": "user project",
+      "use": "Cross-sport hypothesis discovery",
+      "status": "manual review",
+      "note": "Model output is not accepted as official pricing or settlement evidence."
+    },
+    {
+      "id": "gold-project",
+      "name": "GOLD project",
+      "url": "https://buffedlizard55-lab.github.io/GOLD/",
+      "kind": "user project",
+      "use": "Gold research reference",
+      "status": "manual review",
+      "note": "MasterSite describes a buyer's directory, not a live commodity benchmark feed."
+    },
+    {
+      "id": "pinepilot-project",
+      "name": "PinePilot project",
+      "url": "https://buffedlizard55-lab.github.io/Tradingview-pinescript-editor/",
+      "kind": "user project",
+      "use": "Rule discovery and future replay",
+      "status": "manual review",
+      "note": "Pine calculations are not treated as historical Kalshi prices."
+    },
+    {
+      "id": "ceo-unresolved",
+      "name": "CEO project reference",
+      "url": "https://buffedlizard55-lab.github.io/MasterSite/",
+      "kind": "unresolved user reference",
+      "use": "Owner review required",
+      "status": "not located",
+      "note": "The requested label CEO was not an identifiable entry in the retrieved MasterSite directory. No URL is invented and no CEO signal is enabled."
+    },
+    {
+      "id": "trade-ideas",
+      "name": "Trade Ideas competition",
+      "url": "https://www.trade-ideas.com/stock-trading-competition/",
+      "kind": "competition reference",
+      "use": "Reverse-engineering research only",
+      "status": "manual review",
+      "note": "This is not a Kalshi data source."
+    },
+    {
+      "id": "candlecharts",
+      "name": "CandleCharts contest",
+      "url": "https://specials.candlecharts.com/contest/",
+      "kind": "competition reference",
+      "use": "Reverse-engineering research only",
+      "status": "manual review",
+      "note": "This is not a Kalshi data source."
+    },
+    {
+      "id": "cepr-kalshi-bias",
+      "name": "CEPR — The economics of the Kalshi prediction market (300k+ contracts)",
+      "url": "https://cepr.org/voxeu/columns/economics-kalshi-prediction-market",
+      "kind": "academic research (discovery-only)",
+      "use": "Supports the favorite-longshot roster design: 5-20c contracts underperform their price, 80-95c favorites overperform; taker longshot losses far larger than maker losses",
+      "status": "discovery only 2026-09-20",
+      "note": "Research context for SureThing/YieldSniper and the documented DipHunter failure mode. It does not verify any price, fill or settlement in this repository."
+    },
+    {
+      "id": "reddit-btc15m-backtest",
+      "name": "r/PredictionsMarkets — 5,000 strategies backtested on Kalshi 15-min BTC markets",
+      "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1szxy8h/backtested_5000_strategies_on_kalshi_15min_btc/",
+      "kind": "community research (discovery-only)",
+      "use": "Hypothesis for a future season: volatility-reversion ('panic fade') was the only profitable archetype; tight 2c high-turnover targets are fee/slippage traps; 0.10-0.40 mean-reversion entries were 0-for-432",
+      "status": "discovery only 2026-09-20",
+      "note": "The KXBTC15M series was independently observed on the verified official trade tape (trade-tape-sample.csv). No numbers from the post are used; a future session must re-verify against the official KXBTC15M tape before any claim."
+    },
+    {
+      "id": "reddit-shock-timing-refuted",
+      "name": "r/PredictionsMarkets — 'Shock-timing' World Cup bot (+39% claim) and its backtest refutation",
+      "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1u3rn8s/i_built_a_39_kalshi_trading_bot_to_exploit_world/",
+      "kind": "community research (discovery-only)",
+      "use": "Example of a community return claim failing out-of-sample re-testing (panic-fade and sell-the-bounce variants lose); kept to calibrate skepticism toward social results",
+      "status": "discovery only 2026-09-20",
+      "note": "Discovery reference only. Neither the +39% claim nor the refutation is accepted as evidence; both are social posts."
+    },
+    {
+      "id": "medium-pm-synthesis",
+      "name": "Academic synthesis of prediction-market strategy literature",
+      "url": "https://medium.com/@FrenzyCapital/trading-strategies-for-prediction-markets-4025a050e2e2",
+      "kind": "research synthesis (discovery-only)",
+      "use": "Framing: buying NO on overpriced longshots is the long-only expression of the favorite-longshot edge; passive liquidity provision on Kalshi shows aggregate positive returns (with event-risk caveats)",
+      "status": "discovery only 2026-09-20",
+      "note": "Discovery context for the YieldSniper thesis and the maker-side research path (SpreadSmith remains gated)."
+    },
+    {
+      "id": "pith-optimal-mm",
+      "name": "Optimal Market Making in Prediction Markets (stochastic control)",
+      "url": "https://pith.science/paper/2607.17991",
+      "kind": "academic research (discovery-only)",
+      "use": "Theoretical quoting rules for binary-settlement market making (spread/skew vs inventory and time-to-resolution); a public referee note flags one unsupported downside-protection claim",
+      "status": "discovery only 2026-09-20",
+      "note": "Research path for future maker-fee-aware quote modeling; not a price or fill source."
+    },
+    {
+      "id": "kalshi-exchange-sharding",
+      "name": "Kalshi exchange sharding documentation",
+      "url": "https://docs.kalshi.com/getting_started/exchange_sharding",
+      "kind": "primary exchange",
+      "use": "Routing for sharded series (shard 2 = crypto + commodities since 2026-09-10)",
+      "status": "verified 2026-09-20",
+      "note": "Market-data calls for sharded series need the exchange_index query parameter (or auto-route via market_ticker on some endpoints). KXGOLDH and the other Commodities series live on shard 2; /series/{T}/markets 404s without it. Official timeline: new commodities markets created on shard 2 from 2026-09-10 12:00 ET."
+    },
+    {
+      "id": "kalshi-gold-hourly",
+      "name": "Kalshi KXGOLDH - Gold Hourly (shard 2)",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXGOLDH&exchange_index=2",
+      "kind": "primary exchange",
+      "use": "Kalshi gold contract for MetalMomentum (hourly 1-minute-candle strike binaries, settled by Pyth gold)",
+      "status": "verified 2026-09-20",
+      "note": "Series KXGOLDH (Commodities, frequency hourly, fee quadratic x1, settlement source Pyth Metal.Index.1OZGOLD/USD). Markets are strike binaries per hourly event (KXGOLDH-YYMMDDHH), events created ~2h before occurrence. Liquidity immature at verification: settled market KXGOLDH-26SEP1920-T4407.99 (result no, settlement value 4376.42, settlement_ts 2026-09-20T01:03:14.503804Z) shows zero-volume candlesticks with only a 0.24->0.03 yes-ask. KXGOLDH is therefore forward-desk watch only, not backtest-ready."
+    }
   ],
   "irregularities": [
     "IRR-01 · Live data is intentionally fail-closed: an API/network/CORS failure produces an empty market panel, not demo quotes.",
@@ -65,9 +483,10 @@
     "IRR-08 · The CEO label was not resolvable to a MasterSite entry during review, so it remains an explicit unresolved item instead of a guessed link.",
     "IRR-09 · Kalshi's current API reference shows authentication headers for the orderbook endpoint while its getting-started response guide says no authentication is required; this app uses no credentials and treats a rejected public read as unavailable.",
     "IRR-10 · A live response read on 2026-09-19 returned status=active for rows selected by the status=open query; the app accepts both open and active and retains the raw status in each observation/trade record.",
-    "IRR-11 · Backtest fee model: the published taker fee 0.07·q·p·(1-p) is applied at entry and verified bid exits, rounded up to $0.0001 (Kalshi fee-rounding docs). No fee is modeled at settlement — flagged as an assumption pending settlement-fee documentation; KXFED/KXCPI are quadratic_with_maker_fees series and taker fills use the standard formula, maker-side differences are not modeled.",
-    "IRR-12 · This build was collected from a sandbox without direct egress to kalshi.com: official responses were read via a server-side reader and transcribed into the committed CSV/JSON files. Mitigations: 50 automated cross-checks (volume sums equal market-record volume exactly, open-interest continuity, timestamp monotonicity, price bounds, settlement fields) plus SHA-256 binding. A future collector with direct API access should re-fetch the same URLs and diff byte-for-byte; single-field transcription errors remain a residual risk.",
-    "IRR-13 · No gold/commodity price feed was reachable from this environment on 2026-09-19 (FRED CSV URL returned an error page; Stooq returned 'Access denied'). No gold price is stored or used anywhere; MetalMomentum remains source-gated with manual review links.",
-    "IRR-14 · The official /markets/trades endpoint ignored the market_ticker filter in the captured call, so the committed trade-tape sample spans multiple tickers (recorded as all-market). The per-market trade filter parameter name is not verified and is not used."
+    "IRR-11 · (resolved 2026-09-20) Backtest fee model: taker fee 0.07·q·p·(1-p) applied at entry and verified-bid exits, rounded up to $0.0001. Official docs (fee_rounding.md) specify 6-decimal-granularity trade fees plus a per-fill rounding fee onto the member balance grid; $0.0001 is the direct-member grid, so the model is a documented approximation. Settlement fee: official market_settlement.md states settlement fees are zero for simple yes/no determinations (sub-cent scalar settlement may differ) - all season-2026 backtest markets are simple yes/no, so the no-settlement-fee model is confirmed. KXFED/KXCPI are quadratic_with_maker_fees; maker-side differences are not modeled (flagged).",
+    "IRR-12 · (resolved 2026-09-20) The 2026-09-19 build was transcribed in a sandbox without direct egress. On 2026-09-20 every MANIFEST URL was re-fetched via the sandbox fetch tool; raw JSON responses are stored under data/season-2026/raw/ (SHA-256 bound) and all three candle CSVs were field-by-field diffed against the raw (KXCPI 44 bars OK, KXFED-90d 72 bars OK, NFL 14 bars OK after the IRR-15a fix). The settled-market, orderbook (byte-exact), trade-tape and series refetches match the committed files; the KXFED open limit=4 refetch is a dynamic list - 3 of 4 tickers (KXFED-27APR-T5.50/T5.75/T6.00) match field-for-field and the 4th differs only because new 27APR strikes were created after the 2026-09-19 snapshot. FRED and Stooq remain unreachable from this sandbox (IRR-13).",
+    "IRR-13 · (resolved 2026-09-20, with gap) FRED's CSV endpoint and Stooq remain unreachable from this sandbox (error page / blocked connection, both re-tested 2026-09-20). The official LBMA JSON feed (prices.lbma.org.uk/json/gold_am.json) IS reachable; rows 2026-06-15..2026-09-18 are stored verbatim (data/season-2026/raw/lbma-gold-am-2026.json). Kalshi's own gold series KXGOLDH (shard 2, Pyth-settled, hourly 1-minute-candle strikes) was discovered and verified, but recent KXGOLDH events show zero volume (liquidity immature), so MetalMomentum still cannot produce verified fills - it moves from 'no source at all' to 'reference data verified, fills gated on Kalshi gold liquidity'.",
+    "IRR-14 · (resolved 2026-09-20) The per-market trade-tape parameter is `ticker` (not market_ticker): GET /trade-api/v2/markets/trades?ticker=<TICKER>&limit=N, verified 2026-09-20 - the call for KXBTC-26SEP2017-T90749.99 returned exactly 1 trade matching that market's volume_fp (raw stored in data/season-2026/raw/refetch-20260920-markets-trades-ticker-KXBTC-26SEP2017-T90749.99.json). The all-market sample in trade-tape-sample.csv remains as captured on 2026-09-19.",
+    "IRR-15 · (2026-09-20) (a) The committed NFL hourly CSV (transcribed 2026-09-19) carried a one-bar transcription shift: price_mean on bars 1789660800/1789664400/1789668000/1789675200 and price_close (with ask) on bar 1789678800 (committed 0.70 vs official 0.69). Fixed by mechanical regeneration from the canonical raw (scripts/candles_from_raw.py --diff now clean on all 14 bars). Backtest impact: CrossChaser's entry moved from the 21:00Z bar (where the verified ask was 0.69) to the 22:00Z bar (where 0.70 was the verified ask) - same entry price 0.70, 7142 contracts, exit 0.69 bid, identical PnL -$283.34, fees and leaderboard unchanged; the fill is now attributed to the bar on which that price was actually verified. (b) Exchange-side inconsistency: two official candlesticks calls minutes apart for KXNFLGAME-26SEP17DETBUF-BUF returned different volume/OI/close/mean for bars 1789678800-1789686000 - the narrow window (start_ts=1789657200&end_ts=1789686000) shifts values one hour later and introduces OI states (188254.68, 2295532.84) absent from the documented window. The documented MANIFEST URL (start_ts=1789646400&end_ts=1789697600&period_interval=60) is treated as canonical; flagged for a future session to re-check whether the exchange re-published that window."
   ]
 }

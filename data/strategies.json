@@ -234,9 +234,9 @@
     "mode": "source-gated",
     "tag": "gold",
     "status": "gated",
-    "rule": "Use an official commodity or benchmark publication with an explicit timestamp only when the Kalshi contract names the same reference and window.",
+    "rule": "When the Kalshi gold contract names a reference and window that matches a stored official publication timestamp, trade only against that contract's verified book; otherwise no signal.",
     "why": "A jewelry listing or third-party gold quote is not a settlement oracle. The user's GOLD directory is a buyer's reference and is not used as a market price.",
-    "evidence": "Official benchmark/commodity source + Kalshi terms + live Kalshi book",
+    "evidence": "Official benchmark/commodity source + Kalshi terms + live Kalshi book. Verified 2026-09-20: LBMA AM feed reachable (rows 2026-06-15..2026-09-18 stored in data/season-2026/raw/lbma-gold-am-2026.json) and Kalshi's KXGOLDH gold series discovered on exchange shard 2 (Pyth-settled hourly 1-minute-candle strike binaries). Recent KXGOLDH events show zero volume (liquidity immature) - no verified fills yet.",
     "signal": "blocked"
   },
   {

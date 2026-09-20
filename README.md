@@ -16,7 +16,7 @@ index.html, styles.css, src/        GitHub Pages site (published from the repo r
   src/engine.js                     pure accounting / orderbook / fee / settlement helpers
   src/app.js                        live UI: market list, books, intents, paper fills, ledger
 scripts/
-  verify_data.py                    50 assertions over every stored data file + SHA-256 manifest
+  verify_data.py                    51 assertions over every stored data file + SHA-256 manifest
   regen_candles.py                  structural regeneration of the candle CSVs (transcription guard)
   build_competition.py              deterministic backtest + competition memory builder
 data/
@@ -72,7 +72,7 @@ fees and slippage are in `data/season-2026/trades.json`; per-strategy analysis i
 ### How to reproduce
 
 ```bash
-python3 scripts/verify_data.py      # 50 assertions; rewrites SHA256SUMS.txt
+python3 scripts/verify_data.py      # 51 assertions; rewrites SHA256SUMS.txt
 python3 scripts/build_competition.py # recomputes trades.json / leaderboard.json / intents.json / explanations.json
 npm test                            # node --test (engine + season-memory invariants)
 ```
@@ -123,19 +123,35 @@ BookRocket → `KXBTC-26SEP2017-B90625` YES @ 0.02 (180 displayed), TailSprint a
 
 ## Known limitations and next work (for the next session)
 
-- **Collector with direct egress.** Re-fetch every URL in `MANIFEST.md` from an environment with
-  network access, store the raw bytes, and replace the transcribed CSVs with byte-identical files
-  (keeps the same hashes contract).
-- **Deeper history.** Extend the KXFED window back to the 2025-08 open (the full-history endpoint
-  works; only the first chunk was captured this session) and add more CPI/Fed meetings and more
-  settled NFL games to grow the backtest sample.
-- **Per-market trade tape.** Confirm the market filter parameter name on `GET /markets/trades`
-  (the captured call ignored `market_ticker`; see IRR-14) and store per-market tick data.
-- **Gold/commodity feed.** FRED and Stooq were unreachable from this environment (IRR-13). Wire an
-  official free feed (e.g. LBMA via a reachable mirror, or EIA for oil) before MetalMomentum can
-  enter the roster.
-- **Settlement fee check.** Verify against Kalshi settlement documentation whether settlement
-  incurs any fee (IRR-11) and adjust the model if so.
+- **Collector with direct egress — RESOLVED 2026-09-20 (IRR-12).** Every `MANIFEST.md` URL was
+  re-fetched via the sandbox fetch tool; raw responses are stored verbatim in
+  `data/season-2026/raw/` (SHA-256 bound) and all three candle CSVs were field-by-field diffed
+  against the raw (`scripts/candles_from_raw.py --diff`). The diff caught one one-bar
+  transcription shift in the NFL CSV (IRR-15a), which was regenerated mechanically from the
+  canonical raw; PnL/fees/leaderboard are unchanged, and one fill's entry-bar attribution was
+  corrected to the bar on which its price was actually verified. FRED/Stooq remain unreachable
+  from the sandbox (IRR-13) — Kalshi endpoints work through the fetch tool.
+- **Deeper history.** The KXFED full-history fetch is 14 chunks; only the zero-volume prefix
+  (chunks 0-1, 2025-08-07→2025-09-28) is archived so far — archive the middle, and page settled
+  KXGOLDH markets (cursor pagination) to find the first *liquid* gold event (none traded yet).
+  Add more CPI/Fed meetings and settled NFL games to grow the sample.
+- **Per-market trade tape — RESOLVED 2026-09-20 (IRR-14).** The filter parameter is `ticker`:
+  `GET /markets/trades?ticker=<TICKER>&limit=N`, verified against KXBTC-26SEP2017-T90749.99
+  (1 trade = market volume; raw stored).
+- **Gold/commodity feed — RESOLVED 2026-09-20 (IRR-13, with gap).** The official LBMA JSON feed
+  (`prices.lbma.org.uk/json/gold_am.json`) is reachable; 2026-06-15→2026-09-18 AM fixes are
+  stored in `data/season-2026/raw/lbma-gold-am-2026.json`. Kalshi's own gold series `KXGOLDH`
+  (hourly 1-minute-candle strike binaries, Pyth-settled, exchange shard 2) was discovered and
+  verified — but recent events show zero volume, so MetalMomentum stays gated on Kalshi gold
+  liquidity. FRED's CSV endpoint and Stooq are still unreachable from the sandbox.
+- **Settlement fee check — RESOLVED 2026-09-20 (IRR-11).** Official docs: "Settlement fees are
+  zero for simple yes/no determinations" (sub-cent scalar settlement may differ; payouts rounded
+  to whole cents). All backtested markets are simple yes/no → the no-settlement-fee model is
+  confirmed. Fee docs: 6-decimal granularity with a per-fill rounding fee onto the member balance
+  grid; the model's $0.0001 round-up is the direct-member grid approximation (documented).
+- **Exchange sharding (new, 2026-09-20).** Kalshi sharded matching engines by category: shard 2 =
+  crypto + commodities (since 2026-09-10). Market-data calls for sharded series require
+  `exchange_index=2` (e.g. `KXGOLDH`; `/series/KXGOLDH/markets` 404s without it).
 - **Source-gated strategies.** NWS, SEC EDGAR, FDA, NFL/NBA injury, NCAA/NFL/MLB scoreboards and
   SportsPred each need a versioned adapter (primary-source response → exact contract mapping)
   before they can emit a signal. The "CEO" MasterSite reference remains unresolved (IRR-08).
@@ -162,4 +178,7 @@ BookRocket → `KXBTC-26SEP2017-B90625` YES @ 0.02 (180 displayed), TailSprint a
 - Orderbook semantics: <https://docs.kalshi.com/getting_started/orderbook_responses>
 - Fee rounding: <https://docs.kalshi.com/getting_started/fee_rounding>
 - Settlement: <https://docs.kalshi.com/getting_started/market_settlement>
-- Settlement sources for the backtested markets: Fed — <https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm>, CPI — <https://www.bls.gov/cpi/>, BTC — <https://www.cfbenchmarks.com/data/indices/BRTI>
+- Exchange sharding (shard 2 = crypto + commodities): <https://docs.kalshi.com/getting_started/exchange_sharding>
+- Kalshi gold series (shard 2): `GET /markets?series_ticker=KXGOLDH&exchange_index=2` on <https://external-api.kalshi.com>
+- LBMA gold price (official JSON feed): <https://prices.lbma.org.uk/json/gold_am.json>
+- Settlement sources for the backtested markets: Fed — <https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm>, CPI — <https://www.bls.gov/cpi/>, BTC — <https://www.cfbenchmarks.com/data/indices/BRTI>, KXGOLDH — <https://app.pyth.com/explore/Metal.Index.1OZGOLD%2FUSD>

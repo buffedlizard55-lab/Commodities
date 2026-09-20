@@ -63,5 +63,80 @@ Docs verified for the same session (for manual review):
 - **NWS / SEC / FDA / NCAA / MLB / NFL / NBA adapters**: not collected this session; the related
   strategies remain source-gated (no signal without the primary source response).
 - The KXFED full-history window (2025-08 → 2026-09) was not fully captured; only the verified
-  90-day window (2026-06-20 → 2026-09-16) plus the 26-bar cold-open sample are stored. Backtests
+  90-day window (2026-06-20 → 2026-09-16) plus the 27-bar cold-open sample are stored. Backtests
   are scoped to stored data only.
+
+## Re-verification pass, 2026-09-20 (IRR-12 closure + new findings)
+
+Every URL above was re-fetched on 2026-09-20 via the sandbox fetch tool (direct egress is
+still blocked; the fetch tool is the sandbox's network path). Raw JSON responses are stored
+verbatim in `raw/` and SHA-256 bound. Results:
+
+| Item | Result |
+|---|---|
+| cutoff, KXCPI/KXFED/KXNFLGAME settled, KXFED/KXBTC open, orderbook, series x3 | match the committed files (orderbook byte-exact) |
+| KXFED open limit=4 | 3 of 4 tickers (KXFED-27APR-T5.50/T5.75/T6.00) match field-for-field; the list is dynamic (new 27APR strikes created 2026-09-18) |
+| KXCPI-26AUG-T0.8 daily candles | `scripts/candles_from_raw.py --diff` OK — 44 bars, all fields (IRR-12 closure) |
+| KXFED-26SEP-T4.75 90-day candles | `--diff` OK — 72 bars, all fields (IRR-12 closure) |
+| KXNFLGAME-26SEP17DETBUF-BUF hourly candles | `--diff` OK after the IRR-15a fix (see below) |
+| KXFED full-history window (start_ts=1754438400&end_ts=1789690000, 14 chunks) | chunks 0-1 read: 2025-08-07→2025-09-28 zone is zero volume/OI (untradeable), consistent with the committed cold-open file; remaining chunks not archived (see gaps) |
+
+**Raw files stored this pass** (`raw/refetch-20260920-*`): the 13 manifest responses above plus
+`lbma-gold-am-2026.json` (official LBMA AM gold, 2026-06-15..2026-09-18).
+
+### IRR-15a — transcription shift found and fixed (2026-09-20)
+
+The 2026-09-19 committed NFL CSV had `price_mean` shifted by one bar on four bars
+(1789660800/1789664400/1789668000/1789675200) and `price_close` 0.70 (official 0.69) on
+1789678800. The CSV was mechanically regenerated from the canonical raw
+(`raw/refetch-20260920-candles-KXNFLGAME-26SEP17DETBUF-BUF-hourly.json`); `--diff` is now clean
+on all 14 bars. Backtest impact: one trade's entry-bar attribution corrected. The old (shifted)
+CSV showed a 0.70 ask on the 21:00Z bar (1789678800) where the verified ask was 0.69, so
+CrossChaser's entry was recorded on that bar. With the corrected CSV the same signal fires on the
+22:00Z bar (1789682400), where 0.70 was the verified ask: entry price $0.70, contracts 7142, exit
+$0.69 bid, PnL -$283.34 and fees are unchanged, and the leaderboard is identical — but the fill is
+now attributed to the bar on which that price was actually verified (the old record was an
+implicit use of a not-yet-verified price).
+
+### IRR-15b — exchange-side inconsistency (flagged, not "fixed")
+
+Two official candlesticks calls for the same market, minutes apart, disagree for bars
+1789678800-1789686000: the narrow window (`start_ts=1789657200&end_ts=1789686000`) returns
+volume 188254.68/282642.38/457661.27, OI 2037998.19/**2295532.84**/2731437.64, close
+0.69/0.70/**0.70**; the documented MANIFEST window returns volume 282642.38/457661.27/724830.69,
+OI 2037998.19/2731437.64/3427644.61, close 0.69/0.70/**0.69**. Values are shifted one hour
+later in the narrow response. **Decision: the documented MANIFEST URL is canonical** for this
+repository. A future session should re-poll both windows and record which one persists.
+
+### New official data verified 2026-09-20
+
+- **Settlement & fee docs** (closes IRR-11): `https://docs.kalshi.com/getting_started/market_settlement`
+  — "Settlement fees are zero for simple yes/no determinations"; `https://docs.kalshi.com/getting_started/fee_rounding`
+  — 6-decimal fee granularity, rounding fee onto the member balance grid.
+- **Per-market trade tape** (closes IRR-14): the filter parameter is `ticker` —
+  `GET /markets/trades?ticker=KXBTC-26SEP2017-T90749.99` returned exactly 1 trade = the
+  market's volume.
+- **Exchange sharding** (`https://docs.kalshi.com/getting_started/exchange_sharding`): shard 2
+  = crypto + commodities (since 2026-09-10); sharded market data needs `exchange_index=2`.
+- **KXGOLDH — Gold Hourly** (Commodities, shard 2, Pyth-settled hourly 1-minute-candle strike
+  binaries). Verified market rows (active + settled) and candlesticks: recent events have zero
+  volume (e.g. KXGOLDH-26SEP1920-T4407.99 settled `no` @ 2026-09-20T01:03:14.503804Z,
+  settlement value 4376.42, zero-volume bars, 0.24→0.03 yes-ask only). Forward-desk watch only —
+  not backtest-ready (no liquid history yet).
+- **LBMA gold AM** (official, free): `https://prices.lbma.org.uk/json/gold_am.json` reachable;
+  2026 rows stored. Season context: peak 4634.20 (2026-08-24), 4387.00 (2026-09-18), ~8% off
+  the peak. Cross-checks the Pyth-settled KXGOLDH level (4376.42 on 09-19 20:00 ET).
+- **FRED/Stooq**: still unreachable from this sandbox (re-tested 2026-09-20) — IRR-13 gap stands
+  for those two hosts only.
+
+## Updated known gaps (2026-09-20)
+
+- **KXFED full-history window**: only chunks 0-1 of 14 archived (the 2025-08-07→2025-09-28
+  zero-volume prefix, consistent with the cold-open file). Chunks 2-13 (the 2025-09→2026-06
+  middle) remain unarchived; the committed backtest window is unchanged.
+- **KXGOLDH liquidity**: no KXGOLDH market with trading volume has been found yet; the next
+  session should page settled KXGOLDH markets (cursor pagination) to locate the first liquid
+  event and start the gold backtest.
+- **Fresh KXBTC forward markets**: the committed forward intents reference 26SEP2017 markets that
+  close 2026-09-20T21:00:00Z; a future desk refresh should pick up later-dated KXBTC markets.
+- **CEO / NWS / SEC / FDA / NCAA / MLB / NFL / NBA adapters**: unchanged (see above).
