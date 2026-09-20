@@ -104,7 +104,8 @@ def verify_forward_ledger():
         check(f"forward.event.{event['positionId']}.{event['kind']}.evidence_bound", ev.get("sha256") in hashes_by_file.get(rel, set()),
               f"{rel} {ev.get('sha256', '')[:12]}", quiet=True)
         if event["kind"] == "settlement":
-            check(f"forward.event.{event['positionId']}.settlement_official", event["result"] in ("yes", "no") and bool(event["exitAt"]), quiet=True)
+            check(f"forward.event.{event['positionId']}.settlement_official",
+                  (event["result"] in ("yes", "no") or str(event["result"]).startswith("value:")) and bool(event["exitAt"]), quiet=True)
         if event["kind"] == "fill":
             check(f"forward.event.{event['positionId']}.fill_sane", event["contracts"] > 0 and event["entryNotional"] > 0 and
                   event["entryFee"] >= 0 and event["unfilledContracts"] >= 0, quiet=True)

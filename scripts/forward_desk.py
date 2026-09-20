@@ -494,11 +494,12 @@ class Cycle:
             settled = False
             if live is None or (position.get("closeTs") and position["closeTs"] <= self.now_ts):
                 record = self.get_market_record(ticker, position.get("exchangeIndex"))
-                if record and record["market"]["result"] in ("yes", "no") and record["market"]["settlement_ts"]:
+                rm = record["market"] if record else None
+                if rm and rm["settlement_ts"] and (rm["result"] in ("yes", "no") or rm["settlement_value"] is not None):
                     self.settle(strategy, account, position, record)
                     settled = True
-                elif record and record["market"]["status"] in ("finalized", "settled") and record["market"]["result"] not in ("yes", "no"):
-                    self.errors.append(f"{ticker}: finalized without a yes/no result (possible void) - position held, flagged")
+                elif rm and rm["status"] in ("finalized", "settled"):
+                    self.errors.append(f"{ticker}: finalized without a yes/no result or settlement value - position held, flagged")
             if settled:
                 continue
             # rule-based exit: pre-check on the list quote, confirm on the fresh ladder, full size only
@@ -547,8 +548,13 @@ class Cycle:
 
     def settle(self, strategy, account, position, record):
         m = record["market"]
-        won = (m["result"] == position["side"])
-        payout_per = 1.0 if won else 0.0
+        if m["result"] in ("yes", "no"):
+            payout_per = 1.0 if m["result"] == position["side"] else 0.0
+            result = m["result"]
+        else:  # official scalar settlement value of the YES side (e.g. a tie resolves each team at $0.50)
+            value = max(0.0, min(1.0, float(m["settlement_value"])))
+            payout_per = value if position["side"] == "yes" else round(1.0 - value, 6)
+            result = f"value:{value:.4f}"
         payout = round(payout_per * position["contracts"], 6)
         pnl = round(payout - position["entryNotional"] - position["entryFee"], 6)
         account["cash"] = round(account["cash"] + payout, 6)
@@ -563,10 +569,10 @@ class Cycle:
             "subtitle": position.get("subtitle"), "series": position.get("seriesTicker"),
             "side": position["side"], "contracts": position["contracts"], "entryPrice": position["entryPrice"],
             "entryAt": position["entryAt"], "exitPrice": payout_per, "exitAt": iso(m["settlement_ts"]),
-            "exitType": "settlement", "result": m["result"], "settlementValue": m["settlement_value"],
+            "exitType": "settlement", "result": result, "settlementValue": m["settlement_value"],
             "exitFee": 0.0, "feesTotal": position["entryFee"], "slippageEntry": position["entrySlippage"], "slippageExit": 0.0,
             "pnl": pnl, "evidence": evidence,
-            "note": "official result + settlement_ts from GET /markets/{ticker}; no fee on simple yes/no settlement",
+            "note": "official result/settlement_value + settlement_ts from GET /markets/{ticker}; no fee on simple yes/no settlement",
         })
 
     def exit_position(self, strategy, account, position, book, reason) -> bool:
@@ -907,8 +913,9 @@ def analysis_for(strategy: dict, account: dict, equity: float) -> str:
     filled = account.get("filledContracts") or 0.0
     fill_ratio = (filled / requested * 100) if requested else 0.0
     avg_px = (account.get("notionalFilled") or 0.0) / filled if filled else None
+    depth_note = "" if fill_ratio >= 99.5 else "; the remainder exceeded displayed depth within the limit price"
     parts.append(f"{account['fills']} verified fill(s), {filled:,.0f} of {requested:,.0f} requested contracts filled "
-                 f"({fill_ratio:.0f}%; the rest exceeded displayed depth within the limit)" + (f", average entry ${avg_px:.3f}" if avg_px else "") + ".")
+                 f"({fill_ratio:.0f}%{depth_note})" + (f", average entry ${avg_px:.3f}" if avg_px else "") + ".")
     closed = account["exits"] + account["settlements"]
     if closed:
         parts.append(f"{closed} closed ({account['settlements']} official settlement(s), {account['exits']} bid exit(s)): "
@@ -993,6 +1000,7 @@ def main(argv=None):
     index = load_series_index()
     ensure_series(client, index, FS.TRACKED_SERIES, errors := [])
     state = read_json(os.path.join(FORWARD_DIR, "state.json")) or new_state(now_ts)
+    backfill_counters(state)
     cycle = Cycle(client, now_ts, index, state, nws_fetcher=nws)
     cycle.errors.extend(errors)
     summary = cycle.run()
@@ -1001,6 +1009,34 @@ def main(argv=None):
         cycle.persist(summary)
     print(json.dumps(summary, indent=1))
     return 0
+
+
+COUNTERS_VERSION = 2
+
+
+def backfill_counters(state: dict):
+    """Recompute the derived per-account counters from trades.jsonl (the source of truth) once,
+    so accounts created before a counter existed carry correct fill/size/best-worst statistics."""
+    if state.get("countersVersion") == COUNTERS_VERSION:
+        return
+    path = os.path.join(FORWARD_DIR, "trades.jsonl")
+    events = []
+    if os.path.exists(path):
+        with open(path) as fh:
+            events = [json.loads(line) for line in fh if line.strip()]
+    for strategy_id, account in state["accounts"].items():
+        mine = [e for e in events if e["strategyId"] == strategy_id]
+        fills = [e for e in mine if e["kind"] == "fill"]
+        closes = [e for e in mine if e["kind"] in ("exit", "settlement")]
+        account["requestedContracts"] = round(sum(e.get("requestedContracts", e["contracts"]) for e in fills), 2)
+        account["filledContracts"] = round(sum(e["contracts"] for e in fills), 2)
+        account["notionalFilled"] = round(sum(e["entryNotional"] for e in fills), 6)
+        pnls = [e["pnl"] for e in closes]
+        account["bestTradePnl"] = round(max(pnls), 6) if pnls else None
+        account["worstTradePnl"] = round(min(pnls), 6) if pnls else None
+        account["grossWins"] = round(sum(p for p in pnls if p > 0), 6)
+        account["grossLosses"] = round(sum(p for p in pnls if p < 0), 6)
+    state["countersVersion"] = COUNTERS_VERSION
 
 
 def fixture_client(directory: str):

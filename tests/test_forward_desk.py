@@ -264,6 +264,21 @@ class DeskCycleTests(unittest.TestCase):
         for row in board["rows"]:
             self.assertAlmostEqual(row["equity"], row["cash"], places=2)
 
+    def test_scalar_settlement_uses_official_value(self):
+        cycle, _ = self.run_cycle(build_fixtures(), T0)
+        fx = build_fixtures(settled=True)
+        # A tie: no yes/no result, settlement_value 0.50 for the YES side (official rules_secondary for game markets).
+        tie = dict(fx["markets/KXNFLGAME-26SEP20AAABBB-AAA"]["market"])
+        tie.update({"result": "", "settlement_value_dollars": "0.5000"})
+        fx["markets/KXNFLGAME-26SEP20AAABBB-AAA"] = {"market": tie}
+        cycle2, _ = self.run_cycle(fx, T0 + 86400)
+        events = [e for e in cycle2.events if e["kind"] == "settlement" and e["ticker"] == "KXNFLGAME-26SEP20AAABBB-AAA"]
+        self.assertTrue(events)
+        for e in events:
+            self.assertEqual(e["result"], "value:0.5000")
+            self.assertAlmostEqual(e["exitPrice"], 0.5, places=6)
+            self.assertAlmostEqual(e["pnl"], 0.5 * e["contracts"] - [p for p in cycle.state["accounts"][e["strategyId"]]["positions"] if p["id"] == e["positionId"]][0]["entryNotional"] - [p for p in cycle.state["accounts"][e["strategyId"]]["positions"] if p["id"] == e["positionId"]][0]["entryFee"], places=4)
+
     def test_rule_must_confirm_on_fresh_book(self):
         fx = build_fixtures()
         # Make the NFL book contradict the list quote (fresh ask 0.99 -> outside the 0.80-0.95 band).

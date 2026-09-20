@@ -58,13 +58,16 @@ def _spread(m, side):
 
 
 def _hours_to_close(m, now_ts):
-    close_ts = m.get("close_ts")
-    return None if close_ts is None else (close_ts - now_ts) / HOUR
+    """Hours until expected resolution: expected_expiration_time when Kalshi provides it (game
+    markets keep close_time days after the game), else close_time."""
+    ref = m.get("expected_expiration_ts") or m.get("close_ts")
+    return None if ref is None else (ref - now_ts) / HOUR
 
 
 def _minutes_to_close(m, now_ts):
-    hours = _hours_to_close(m, now_ts)
-    return None if hours is None else hours * 60
+    """Minutes left to TRADE (close_time), used by the 15-minute market rules."""
+    close_ts = m.get("close_ts")
+    return None if close_ts is None else (close_ts - now_ts) / 60
 
 
 def _move(m, now_ts=None):
@@ -110,7 +113,7 @@ def entry_expiry_tail(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "limit": 0.15, "reason": f"closes in {hours:.1f}h and {side.upper()} ask {ask:.2f} <= 0.15"}
+    return {"side": side, "price": ask, "limit": 0.15, "reason": f"expected to resolve in {hours:.1f}h and {side.upper()} ask {ask:.2f} <= 0.15"}
 
 
 def entry_depth_imbalance(m, ctx):
@@ -173,7 +176,7 @@ def entry_yield_sniper(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "limit": 0.99, "reason": f"{side.upper()} ask {ask:.2f} in [0.97, 0.99], closes in {hours / 24:.1f} days (<= 21)"}
+    return {"side": side, "price": ask, "limit": 0.99, "reason": f"{side.upper()} ask {ask:.2f} in [0.97, 0.99], expected to resolve in {hours / 24:.1f} days (<= 21)"}
 
 
 def entry_ceo_fav(m, ctx):
@@ -200,7 +203,7 @@ def entry_game_favourite(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "limit": 0.95, "reason": f"game favourite {side.upper()} ask {ask:.2f} in [0.80, 0.95], closes in {hours:.1f}h, volume {m['volume']:,.0f}"}
+    return {"side": side, "price": ask, "limit": 0.95, "reason": f"game favourite {side.upper()} ask {ask:.2f} in [0.80, 0.95], expected resolution in {hours:.1f}h, volume {m['volume']:,.0f}"}
 
 
 def entry_underdog_sweep(m, ctx):
@@ -211,7 +214,7 @@ def entry_underdog_sweep(m, ctx):
     if not pick:
         return None
     side, ask = pick
-    return {"side": side, "price": ask, "limit": 0.20, "reason": f"underdog {side.upper()} ask {ask:.2f} <= 0.20, closes in {hours:.1f}h, volume {m['volume']:,.0f}"}
+    return {"side": side, "price": ask, "limit": 0.20, "reason": f"underdog {side.upper()} ask {ask:.2f} <= 0.20, expected resolution in {hours:.1f}h, volume {m['volume']:,.0f}"}
 
 
 def entry_gold_leader(m, ctx):
@@ -416,7 +419,7 @@ STRATEGIES = [
     {"id": "tail-sprint", "username": "TailSprint", "name": "Expiry Tail Sprint", "group": "expiry",
      "source": {"kind": "exchange mechanics", "label": "Kalshi close_time semantics", "url": "https://docs.kalshi.com/getting_started/market_lifecycle"},
      "universe": "tracked", "entry": entry_expiry_tail, "exit": exit_hold, "fraction": 0.5,
-     "rule": "Inside 48h of close, buy any side quoted at or below 15c and hold to official settlement.",
+     "rule": "Inside 48h of expected resolution (expected_expiration_time, else close_time), buy any side quoted at or below 15c and hold to official settlement.",
      "why": "Pure return-seeking tail exposure: many small losses, occasional 6-100x payoffs. Judged only against official results."},
     {"id": "depth-diver", "username": "DepthDiver", "name": "Depth Imbalance", "group": "liquidity",
      "source": {"kind": "exchange mechanics", "label": "Kalshi order-book depth", "url": "https://docs.kalshi.com/api-reference/market/get-market-orderbook"},
@@ -442,7 +445,7 @@ STRATEGIES = [
     {"id": "yield-sniper", "username": "YieldSniper", "name": "Certainty Carry", "group": "carry",
      "source": {"kind": "literature", "label": "Prediction-market carry (buying near-certain outcomes)", "url": "https://medium.com/@FrenzyCapital/trading-strategies-for-prediction-markets-4025a050e2e2"},
      "universe": "tracked", "entry": entry_yield_sniper, "exit": exit_hold, "fraction": 0.5,
-     "rule": "Buy a 97-99c side on a market with volume that closes within 21 days; hold to settlement.",
+     "rule": "Buy a 97-99c side on a market with volume whose expected resolution is within 21 days; hold to settlement.",
      "why": "Earns the last cents on near-certain outcomes with a hard horizon; loses everything if the favourite collapses."},
     {"id": "pinepilot", "username": "PinePilotX", "name": "Pine SMA Cross Replay", "group": "technical",
      "source": {"kind": "MasterSite project", "label": "PinePilot - TradingView Pine Script Strategy Lab", "url": "https://buffedlizard55-lab.github.io/Tradingview-pinescript-editor/"},
@@ -473,12 +476,12 @@ STRATEGIES = [
     {"id": "game-favourite", "username": "GridironPulse", "name": "Game Favourite (NFL/NBA/NCAA/MLB)", "group": "sports",
      "source": {"kind": "MasterSite projects", "label": "NFL-scoreboard, NFLInjuryReport, NBAInjuryReport, Ncaa-football-alerts, MLB-Live-PBP -> Kalshi game series", "url": "https://buffedlizard55-lab.github.io/NFL-scoreboard/"},
      "universe": SERIES_SPORTS, "entry": entry_game_favourite, "exit": exit_hold, "fraction": 0.5,
-     "rule": "Within 12h of a game market's close, buy the 80-95c favourite when volume >= 10,000 and hold to settlement.",
+     "rule": "Within 12h of a game market's expected resolution (expected_expiration_time), buy the 80-95c favourite when volume >= 10,000 and hold to settlement.",
      "why": "Favourites on liquid game markets; the injury/scoreboard feeds are review links, the exchange price is the trade."},
     {"id": "underdog-sweep", "username": "SportsPredLab", "name": "Underdog Convexity Sweep", "group": "sports",
      "source": {"kind": "MasterSite project", "label": "SportsPred - 22-Sport Scoreboard & Prediction Hub -> Kalshi game series", "url": "https://buffedlizard55-lab.github.io/SportsPred/"},
      "universe": SERIES_SPORTS, "entry": entry_underdog_sweep, "exit": exit_take_profit(multiple=2.0), "fraction": 0.5,
-     "rule": "Within 12h of close, buy a 2-20c underdog side on a game market with volume >= 10,000; sell at a bid >= 2x entry, else hold to settlement.",
+     "rule": "Within 12h of expected resolution, buy a 2-20c underdog side on a game market with volume >= 10,000; sell at a bid >= 2x entry, else hold to settlement.",
      "why": "Convexity on upsets. The favourite-longshot literature predicts this bleeds; it is here to measure exactly how much."},
     {"id": "gold-leader", "username": "MetalMomentum", "name": "Gold 15-Minute Early Leader", "group": "gold",
      "source": {"kind": "MasterSite negative + exchange series", "label": "GOLD is a ring-buyer directory (not a price signal); Kalshi's liquid gold series KXGOLD15M is traded instead (Pyth-settled)", "url": "https://buffedlizard55-lab.github.io/GOLD/"},
