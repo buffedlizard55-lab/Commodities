@@ -17,12 +17,13 @@ FAILURES = []
 PASSES = []
 
 
-def check(name, condition, detail=""):
+def check(name, condition, detail="", quiet=False):
     if condition:
         PASSES.append(f"PASS {name}")
     else:
         FAILURES.append(f"FAIL {name} {detail}")
-    print(f"{'PASS' if condition else 'FAIL'}  {name} {detail}")
+    if not quiet or not condition:
+        print(f"{'PASS' if condition else 'FAIL'}  {name} {detail}")
 
 
 def read_csv(path):
@@ -41,6 +42,75 @@ def fnum(cell):
     if cell == "":
         return None
     return float(cell)
+
+
+def verify_forward_ledger():
+    """Invariants of data/season-2026/forward (skipped when the desk has not run yet)."""
+    fwd = os.path.join(BASE, "forward")
+    state_path = os.path.join(fwd, "state.json")
+    if not os.path.exists(state_path):
+        print("SKIP  forward ledger (no state.json yet)")
+        return
+    with open(state_path) as fh:
+        state = json.load(fh)
+    start = float(state["startingCash"])
+    events = []
+    trades_path = os.path.join(fwd, "trades.jsonl")
+    if os.path.exists(trades_path):
+        with open(trades_path) as fh:
+            events = [json.loads(line) for line in fh if line.strip()]
+    by_strategy = {}
+    for event in events:
+        by_strategy.setdefault(event["strategyId"], []).append(event)
+    for strategy_id, account in sorted(state["accounts"].items()):
+        open_cost = sum(p["entryNotional"] + p["entryFee"] for p in account["positions"])
+        expected_cash = start + account["realizedPnl"] - open_cost
+        check(f"forward.{strategy_id}.cash_identity", abs(account["cash"] - expected_cash) < 0.01,
+              f"cash {account['cash']:.4f} vs start+realized-open {expected_cash:.4f}", quiet=True)
+        check(f"forward.{strategy_id}.position_count",
+              account["fills"] == account["exits"] + account["settlements"] + len(account["positions"]),
+              f"fills {account['fills']} = exits {account['exits']} + settlements {account['settlements']} + open {len(account['positions'])}", quiet=True)
+        check(f"forward.{strategy_id}.win_loss_count", account["wins"] + account["losses"] == account["exits"] + account["settlements"], quiet=True)
+        mine = by_strategy.get(strategy_id, [])
+        fills = [e for e in mine if e["kind"] == "fill"]
+        closes = [e for e in mine if e["kind"] in ("exit", "settlement")]
+        check(f"forward.{strategy_id}.event_counts", len(fills) == account["fills"] and len(closes) == account["exits"] + account["settlements"],
+              f"events fills {len(fills)} closes {len(closes)}", quiet=True)
+        realized = sum(e["pnl"] for e in closes)
+        check(f"forward.{strategy_id}.realized_matches_events", abs(realized - account["realizedPnl"]) < 0.01,
+              f"{realized:.4f} vs {account['realizedPnl']:.4f}", quiet=True)
+        fees = sum(e["entryFee"] for e in fills) + sum(e.get("exitFee", 0.0) for e in closes)
+        check(f"forward.{strategy_id}.fees_match_events", abs(fees - account["feesPaid"]) < 0.01, f"{fees:.4f} vs {account['feesPaid']:.4f}", quiet=True)
+        for p in account["positions"]:
+            check(f"forward.{strategy_id}.{p['ticker']}.positive_size", p["contracts"] > 0 and 0 < p["entryPrice"] < 1, quiet=True)
+    # evidence binding: every event points at an evidence row whose sha256 exists
+    hashes_by_file = {}
+    for event in events:
+        ev = event.get("evidence") or {}
+        rel = ev.get("file")
+        if rel not in hashes_by_file:
+            path = os.path.join(fwd, rel or "")
+            found = set()
+            if rel and os.path.exists(path):
+                with open(path) as fh:
+                    for line in fh:
+                        if line.strip():
+                            row = json.loads(line)
+                            found.add(row["sha256"])
+                            if row.get("kind") == "orderbook":
+                                check(f"forward.evidence.{row['cycle']}.{row['ticker']}.self_hash",
+                                      hashlib.sha256(row["raw"].encode()).hexdigest() == row["sha256"], quiet=True)
+            hashes_by_file[rel] = found
+        check(f"forward.event.{event['positionId']}.{event['kind']}.evidence_bound", ev.get("sha256") in hashes_by_file.get(rel, set()),
+              f"{rel} {ev.get('sha256', '')[:12]}", quiet=True)
+        if event["kind"] == "settlement":
+            check(f"forward.event.{event['positionId']}.settlement_official", event["result"] in ("yes", "no") and bool(event["exitAt"]), quiet=True)
+        if event["kind"] == "fill":
+            check(f"forward.event.{event['positionId']}.fill_sane", event["contracts"] > 0 and event["entryNotional"] > 0 and
+                  event["entryFee"] >= 0 and event["unfilledContracts"] >= 0, quiet=True)
+    forward_passes = sum(1 for p in PASSES if p.startswith("PASS forward."))
+    forward_fails = sum(1 for f in FAILURES if f.startswith("FAIL forward."))
+    print(f"INFO  forward ledger: {len(state['accounts'])} accounts, {len(events)} events, {forward_passes} checks passed, {forward_fails} failed")
 
 
 def main():
@@ -156,10 +226,14 @@ def main():
     check("series.btc_fee", fees["KXBTC"] == ("quadratic", 1))
     check("series.gold_fee", fees["KXGOLDH"] == ("quadratic", 1))
 
-    # ---- Hashes (recursive: raw/ holds the verbatim API responses) ----
+    # ---- Forward desk ledger (appended by the scheduled collector) ----
+    verify_forward_ledger()
+
+    # ---- Hashes (recursive: raw/ holds the verbatim API responses; forward/ is self-binding
+    #      through per-record sha256 fields and its own git history, so it is excluded) ----
     lines = []
     for root, dirs, files in os.walk(BASE):
-        dirs.sort()
+        dirs[:] = sorted(d for d in dirs if not (root == BASE and d == "forward"))
         for name in sorted(files):
             if name == "SHA256SUMS.txt":
                 continue

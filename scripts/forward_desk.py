@@ -1,0 +1,801 @@
+#!/usr/bin/env python3
+"""Forward-test desk: one scheduled cycle of the paper-trading competition.
+
+Runs unattended (GitHub Actions cron) and does, in order:
+  1. Read the committed desk state (cash + open paper positions per strategy).
+  2. Fetch the tracked universe of OPEN markets from Kalshi's public API (official quotes).
+  3. Capture point-in-time signals (NWS forecast for the KXHIGHNY weather bracket personas,
+     verified daily candlesticks for the technical persona).
+  4. Reconcile open positions: official settlement (result + settlement_ts) -> $1/$0 payout;
+     rule-based exits ONLY when the fresh bid ladder can absorb the whole position.
+  5. Evaluate every strategy rule on the fresh quotes, record the upcoming intents, fetch the
+     fresh order book for the chosen candidates and simulate taker fills level by level (VWAP,
+     slippage vs the touch, exact quadratic fee, unfilled remainder reported).
+  6. Mark every open position at the current best bid and append equity rows.
+  7. Append compact, hash-bound evidence: trades.jsonl, intents, quotes, cycles, raw books for
+     every fill/exit and raw market records for every settlement.
+
+Nothing here can place a real order: the client is read-only and no credentials exist.
+
+Usage:
+  python3 scripts/forward_desk.py --live                 # real cycle (needs network egress)
+  python3 scripts/forward_desk.py --fixtures DIR --now ISO  # offline replay for tests
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+import urllib.request
+from datetime import datetime, timezone, timedelta
+
+sys.path.insert(0, os.path.dirname(__file__))
+from kalshi_client import KalshiClient, FixtureClient, KalshiError, USER_AGENT  # noqa: E402
+from paper_engine import (STARTING_CASH, normalize_market, parse_book, book_quotes, size_and_fill, execute,  # noqa: E402
+                          taker_fee, iso, parse_ts, fnum)
+import forward_strategies as FS  # noqa: E402
+
+ROOT = os.path.join(os.path.dirname(__file__), "..")
+FORWARD_DIR = os.path.join(ROOT, "data", "season-2026", "forward")
+UNIVERSE_DIR = os.path.join(ROOT, "data", "universe")
+SERIES_INDEX_PATH = os.path.join(UNIVERSE_DIR, "series-index.json")
+NWS_FORECAST_URL = "https://api.weather.gov/gridpoints/OKX/34,45/forecast"  # Central Park point (verified 2026-09-20)
+NWS_EVENT_PREFIX = "KXHIGHNY-"
+
+MAX_NEW_FILLS_PER_STRATEGY = 2
+MAX_OPEN_POSITIONS_PER_STRATEGY = 8
+MAX_BOOKS_PER_CYCLE = 160
+BOOK_DEPTH = 40
+MAX_CANDIDATES_PER_STRATEGY = 2
+MAX_QUEUED_INTENTS = 3
+MAX_TECHNICAL_MARKETS = 8
+QUOTE_LOG_LIMIT = 200
+FEE_TYPES_MODELED = {"quadratic", "quadratic_with_maker_fees", "quadratic_with_combo_maker_fees"}
+MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+
+
+def set_paths(forward_dir=None, series_index=None):
+    """Redirect outputs (used by tests so they never touch the committed season memory)."""
+    global FORWARD_DIR, SERIES_INDEX_PATH
+    if forward_dir:
+        FORWARD_DIR = forward_dir
+        SERIES_INDEX_PATH = series_index or os.path.join(forward_dir, "series-index.json")
+    elif series_index:
+        SERIES_INDEX_PATH = series_index
+
+
+# ----------------------------------------------------------------------------- io helpers
+def read_json(path, default=None):
+    if not os.path.exists(path):
+        return default
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def write_json(path, payload, compact=False):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        if compact:
+            json.dump(payload, fh, separators=(",", ":"), sort_keys=True)
+        else:
+            json.dump(payload, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+
+
+def append_jsonl(path, rows):
+    if not rows:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, separators=(",", ":"), sort_keys=True) + "\n")
+
+
+def append_csv(path, header, rows):
+    if not rows:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    new = not os.path.exists(path) or os.path.getsize(path) == 0
+    with open(path, "a", newline="") as fh:
+        writer = csv.writer(fh, lineterminator="\n")
+        if new:
+            writer.writerow(header)
+        writer.writerows(rows)
+
+
+def sha256_bytes(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+MARKET_PROJECTION_FIELDS = ("ticker", "event_ticker", "status", "result", "settlement_ts", "settlement_value_dollars",
+                            "expiration_value", "close_time", "expected_expiration_time", "expiration_time", "last_price_dollars",
+                            "yes_bid_dollars", "yes_ask_dollars", "no_bid_dollars", "no_ask_dollars", "volume_fp",
+                            "open_interest_fp", "updated_time", "exchange_index", "strike_type", "floor_strike", "cap_strike")
+
+
+def project_market(raw_market: dict) -> dict:
+    """Verbatim copy of the settlement-relevant fields of a market record (rules text omitted)."""
+    return {k: raw_market.get(k) for k in MARKET_PROJECTION_FIELDS if k in raw_market}
+
+
+def fetch_json_url(url: str, timeout: float = 30.0) -> tuple[dict, bytes]:
+    request = urllib.request.Request(url, headers={"Accept": "application/geo+json, application/json", "User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read()
+    return json.loads(raw.decode("utf-8")), raw
+
+
+# ----------------------------------------------------------------------------- universe
+def load_series_index() -> dict:
+    payload = read_json(SERIES_INDEX_PATH, {"schemaVersion": 1, "series": {}})
+    return payload
+
+
+def save_series_index(index: dict):
+    index["updatedAt"] = iso(int(time.time()))
+    write_json(SERIES_INDEX_PATH, index)
+
+
+def compact_series(raw: dict) -> dict:
+    return {
+        "ticker": raw.get("ticker"), "title": raw.get("title"), "category": raw.get("category"),
+        "categories": raw.get("categories") or [], "tags": raw.get("tags") or [], "frequency": raw.get("frequency"),
+        "fee_type": raw.get("fee_type"), "fee_multiplier": raw.get("fee_multiplier"),
+        "exchange_index": int(raw.get("exchange_index") or 0),
+        "settlement_sources": [{"name": s.get("name"), "url": s.get("url")} for s in raw.get("settlement_sources") or []],
+        "contract_terms_url": raw.get("contract_terms_url"), "volume_fp": raw.get("volume_fp"),
+        "last_updated_ts": raw.get("last_updated_ts"),
+    }
+
+
+def ensure_series(client: KalshiClient, index: dict, tickers: list[str], errors: list[str]):
+    """Fetch GET /series/{ticker} for any tracked series not yet in the index (or stale > 7d)."""
+    now = time.time()
+    for ticker in tickers:
+        entry = index["series"].get(ticker)
+        fetched = parse_ts(entry.get("fetchedAt")) if entry else None
+        if entry and fetched and now - fetched < 7 * 86400 and entry.get("status") == 200:
+            continue
+        try:
+            raw = client.series(ticker)
+            row = compact_series(raw)
+            row.update({"status": 200, "fetchedAt": iso(int(now)), "source": f"{client.base_url}/series/{ticker}"})
+            index["series"][ticker] = row
+        except KalshiError as error:
+            index["series"][ticker] = {"ticker": ticker, "status": 404 if "404" in str(error) else 0, "fetchedAt": iso(int(now)),
+                                       "error": str(error)[:200], "source": f"{client.base_url}/series/{ticker}"}
+            errors.append(f"series {ticker}: {error}")
+
+
+def resolve_selector(index: dict, selector) -> list[str]:
+    if isinstance(selector, list):
+        return selector
+    if selector == "tracked":
+        out = list(FS.TRACKED_SERIES)
+        for sel in FS.TRACKED_SELECTORS:
+            out.extend(resolve_selector(index, sel))
+        return sorted(set(out))
+    if selector == "technical":
+        return list(FS.SERIES_ECON)
+    if selector.startswith("tag:"):
+        tag = selector[4:]
+        return sorted(t for t, s in index["series"].items() if s.get("status") == 200 and tag in (s.get("tags") or []))
+    if selector.startswith("prefix:"):
+        prefix = selector[7:]
+        return sorted(t for t, s in index["series"].items() if s.get("status") == 200 and t.startswith(prefix))
+    return []
+
+
+def series_info(index: dict, series_ticker: str) -> dict:
+    return index["series"].get(series_ticker) or {}
+
+
+def fee_multiplier_for(index: dict, series_ticker: str) -> float | None:
+    info = series_info(index, series_ticker)
+    if info.get("status") != 200:
+        return None
+    if info.get("fee_type") not in FEE_TYPES_MODELED:
+        return None
+    return float(info.get("fee_multiplier") or 1)
+
+
+# ----------------------------------------------------------------------------- data capture
+def fetch_open_markets(client, index, series_list, errors) -> dict:
+    markets = {}
+    for series_ticker in series_list:
+        info = series_info(index, series_ticker)
+        if info.get("status") != 200:
+            continue
+        exchange_index = info.get("exchange_index") or None
+        try:
+            rows = client.markets(series_ticker=series_ticker, status="open", limit=200, max_pages=5, exchange_index=exchange_index)
+        except KalshiError as error:
+            if exchange_index:
+                try:
+                    rows = client.markets(series_ticker=series_ticker, status="open", limit=200, max_pages=5)
+                except KalshiError as error2:
+                    errors.append(f"markets {series_ticker}: {error2}")
+                    continue
+            else:
+                errors.append(f"markets {series_ticker}: {error}")
+                continue
+        for raw in rows:
+            m = normalize_market(raw)
+            if not m["ticker"]:
+                continue
+            if m["status"] and m["status"] not in ("open", "active"):
+                continue  # IRR-10: production returns status=active for status=open queries
+            m["series_ticker"] = series_ticker
+            markets[m["ticker"]] = m
+    return markets
+
+
+def event_date_from_ticker(event_ticker: str):
+    """KXHIGHNY-26SEP20 -> date(2026, 9, 20). Returns None if the pattern does not match."""
+    match = re.search(r"-(\d{2})([A-Z]{3})(\d{2})$", event_ticker or "")
+    if not match:
+        return None
+    yy, mon, dd = match.groups()
+    if mon not in MONTH_ABBR:
+        return None
+    try:
+        return datetime(2000 + int(yy), MONTH_ABBR[mon], int(dd)).date()
+    except ValueError:
+        return None
+
+
+def capture_nws(markets: dict, cycle_id: str, now_ts: int, fetcher=fetch_json_url, errors=None) -> tuple[dict, dict | None]:
+    """Point-in-time NWS forecast for Central Park -> {event_ticker: {high_f, period, updated}}."""
+    events = sorted({m["event_ticker"] for m in markets.values() if m["event_ticker"].startswith(NWS_EVENT_PREFIX)})
+    if not events:
+        return {}, None
+    try:
+        payload, raw = fetcher(NWS_FORECAST_URL)
+    except Exception as error:  # network / 5xx: the weather personas simply abstain this cycle
+        if errors is not None:
+            errors.append(f"nws: {error}")
+        return {}, None
+    props = payload.get("properties") or {}
+    periods = props.get("periods") or []
+    updated = props.get("updateTime") or props.get("updated") or props.get("generatedAt")
+    daytime = {}
+    compact_periods = []
+    for period in periods:
+        if not period.get("isDaytime"):
+            continue
+        start = period.get("startTime")
+        try:
+            local_date = datetime.fromisoformat(start).date()
+        except (TypeError, ValueError):
+            continue
+        temp = fnum(period.get("temperature"))
+        if temp is None or period.get("temperatureUnit") not in (None, "F"):
+            continue
+        daytime[local_date] = {"high_f": temp, "period": period.get("name"), "updated": updated, "start": start}
+        compact_periods.append({"date": local_date.isoformat(), "name": period.get("name"), "high_f": temp})
+    forecasts = {}
+    for event in events:
+        date = event_date_from_ticker(event)
+        if date and date in daytime:
+            forecasts[event] = daytime[date]
+    record = {"cycle": cycle_id, "at": iso(now_ts), "source": NWS_FORECAST_URL, "updateTime": updated,
+              "generatedAt": props.get("generatedAt"), "sha256": sha256_bytes(raw), "daytime": compact_periods,
+              "mapped": {event: forecasts[event]["high_f"] for event in forecasts}}
+    return forecasts, record
+
+
+def capture_candles(client, index, markets: dict, now_ts: int, errors) -> dict:
+    """Daily candlesticks (last 45 days) for the most active technical-universe markets."""
+    technical = [m for m in markets.values() if m["series_ticker"] in FS.SERIES_ECON and (m["volume_24h"] or 0) > 0]
+    technical.sort(key=lambda m: (-(m["volume_24h"] or 0), m["ticker"]))
+    out = {}
+    for m in technical[:MAX_TECHNICAL_MARKETS]:
+        info = series_info(index, m["series_ticker"])
+        try:
+            payload, _raw, _url = client.candlesticks(m["series_ticker"], m["ticker"], now_ts - 45 * 86400, now_ts, 1440,
+                                                     exchange_index=info.get("exchange_index") or None)
+        except KalshiError as error:
+            errors.append(f"candles {m['ticker']}: {error}")
+            continue
+        bars = []
+        for bar in payload.get("candlesticks") or []:
+            price = bar.get("price") or {}
+            bars.append({"ts": bar.get("end_period_ts"), "close": fnum(price.get("close_dollars")),
+                         "volume": fnum(bar.get("volume_fp"))})
+        out[m["ticker"]] = bars
+    return out
+
+
+# ----------------------------------------------------------------------------- state
+def new_state(now_ts: int) -> dict:
+    return {"schemaVersion": 1, "season": "2026", "startingCash": STARTING_CASH, "createdAt": iso(now_ts),
+            "cycles": 0, "lastCycle": None, "accounts": {}}
+
+
+def account_for(state: dict, strategy: dict) -> dict:
+    account = state["accounts"].get(strategy["id"])
+    if account is None:
+        account = {"strategyId": strategy["id"], "username": strategy["username"], "cash": STARTING_CASH, "positions": [],
+                   "realizedPnl": 0.0, "feesPaid": 0.0, "slippagePaid": 0.0, "fills": 0, "exits": 0, "settlements": 0,
+                   "wins": 0, "losses": 0, "unfilledContracts": 0.0}
+        state["accounts"][strategy["id"]] = account
+    account["username"] = strategy["username"]
+    return account
+
+
+# ----------------------------------------------------------------------------- the cycle
+class Cycle:
+    def __init__(self, client, now_ts: int, index: dict, state: dict, nws_fetcher=fetch_json_url):
+        self.client = client
+        self.now_ts = now_ts
+        self.cycle_id = datetime.fromtimestamp(now_ts, tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        self.day = datetime.fromtimestamp(now_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        self.month = self.day[:7]
+        self.index = index
+        self.state = state
+        self.errors: list[str] = []
+        self.events: list[dict] = []
+        self.intents: list[dict] = []
+        self.equity_rows: list[list] = []
+        self.quote_rows: list[list] = []
+        self.books: dict[str, dict] = {}
+        self.book_meta: dict[str, dict] = {}
+        self.market_records: dict[str, dict] = {}
+        self.nws_fetcher = nws_fetcher
+        self.nws_record = None
+        self.candles = {}
+        self.markets: dict[str, dict] = {}
+        self.evidence_rows: list[dict] = []
+        self._evidence_logged: set[str] = set()
+
+    # -- data ---------------------------------------------------------------------------
+    def load_universe(self):
+        tracked = resolve_selector(self.index, "tracked")
+        self.markets = fetch_open_markets(self.client, self.index, tracked, self.errors)
+        self.nws, self.nws_record = capture_nws(self.markets, self.cycle_id, self.now_ts, self.nws_fetcher, self.errors)
+        self.candles = capture_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
+
+    def get_book(self, ticker: str) -> dict | None:
+        if ticker in self.books:
+            return self.books[ticker]
+        if len(self.books) >= MAX_BOOKS_PER_CYCLE:
+            return None
+        m = self.markets.get(ticker)
+        exchange_index = (m or {}).get("exchange_index") or None
+        try:
+            payload, raw, url = self.client.orderbook(ticker, depth=BOOK_DEPTH, exchange_index=exchange_index)
+        except KalshiError as error:
+            self.errors.append(f"orderbook {ticker}: {error}")
+            return None
+        book = parse_book(payload)
+        self.books[ticker] = book
+        self.book_meta[ticker] = {"raw": raw, "url": url, "at": self.client.calls[-1]["at"], "sha256": sha256_bytes(raw)}
+        return book
+
+    def get_market_record(self, ticker: str, exchange_index=None) -> dict | None:
+        if ticker in self.market_records:
+            return self.market_records[ticker]
+        try:
+            raw_market, raw, url = self.client.market(ticker, exchange_index=exchange_index or None)
+        except KalshiError as error:
+            if exchange_index:
+                try:
+                    raw_market, raw, url = self.client.market(ticker)
+                except KalshiError as error2:
+                    self.errors.append(f"market {ticker}: {error2}")
+                    return None
+            else:
+                self.errors.append(f"market {ticker}: {error}")
+                return None
+        record = {"market": normalize_market(raw_market), "raw": raw, "url": url, "at": self.client.calls[-1]["at"],
+                  "sha256": sha256_bytes(raw)}
+        self.market_records[ticker] = record
+        return record
+
+    def evidence_book(self, ticker: str) -> dict:
+        """Bind a fill/exit to the verbatim order-book response (stored once per cycle+ticker)."""
+        meta = self.book_meta[ticker]
+        key = f"book:{ticker}"
+        if key not in self._evidence_logged:
+            self._evidence_logged.add(key)
+            self.evidence_rows.append({"cycle": self.cycle_id, "kind": "orderbook", "ticker": ticker, "url": meta["url"],
+                                       "retrievedAt": meta["at"], "sha256": meta["sha256"], "raw": meta["raw"].decode("utf-8")})
+        return {"file": f"evidence/{self.day}.jsonl", "kind": "orderbook", "sha256": meta["sha256"], "url": meta["url"],
+                "retrievedAt": meta["at"]}
+
+    def evidence_market(self, ticker: str, record: dict) -> dict:
+        """Bind a settlement to the official market record: verbatim projection + hash of the full body."""
+        key = f"market:{ticker}"
+        if key not in self._evidence_logged:
+            self._evidence_logged.add(key)
+            try:
+                raw_market = json.loads(record["raw"].decode("utf-8")).get("market", {})
+            except (ValueError, AttributeError):
+                raw_market = {}
+            self.evidence_rows.append({"cycle": self.cycle_id, "kind": "market", "ticker": ticker, "url": record["url"],
+                                       "retrievedAt": record["at"], "sha256": record["sha256"], "projection": project_market(raw_market),
+                                       "note": "projection of the settlement-relevant fields; sha256 is over the full response body"})
+        return {"file": f"evidence/{self.day}.jsonl", "kind": "market", "sha256": record["sha256"], "url": record["url"],
+                "retrievedAt": record["at"]}
+
+    def quotes_for(self, ticker: str) -> dict:
+        book = self.books.get(ticker)
+        if book:
+            return book_quotes(book)
+        m = self.markets.get(ticker)
+        if m:
+            return {k: m.get(k) for k in ("yes_bid", "yes_ask", "no_bid", "no_ask")}
+        rec = self.market_records.get(ticker)
+        if rec:
+            return {k: rec["market"].get(k) for k in ("yes_bid", "yes_ask", "no_bid", "no_ask")}
+        return {"yes_bid": None, "yes_ask": None, "no_bid": None, "no_ask": None}
+
+    # -- reconciliation -----------------------------------------------------------------
+    def reconcile(self, strategy: dict, account: dict):
+        ctx = {"now_ts": self.now_ts, "candles": self.candles, "nws": getattr(self, "nws", {})}
+        remaining = []
+        for position in account["positions"]:
+            ticker = position["ticker"]
+            live = self.markets.get(ticker)
+            settled = False
+            if live is None or (position.get("closeTs") and position["closeTs"] <= self.now_ts):
+                record = self.get_market_record(ticker, position.get("exchangeIndex"))
+                if record and record["market"]["result"] in ("yes", "no") and record["market"]["settlement_ts"]:
+                    self.settle(strategy, account, position, record)
+                    settled = True
+                elif record and record["market"]["status"] in ("finalized", "settled") and record["market"]["result"] not in ("yes", "no"):
+                    self.errors.append(f"{ticker}: finalized without a yes/no result (possible void) - position held, flagged")
+            if settled:
+                continue
+            # rule-based exit: pre-check on the list quote, confirm on the fresh ladder, full size only
+            if live is not None and strategy["exit"] is not FS.exit_hold:
+                pre = strategy["exit"](position, self.quotes_for(ticker), ctx)
+                if pre:
+                    book = self.get_book(ticker)
+                    if book is not None:
+                        reason = strategy["exit"](position, book_quotes(book), ctx)
+                        if reason and self.exit_position(strategy, account, position, book, reason):
+                            continue
+                        if not reason:
+                            position["lastCloseError"] = {"at": iso(self.now_ts), "reason": pre,
+                                                          "detail": "exit condition did not hold on the fresh order book"}
+            # mark-to-bid
+            quotes = self.quotes_for(ticker)
+            bid = quotes.get(f"{position['side']}_bid")
+            position["lastMark"] = {"bid": bid, "value": None if bid is None else round(bid * position["contracts"], 4),
+                                    "at": iso(self.now_ts), "source": "book" if ticker in self.books else ("market" if live else "record")}
+            remaining.append(position)
+        account["positions"] = remaining
+
+    def settle(self, strategy, account, position, record):
+        m = record["market"]
+        won = (m["result"] == position["side"])
+        payout_per = 1.0 if won else 0.0
+        payout = round(payout_per * position["contracts"], 6)
+        pnl = round(payout - position["entryNotional"] - position["entryFee"], 6)
+        account["cash"] = round(account["cash"] + payout, 6)
+        account["realizedPnl"] = round(account["realizedPnl"] + pnl, 6)
+        account["settlements"] += 1
+        account["wins" if pnl > 0 else "losses"] += 1
+        evidence = self.evidence_market(position["ticker"], record)
+        self.events.append({
+            "kind": "settlement", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"],
+            "username": strategy["username"], "positionId": position["id"], "ticker": position["ticker"], "title": position["title"],
+            "side": position["side"], "contracts": position["contracts"], "entryPrice": position["entryPrice"],
+            "entryAt": position["entryAt"], "exitPrice": payout_per, "exitAt": iso(m["settlement_ts"]),
+            "exitType": "settlement", "result": m["result"], "settlementValue": m["settlement_value"],
+            "exitFee": 0.0, "feesTotal": position["entryFee"], "slippageEntry": position["entrySlippage"], "slippageExit": 0.0,
+            "pnl": pnl, "evidence": evidence,
+            "note": "official result + settlement_ts from GET /markets/{ticker}; no fee on simple yes/no settlement",
+        })
+
+    def exit_position(self, strategy, account, position, book, reason) -> bool:
+        execution = execute(book, position["side"], "sell", position["contracts"])
+        if execution["filled"] + 1e-9 < position["contracts"] or execution["vwap"] is None:
+            position["lastCloseError"] = {"at": iso(self.now_ts), "reason": reason,
+                                          "detail": f"only {execution['filled']} of {position['contracts']} contracts had verified bid liquidity"}
+            return False
+        fee = taker_fee(execution["vwap"], execution["filled"], position["feeMultiplier"])
+        proceeds = round(execution["notional"] - fee, 6)
+        pnl = round(proceeds - position["entryNotional"] - position["entryFee"], 6)
+        account["cash"] = round(account["cash"] + proceeds, 6)
+        account["realizedPnl"] = round(account["realizedPnl"] + pnl, 6)
+        account["feesPaid"] = round(account["feesPaid"] + fee, 6)
+        slip = round((execution["slippage_per_contract"] or 0.0) * execution["filled"], 6)
+        account["slippagePaid"] = round(account["slippagePaid"] + slip, 6)
+        account["exits"] += 1
+        account["wins" if pnl > 0 else "losses"] += 1
+        evidence = self.evidence_book(position["ticker"])
+        self.events.append({
+            "kind": "exit", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"],
+            "username": strategy["username"], "positionId": position["id"], "ticker": position["ticker"], "title": position["title"],
+            "side": position["side"], "contracts": position["contracts"], "entryPrice": position["entryPrice"],
+            "entryAt": position["entryAt"], "exitPrice": execution["vwap"], "exitTouch": execution["touch"],
+            "exitAt": self.book_meta[position["ticker"]]["at"], "exitType": "bid_exit", "exitReason": reason,
+            "exitFee": fee, "feesTotal": round(position["entryFee"] + fee, 6), "slippageEntry": position["entrySlippage"],
+            "slippageExit": slip, "levelsConsumed": len(execution["fills"]), "pnl": pnl, "evidence": evidence,
+        })
+        return True
+
+    # -- entries ------------------------------------------------------------------------
+    def candidates_for(self, strategy) -> list[tuple[dict, dict]]:
+        series_list = set(resolve_selector(self.index, strategy["universe"]))
+        held = {p["ticker"] for p in self.state["accounts"].get(strategy["id"], {}).get("positions", [])}
+        ctx = {"now_ts": self.now_ts, "candles": self.candles, "nws": getattr(self, "nws", {})}
+        found = []
+        pool = self.markets.values()
+        if strategy.get("needs_book"):
+            pool = [self.markets[t] for t in self.books if t in self.markets]
+        for m in pool:
+            if m["series_ticker"] not in series_list or m["ticker"] in held:
+                continue
+            if fee_multiplier_for(self.index, m["series_ticker"]) is None:
+                continue
+            if m["close_ts"] is not None and m["close_ts"] <= self.now_ts:
+                continue
+            ctx["book"] = self.books.get(m["ticker"])
+            try:
+                signal = strategy["entry"](m, ctx)
+            except Exception as error:  # a rule bug must never crash the desk; it is logged
+                self.errors.append(f"rule {strategy['id']} on {m['ticker']}: {error}")
+                continue
+            if signal:
+                found.append((m, signal))
+        found.sort(key=lambda item: (-(item[0]["volume_24h"] or 0), -(item[0]["volume"] or 0), item[0]["ticker"]))
+        return found
+
+    def enter(self, strategy, account):
+        candidates = self.candidates_for(strategy)
+        fills = attempts = queued = 0
+        for m, signal in candidates:
+            if fills >= MAX_NEW_FILLS_PER_STRATEGY:
+                break
+            intent = {"cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"], "username": strategy["username"],
+                      "ticker": m["ticker"], "title": m["title"], "series": m["series_ticker"], "side": signal["side"],
+                      "quotePrice": signal["price"], "reason": signal["reason"], "closeTime": iso(m["close_ts"]),
+                      "volume": m["volume"], "volume24h": m["volume_24h"], "status": "proposed", "positionId": None}
+            if len(account["positions"]) >= MAX_OPEN_POSITIONS_PER_STRATEGY:
+                intent["status"] = "skipped_position_cap"
+                self.intents.append(intent)
+                break
+            if attempts >= MAX_CANDIDATES_PER_STRATEGY:
+                if queued < MAX_QUEUED_INTENTS:
+                    intent["status"] = "queued"  # next in line; no book fetched this cycle
+                    self.intents.append(intent)
+                    queued += 1
+                    continue
+                break
+            attempts += 1
+            book = self.get_book(m["ticker"])
+            if book is None:
+                intent["status"] = "no_book"
+                self.intents.append(intent)
+                continue
+            # The rule must still hold on the fresh book (the list quote can be stale).
+            fresh = dict(m)
+            fresh.update(book_quotes(book))
+            ctx = {"now_ts": self.now_ts, "candles": self.candles, "nws": getattr(self, "nws", {}), "book": book}
+            confirm = strategy["entry"](fresh, ctx)
+            intent["bookQuotes"] = book_quotes(book)
+            intent["bookAt"] = self.book_meta[m["ticker"]]["at"]
+            if not confirm or confirm["side"] != signal["side"]:
+                intent["status"] = "not_confirmed_on_book"
+                self.intents.append(intent)
+                continue
+            multiplier = fee_multiplier_for(self.index, m["series_ticker"])
+            execution = size_and_fill(book, signal["side"], account["cash"], strategy["fraction"], multiplier)
+            if execution is None:
+                intent["status"] = "no_liquidity_or_cash"
+                self.intents.append(intent)
+                continue
+            position = self.open_position(strategy, account, m, confirm, execution, multiplier)
+            intent["status"] = "filled"
+            intent["positionId"] = position["id"]
+            intent["fillPrice"] = position["entryPrice"]
+            intent["contracts"] = position["contracts"]
+            intent["unfilledContracts"] = position["unfilledContracts"]
+            self.intents.append(intent)
+            fills += 1
+
+    def intents_for(self, strategy):
+        return [i for i in self.intents if i["strategyId"] == strategy["id"]]
+
+    def open_position(self, strategy, account, m, signal, execution, multiplier) -> dict:
+        cost = round(execution["notional"] + execution["fee"], 6)
+        account["cash"] = round(account["cash"] - cost, 6)
+        account["feesPaid"] = round(account["feesPaid"] + execution["fee"], 6)
+        slip = round((execution["slippage_per_contract"] or 0.0) * execution["filled"], 6)
+        account["slippagePaid"] = round(account["slippagePaid"] + slip, 6)
+        account["fills"] += 1
+        account["unfilledContracts"] = round(account["unfilledContracts"] + execution["unfilled"], 2)
+        evidence = self.evidence_book(m["ticker"])
+        position = {
+            "id": f"{strategy['id']}-{safe(m['ticker'])}-{self.cycle_id}", "strategyId": strategy["id"], "username": strategy["username"],
+            "ticker": m["ticker"], "eventTicker": m["event_ticker"], "seriesTicker": m["series_ticker"], "title": m["title"],
+            "side": signal["side"], "contracts": execution["filled"], "requestedContracts": execution["requested"],
+            "unfilledContracts": execution["unfilled"], "entryPrice": execution["vwap"], "entryTouch": execution["touch"],
+            "entryNotional": execution["notional"], "entryFee": execution["fee"], "entrySlippage": slip,
+            "levelsConsumed": len(execution["fills"]), "fills": execution["fills"][:10],
+            "entryAt": self.book_meta[m["ticker"]]["at"], "entryCycle": self.cycle_id, "entryReason": signal["reason"],
+            "closeTs": m["close_ts"], "closeTime": iso(m["close_ts"]), "exchangeIndex": m["exchange_index"],
+            "feeMultiplier": multiplier, "quoteAtEntry": {k: m.get(k) for k in ("yes_bid", "yes_ask", "no_bid", "no_ask", "last", "previous", "volume", "volume_24h", "open_interest")},
+            "evidence": evidence, "lastMark": {"bid": None, "value": None, "at": iso(self.now_ts), "source": "book"},
+        }
+        bid = book_quotes(self.books[m["ticker"]]).get(f"{signal['side']}_bid")
+        position["lastMark"]["bid"] = bid
+        position["lastMark"]["value"] = None if bid is None else round(bid * position["contracts"], 4)
+        account["positions"].append(position)
+        self.events.append({
+            "kind": "fill", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"], "username": strategy["username"],
+            "positionId": position["id"], "ticker": m["ticker"], "title": m["title"], "series": m["series_ticker"], "side": signal["side"],
+            "contracts": execution["filled"], "requestedContracts": execution["requested"], "unfilledContracts": execution["unfilled"],
+            "entryPrice": execution["vwap"], "entryTouch": execution["touch"], "entryNotional": execution["notional"],
+            "entryFee": execution["fee"], "slippageEntry": slip, "levelsConsumed": len(execution["fills"]),
+            "entryAt": position["entryAt"], "closeTime": position["closeTime"], "reason": signal["reason"], "evidence": evidence,
+            "feeModel": f"0.07*q*p*(1-p)*{multiplier:g} rounded up to $0.0001",
+        })
+        return position
+
+    # -- accounting ---------------------------------------------------------------------
+    def mark_and_record(self, strategy, account):
+        liquidation = 0.0
+        marked = 0
+        for position in account["positions"]:
+            value = (position.get("lastMark") or {}).get("value")
+            if value is not None:
+                liquidation += value
+                marked += 1
+        equity = round(account["cash"] + liquidation, 4)
+        account["lastEquity"] = equity
+        account["lastLiquidationValue"] = round(liquidation, 4)
+        account["lastMarkedAt"] = iso(self.now_ts)
+        self.equity_rows.append([self.cycle_id, iso(self.now_ts), strategy["id"], strategy["username"], round(account["cash"], 4),
+                                 len(account["positions"]), marked, round(liquidation, 4), equity,
+                                 round(account["realizedPnl"], 4), round(account["feesPaid"], 4), round(account["slippagePaid"], 4)])
+
+    def log_quotes(self):
+        wanted = set(self.books)
+        for account in self.state["accounts"].values():
+            wanted.update(p["ticker"] for p in account["positions"])
+        wanted.update(i["ticker"] for i in self.intents)
+        for ticker in sorted(wanted)[:QUOTE_LOG_LIMIT]:
+            m = self.markets.get(ticker) or (self.market_records.get(ticker) or {}).get("market")
+            if not m:
+                continue
+            q = self.quotes_for(ticker)
+            self.quote_rows.append([self.cycle_id, ticker, m.get("status"), q["yes_bid"], q["yes_ask"], q["no_bid"], q["no_ask"],
+                                    m.get("last"), m.get("previous"), m.get("volume"), m.get("volume_24h"), m.get("open_interest"),
+                                    iso(m.get("close_ts")), "book" if ticker in self.books else "market"])
+
+    # -- run ----------------------------------------------------------------------------
+    def run(self) -> dict:
+        started = time.time()
+        self.load_universe()
+        for strategy in FS.STRATEGIES:
+            account = account_for(self.state, strategy)
+            self.reconcile(strategy, account)
+        ordered = sorted(FS.STRATEGIES, key=lambda st: 1 if st.get("needs_book") else 0)
+        for strategy in ordered:
+            account = account_for(self.state, strategy)
+            if self.markets:
+                self.enter(strategy, account)
+        for strategy in FS.STRATEGIES:
+            self.mark_and_record(strategy, account_for(self.state, strategy))
+        self.log_quotes()
+        summary = {
+            "cycle": self.cycle_id, "at": iso(self.now_ts), "durationSec": round(time.time() - started, 1),
+            "apiCalls": len(self.client.calls), "apiErrors": sum(1 for c in self.client.calls if c["status"] != 200),
+            "seriesTracked": len(resolve_selector(self.index, "tracked")), "marketsSeen": len(self.markets),
+            "booksFetched": len(self.books), "marketRecordsFetched": len(self.market_records),
+            "intents": len(self.intents), "fills": sum(1 for e in self.events if e["kind"] == "fill"),
+            "exits": sum(1 for e in self.events if e["kind"] == "exit"),
+            "settlements": sum(1 for e in self.events if e["kind"] == "settlement"),
+            "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles),
+            "errors": self.errors[:40], "errorCount": len(self.errors),
+        }
+        self.state["cycles"] += 1
+        self.state["lastCycle"] = summary
+        self.state["files"] = {"trades": "trades.jsonl", "intents": f"intents/{self.month}.jsonl", "equity": f"equity/{self.month}.csv",
+                               "cycles": f"cycles/{self.month}.jsonl", "quotes": f"quotes/{self.day}.csv",
+                               "evidence": f"evidence/{self.day}.jsonl", "nws": "signals/nws-central-park.jsonl"}
+        return summary
+
+    def persist(self, summary: dict):
+        append_jsonl(os.path.join(FORWARD_DIR, "evidence", f"{self.day}.jsonl"), self.evidence_rows)
+        append_jsonl(os.path.join(FORWARD_DIR, "trades.jsonl"), self.events)
+        append_jsonl(os.path.join(FORWARD_DIR, "intents", f"{self.month}.jsonl"), self.intents)
+        append_jsonl(os.path.join(FORWARD_DIR, "cycles", f"{self.month}.jsonl"), [summary])
+        append_csv(os.path.join(FORWARD_DIR, "equity", f"{self.month}.csv"),
+                   ["cycle", "at", "strategyId", "username", "cash", "openPositions", "markedPositions", "liquidationValue", "equity",
+                    "realizedPnl", "feesPaid", "slippagePaid"], self.equity_rows)
+        append_csv(os.path.join(FORWARD_DIR, "quotes", f"{self.day}.csv"),
+                   ["cycle", "ticker", "status", "yes_bid", "yes_ask", "no_bid", "no_ask", "last", "previous", "volume", "volume_24h",
+                    "open_interest", "close_time", "quote_source"], self.quote_rows)
+        if self.nws_record:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "nws-central-park.jsonl"), [self.nws_record])
+        write_json(os.path.join(FORWARD_DIR, "state.json"), self.state)
+        write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state))
+
+
+def safe(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "-", text)
+
+
+def build_leaderboard(state: dict) -> dict:
+    rows = []
+    for strategy in FS.STRATEGIES:
+        account = state["accounts"].get(strategy["id"])
+        if not account:
+            continue
+        equity = account.get("lastEquity", account["cash"])
+        rows.append({
+            "strategyId": strategy["id"], "username": strategy["username"], "name": strategy["name"], "group": strategy["group"],
+            "source": strategy["source"], "rule": strategy["rule"], "why": strategy["why"],
+            "startingCash": STARTING_CASH, "cash": round(account["cash"], 2), "equity": round(equity, 2),
+            "returnPct": round((equity / STARTING_CASH - 1) * 100, 4), "openPositions": len(account["positions"]),
+            "liquidationValue": account.get("lastLiquidationValue", 0.0), "realizedPnl": round(account["realizedPnl"], 4),
+            "feesPaid": round(account["feesPaid"], 4), "slippagePaid": round(account["slippagePaid"], 4),
+            "fills": account["fills"], "exits": account["exits"], "settlements": account["settlements"],
+            "wins": account["wins"], "losses": account["losses"], "unfilledContracts": account["unfilledContracts"],
+            "evidenceState": ("verified forward fills" if account["fills"] else "no fill yet (rule never confirmed on a fresh book)"),
+        })
+    rows.sort(key=lambda r: (-r["returnPct"], r["username"]))
+    for i, row in enumerate(rows):
+        row["rank"] = i + 1
+    return {"schemaVersion": 1, "season": "2026", "generatedAt": (state.get("lastCycle") or {}).get("at"),
+            "cycles": state.get("cycles", 0), "participants": len(rows),
+            "gated": [{k: g[k] for k in ("id", "username", "name", "group", "source", "blocker")} for g in FS.GATED], "rows": rows}
+
+
+# ----------------------------------------------------------------------------- entry point
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--live", action="store_true", help="run one real cycle against the public API")
+    parser.add_argument("--fixtures", help="directory of recorded responses (offline replay)")
+    parser.add_argument("--now", help="ISO timestamp to use as the cycle clock (fixtures mode)")
+    parser.add_argument("--dry-run", action="store_true", help="run but do not persist anything")
+    parser.add_argument("--out", help="override the forward-desk output directory (tests)")
+    parser.add_argument("--series-index", help="override the series index path (tests)")
+    args = parser.parse_args(argv)
+    if args.out:
+        set_paths(forward_dir=args.out, series_index=args.series_index)
+    if not args.live and not args.fixtures:
+        parser.error("choose --live or --fixtures DIR")
+    now_ts = parse_ts(args.now) if args.now else int(time.time())
+    if args.fixtures:
+        client, nws = fixture_client(args.fixtures)
+    else:
+        client, nws = KalshiClient(), fetch_json_url
+    index = load_series_index()
+    ensure_series(client, index, FS.TRACKED_SERIES, errors := [])
+    state = read_json(os.path.join(FORWARD_DIR, "state.json")) or new_state(now_ts)
+    cycle = Cycle(client, now_ts, index, state, nws_fetcher=nws)
+    cycle.errors.extend(errors)
+    summary = cycle.run()
+    if not args.dry_run:
+        save_series_index(index)
+        cycle.persist(summary)
+    print(json.dumps(summary, indent=1))
+    return 0
+
+
+def fixture_client(directory: str):
+    """Load DIR/kalshi.json ({path?query: body}) and DIR/nws.json (forecast body)."""
+    kalshi = read_json(os.path.join(directory, "kalshi.json"), {})
+    nws_body = read_json(os.path.join(directory, "nws.json"), None)
+
+    def nws_fetcher(url):
+        if nws_body is None:
+            raise RuntimeError("no NWS fixture")
+        raw = json.dumps(nws_body, separators=(",", ":")).encode()
+        return nws_body, raw
+    return FixtureClient(kalshi), nws_fetcher
+
+
+if __name__ == "__main__":
+    sys.exit(main())
