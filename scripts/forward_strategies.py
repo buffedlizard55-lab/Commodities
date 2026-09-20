@@ -43,11 +43,17 @@ def _cheaper_side(m, maximum, minimum=0.0):
     return side, ask
 
 
+MAX_FAVOURITE_SPREAD = 0.05
+
+
 def _favourite_side(m, low, high):
-    """The side whose ask lies in the favourite band [low, high] (at most one side can)."""
+    """The side whose ask lies in the favourite band [low, high] AND whose displayed spread is at
+    most 5c (bid present).  A lone ask on a wide quote is not a priced favourite (IRR-25)."""
     for side in ("yes", "no"):
-        ask = m.get(f"{side}_ask")
-        if ask is not None and low <= ask <= high:
+        ask, bid = m.get(f"{side}_ask"), m.get(f"{side}_bid")
+        if ask is None or bid is None or bid <= 0:
+            continue
+        if low <= ask <= high and (ask - bid) <= MAX_FAVOURITE_SPREAD + 1e-9:
             return side, ask
     return None
 
@@ -284,10 +290,12 @@ def entry_longshot_fader(m, ctx):
     yes_ask = m.get("yes_ask")
     no_ask = m.get("no_ask")
     # Fade a 5-20c YES longshot by buying NO (NO ask 0.80-0.95), or the mirror image.
-    if yes_ask is not None and 0.05 <= yes_ask <= 0.20 and no_ask is not None and 0.80 <= no_ask <= 0.95:
-        return {"side": "no", "price": no_ask, "limit": 0.95, "reason": f"fade YES longshot at {yes_ask:.2f}: buy NO at {no_ask:.2f} (favourite-longshot bias)"}
-    if no_ask is not None and 0.05 <= no_ask <= 0.20 and yes_ask is not None and 0.80 <= yes_ask <= 0.95:
-        return {"side": "yes", "price": yes_ask, "limit": 0.95, "reason": f"fade NO longshot at {no_ask:.2f}: buy YES at {yes_ask:.2f} (favourite-longshot bias)"}
+    tight_no = _spread(m, "no") is not None and _spread(m, "no") <= MAX_FAVOURITE_SPREAD
+    tight_yes = _spread(m, "yes") is not None and _spread(m, "yes") <= MAX_FAVOURITE_SPREAD
+    if yes_ask is not None and 0.05 <= yes_ask <= 0.20 and no_ask is not None and 0.80 <= no_ask <= 0.95 and tight_no:
+        return {"side": "no", "price": no_ask, "limit": 0.95, "reason": f"fade YES longshot at {yes_ask:.2f}: buy NO at {no_ask:.2f} (favourite-longshot bias; spread <= 5c)"}
+    if no_ask is not None and 0.05 <= no_ask <= 0.20 and yes_ask is not None and 0.80 <= yes_ask <= 0.95 and tight_yes:
+        return {"side": "yes", "price": yes_ask, "limit": 0.95, "reason": f"fade NO longshot at {no_ask:.2f}: buy YES at {yes_ask:.2f} (favourite-longshot bias; spread <= 5c)"}
     return None
 
 
@@ -440,12 +448,12 @@ STRATEGIES = [
     {"id": "sure-thing", "username": "SureThing", "name": "Favorite Holder", "group": "favorite",
      "source": {"kind": "literature", "label": "CEPR favourite-longshot analysis of 300k+ Kalshi contracts", "url": "https://cepr.org/voxeu/columns/economics-kalshi-prediction-market"},
      "universe": "tracked", "entry": entry_sure_thing, "exit": exit_hold, "fraction": 0.5,
-     "rule": "Buy a 90-97c favourite on a market with >= 100,000 contracts of volume and hold to settlement.",
+     "rule": "Buy a 90-97c favourite (displayed spread <= 5c) on a market with >= 100,000 contracts of volume and hold to settlement.",
      "why": "Favourite-longshot bias: heavy favourites on liquid event markets have historically been slightly under-priced."},
     {"id": "yield-sniper", "username": "YieldSniper", "name": "Certainty Carry", "group": "carry",
      "source": {"kind": "literature", "label": "Prediction-market carry (buying near-certain outcomes)", "url": "https://medium.com/@FrenzyCapital/trading-strategies-for-prediction-markets-4025a050e2e2"},
      "universe": "tracked", "entry": entry_yield_sniper, "exit": exit_hold, "fraction": 0.5,
-     "rule": "Buy a 97-99c side on a market with volume whose expected resolution is within 21 days; hold to settlement.",
+     "rule": "Buy a 97-99c side (displayed spread <= 5c) on a market with volume whose expected resolution is within 21 days; hold to settlement.",
      "why": "Earns the last cents on near-certain outcomes with a hard horizon; loses everything if the favourite collapses."},
     {"id": "pinepilot", "username": "PinePilotX", "name": "Pine SMA Cross Replay", "group": "technical",
      "source": {"kind": "MasterSite project", "label": "PinePilot - TradingView Pine Script Strategy Lab", "url": "https://buffedlizard55-lab.github.io/Tradingview-pinescript-editor/"},
@@ -456,7 +464,7 @@ STRATEGIES = [
     {"id": "ceo-fav", "username": "CEOExitFav", "name": "CEO-Change Favourite", "group": "companies",
      "source": {"kind": "MasterSite negative + exchange series", "label": "No CEO project exists in MasterSite (verified); Kalshi's CEO-change series (tag CEOs) are traded instead", "url": "https://buffedlizard55-lab.github.io/MasterSite/"},
      "universe": SELECTOR_CEO, "entry": entry_ceo_fav, "exit": exit_hold, "fraction": 0.5,
-     "rule": "On Kalshi CEO markets (Companies series tagged CEOs whose ticker names a CEO market), buy the favourite side when its ask is 80-96c and hold to settlement.",
+     "rule": "On Kalshi CEO markets (Companies series tagged CEOs whose ticker names a CEO market), buy the favourite side when its ask is 80-96c with a displayed spread <= 5c; hold to settlement.",
      "why": "Executive departures are rare, dated events; the favourite (usually NO) tends to carry. Loses the full stake on a surprise exit."},
     {"id": "weather-bracket", "username": "WeatherCatalyst", "name": "NWS Forecast Bracket", "group": "weather",
      "source": {"kind": "MasterSite project + official feed", "label": "SFWeather (NWS pipeline) -> NWS gridpoint forecast for Central Park (OKX/34,45) -> KXHIGHNY", "url": "https://buffedlizard55-lab.github.io/SFWeather/"},
@@ -471,12 +479,12 @@ STRATEGIES = [
     {"id": "fda-premium", "username": "FDAReaction", "name": "FDA Decision Premium", "group": "biotech",
      "source": {"kind": "MasterSite project", "label": "DrugAnalysis - FDA Decisions & Biotech Reactions -> Kalshi KXFDA* series", "url": "https://buffedlizard55-lab.github.io/DrugAnalysis/"},
      "universe": SELECTOR_FDA, "entry": entry_fda_premium, "exit": exit_hold, "fraction": 0.5,
-     "rule": "On Kalshi FDA drug-decision markets (KXFDA* series tagged Medicine), buy the favourite side when its ask is 85-97c and hold to settlement.",
+     "rule": "On Kalshi FDA drug-decision markets (KXFDA* series tagged Medicine), buy the favourite side when its ask is 85-97c with a displayed spread <= 5c; hold to settlement.",
      "why": "PDUFA outcomes are heavily favoured one way; the premium is the residual. An openFDA point-in-time adapter is the next step."},
     {"id": "game-favourite", "username": "GridironPulse", "name": "Game Favourite (NFL/NBA/NCAA/MLB)", "group": "sports",
      "source": {"kind": "MasterSite projects", "label": "NFL-scoreboard, NFLInjuryReport, NBAInjuryReport, Ncaa-football-alerts, MLB-Live-PBP -> Kalshi game series", "url": "https://buffedlizard55-lab.github.io/NFL-scoreboard/"},
      "universe": SERIES_SPORTS, "entry": entry_game_favourite, "exit": exit_hold, "fraction": 0.5,
-     "rule": "Within 12h of a game market's expected resolution (expected_expiration_time), buy the 80-95c favourite when volume >= 10,000 and hold to settlement.",
+     "rule": "Within 12h of a game market's expected resolution (expected_expiration_time), buy the 80-95c favourite (displayed spread <= 5c) when volume >= 10,000 and hold to settlement.",
      "why": "Favourites on liquid game markets; the injury/scoreboard feeds are review links, the exchange price is the trade."},
     {"id": "underdog-sweep", "username": "SportsPredLab", "name": "Underdog Convexity Sweep", "group": "sports",
      "source": {"kind": "MasterSite project", "label": "SportsPred - 22-Sport Scoreboard & Prediction Hub -> Kalshi game series", "url": "https://buffedlizard55-lab.github.io/SportsPred/"},
@@ -486,7 +494,7 @@ STRATEGIES = [
     {"id": "gold-leader", "username": "MetalMomentum", "name": "Gold 15-Minute Early Leader", "group": "gold",
      "source": {"kind": "MasterSite negative + exchange series", "label": "GOLD is a ring-buyer directory (not a price signal); Kalshi's liquid gold series KXGOLD15M is traded instead (Pyth-settled)", "url": "https://buffedlizard55-lab.github.io/GOLD/"},
      "universe": SERIES_GOLD, "entry": entry_gold_leader, "exit": exit_hold, "fraction": 0.5,
-     "rule": "With 5-12 minutes left in a gold 15-minute market, buy the 60-80c leading side and hold to settlement.",
+     "rule": "With 5-12 minutes left in a gold 15-minute market, buy the 60-80c leading side (displayed spread <= 5c) and hold to settlement.",
      "why": "Momentum persistence inside a 15-minute window on the Pyth gold feed. Fees on 60-80c contracts are near the maximum of the quadratic curve."},
     {"id": "micro-tail", "username": "TailSprint15", "name": "15-Minute Cheap Tail", "group": "crypto",
      "source": {"kind": "community post", "label": "r/KalshiBTCUporDown15 community (discovery only; the sub exists and discusses 15-minute BTC entries)", "url": "https://www.reddit.com/r/KalshiBTCUporDown15/"},
@@ -496,7 +504,7 @@ STRATEGIES = [
     {"id": "scalp-8095", "username": "HighProbScalp", "name": "75-80c Entry / 95c Take-Profit", "group": "crypto",
      "source": {"kind": "community post", "label": "r/KalshiBTCUporDown15 'limit buy at 75-80c, take-profit at 95c' post (recreated mechanically; the sibling KalshiPaperSim measured it at -65.03% on its history)", "url": "https://www.reddit.com/r/KalshiBTCUporDown15/comments/1ribidl/my_full_strategy_for_btc_up_to_down_15/"},
      "universe": SERIES_CRYPTO + SERIES_GOLD, "entry": entry_scalp_8095, "exit": exit_take_profit(target=0.95), "fraction": 0.5,
-     "rule": "Buy a side quoted 75-80c with >= 2 minutes left; sell when the bid reaches 95c, else hold to settlement.",
+     "rule": "Buy a side quoted 75-80c (displayed spread <= 5c) with >= 2 minutes left; sell when the bid reaches 95c, else hold to settlement.",
      "why": "The social claim is a high win rate; the arithmetic says a 75c entry needs > 79% wins to break even after fees."},
     {"id": "panic-fade", "username": "PanicFader", "name": "Panic Fade (volatility reversion)", "group": "crypto",
      "source": {"kind": "community post", "label": "r/PredictionsMarkets 5,000-strategy KXBTC15M run: volatility reversion was the only profitable archetype (discovery only)", "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1szxy8h/backtested_5000_strategies_on_kalshi_15min_btc/"},
@@ -506,7 +514,7 @@ STRATEGIES = [
     {"id": "longshot-fader", "username": "LongshotFader", "name": "Favourite-Longshot Fader", "group": "favorite",
      "source": {"kind": "literature", "label": "Favorite-longshot bias evidence (CEPR / Polymarket paper) - longshots at 5-20c underperform", "url": "https://cepr.org/voxeu/columns/economics-kalshi-prediction-market"},
      "universe": "tracked", "entry": entry_longshot_fader, "exit": exit_hold, "fraction": 0.5,
-     "rule": "When one side is a 5-20c longshot on a market with volume >= 5,000, buy the opposite 80-95c side and hold to settlement.",
+     "rule": "When one side is a 5-20c longshot on a market with volume >= 5,000, buy the opposite 80-95c side (displayed spread <= 5c) and hold to settlement.",
      "why": "The documented bias: longshots are over-bought. Loses the full stake on the occasional upset."},
 ]
 

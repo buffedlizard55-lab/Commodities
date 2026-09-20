@@ -94,6 +94,11 @@ Each cycle (`scripts/forward_desk.py --live`, ~100–150 official reads, ~30 s):
 Fee model: `0.07 · q · p · (1 − p) · series multiplier`, rounded up to $0.0001 (documented
 approximation, IRR-11). Series with a non-quadratic fee type are never traded.
 
+Rules may be tightened during the season when the ledger exposes a flaw (e.g. IRR-25: favourite
+bands now also require a displayed spread ≤ 5¢). Every change is a commit to
+`scripts/forward_strategies.py`; positions opened under an earlier rule stay in the ledger and the
+cycle ids make before/after results distinguishable. Nothing is ever re-simulated or deleted.
+
 ### Personas (20 active, 4 gated)
 
 | Username | Rule (short) | Source of the idea |
@@ -193,6 +198,11 @@ this browser's local storage (separate from the committed season). Fail-closed o
 
 ## Known limitations and next work (for the next session)
 
+* **Previous-session items still open.** KXFED full-history chunks 2–13 are not archived; the
+  committed backtest sample is unchanged (3 markets) — the collector's `forward/candles/` archive
+  is now the path to a larger verified sample (it already holds the LSU/Ole Miss game candles).
+* **Season rollover.** `state.json` is Season 2026; on 2027-01-01 start `data/season-2027/`
+  (new accounts at $10,000) and keep 2026 frozen.
 * **Let the season run and audit it.** The desk started counting at cycle `20260920T032126Z`
   (IRR-17). After a few days: compare settlements against `GET /markets/{ticker}` by hand for a
   sample, check `cycles/*.jsonl` for skipped/late schedules (GitHub cron is best-effort and stops
