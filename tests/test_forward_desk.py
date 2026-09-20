@@ -96,13 +96,13 @@ def build_fixtures(settled=False):
             fx[f"markets/{row['ticker']}"] = {"market": done}
             fx[f"markets/{row['ticker']}?exchange_index=2"] = {"market": done}
     # order books (YES bids / NO bids, ascending, best last)
-    fx["markets/KXHIGHNY-26SEP20-B72.5/orderbook?depth=40"] = book([(0.50, 200), (0.55, 300)], [(0.35, 150), (0.40, 400)])   # yes ask 0.60
-    fx["markets/KXHIGHNY-26SEP20-T71/orderbook?depth=40"] = book([(0.04, 500)], [(0.90, 50), (0.94, 2000)])              # yes ask 0.06
-    fx["markets/KXHIGHNY-26SEP20-B74.5/orderbook?depth=40"] = book([(0.25, 100)], [(0.70, 3000)])                         # yes ask 0.30 / no ask 0.75
-    fx["markets/KXHIGHNY-26SEP20-T78/orderbook?depth=40"] = book([], [(0.99, 247.84)])                                  # yes ask 0.01
-    fx["markets/KXBTC15M-26SEP201515-15/orderbook?depth=40&exchange_index=2"] = book([(0.75, 800), (0.76, 1200)], [(0.20, 500), (0.22, 900)])  # yes ask 0.78
-    fx["markets/KXNFLGAME-26SEP20AAABBB-AAA/orderbook?depth=40"] = book([(0.88, 5000)], [(0.10, 9000)])                 # yes ask 0.90
-    fx["markets/KXFED-26OCT-T4.50/orderbook?depth=40"] = book([(0.02, 1000)], [(0.97, 20000)])                           # yes ask 0.03
+    fx[f"markets/KXHIGHNY-26SEP20-B72.5/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.50, 200), (0.55, 300)], [(0.35, 150), (0.40, 400)])   # yes ask 0.60
+    fx[f"markets/KXHIGHNY-26SEP20-T71/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.04, 500)], [(0.90, 50), (0.94, 2000)])              # yes ask 0.06
+    fx[f"markets/KXHIGHNY-26SEP20-B74.5/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.25, 100)], [(0.70, 3000)])                         # yes ask 0.30 / no ask 0.75
+    fx[f"markets/KXHIGHNY-26SEP20-T78/orderbook?depth={FD.BOOK_DEPTH}"] = book([], [(0.99, 247.84)])                                  # yes ask 0.01
+    fx[f"markets/KXBTC15M-26SEP201515-15/orderbook?depth={FD.BOOK_DEPTH}&exchange_index=2"] = book([(0.75, 800), (0.76, 1200)], [(0.20, 500), (0.22, 900)])  # yes ask 0.78
+    fx[f"markets/KXNFLGAME-26SEP20AAABBB-AAA/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.88, 5000)], [(0.10, 9000)])                 # yes ask 0.90
+    fx[f"markets/KXFED-26OCT-T4.50/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.02, 1000)], [(0.97, 20000)])                           # yes ask 0.03
     return fx
 
 
@@ -255,7 +255,7 @@ class DeskCycleTests(unittest.TestCase):
     def test_rule_must_confirm_on_fresh_book(self):
         fx = build_fixtures()
         # Make the NFL book contradict the list quote (fresh ask 0.99 -> outside the 0.80-0.95 band).
-        fx["markets/KXNFLGAME-26SEP20AAABBB-AAA/orderbook?depth=40"] = book([(0.88, 5000)], [(0.01, 9000)])
+        fx[f"markets/KXNFLGAME-26SEP20AAABBB-AAA/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.88, 5000)], [(0.01, 9000)])
         cycle, _ = self.run_cycle(fx, T0)
         intents = [i for i in cycle.intents if i["strategyId"] == "game-favourite"]
         self.assertTrue(intents and intents[0]["status"] == "not_confirmed_on_book")
@@ -269,7 +269,7 @@ class DeskCycleTests(unittest.TestCase):
         fx2 = build_fixtures()
         fx2["markets?series_ticker=KXBTC15M&status=open&limit=200&exchange_index=2"]["markets"][0].update(
             {"yes_bid_dollars": "0.9600", "yes_ask_dollars": "0.9700", "close_time": "2026-09-20T16:10:00Z"})
-        fx2["markets/KXBTC15M-26SEP201515-15/orderbook?depth=40&exchange_index=2"] = book([(0.96, 1)], [(0.03, 100)])
+        fx2[f"markets/KXBTC15M-26SEP201515-15/orderbook?depth={FD.BOOK_DEPTH}&exchange_index=2"] = book([(0.96, 1)], [(0.03, 100)])
         cycle2, _ = self.run_cycle(fx2, T0 + 1800)
         still = [p for p in cycle2.state["accounts"]["scalp-8095"]["positions"] if p["id"] == pos["id"]]
         self.assertTrue(still and "lastCloseError" in still[0])
@@ -277,7 +277,7 @@ class DeskCycleTests(unittest.TestCase):
         fx3 = build_fixtures()
         fx3["markets?series_ticker=KXBTC15M&status=open&limit=200&exchange_index=2"]["markets"][0].update(
             {"yes_bid_dollars": "0.9600", "yes_ask_dollars": "0.9700", "close_time": "2026-09-20T17:10:00Z"})
-        fx3["markets/KXBTC15M-26SEP201515-15/orderbook?depth=40&exchange_index=2"] = book([(0.95, 10000), (0.96, 10000)], [(0.03, 100)])
+        fx3[f"markets/KXBTC15M-26SEP201515-15/orderbook?depth={FD.BOOK_DEPTH}&exchange_index=2"] = book([(0.95, 10000), (0.96, 10000)], [(0.03, 100)])
         cycle3, _ = self.run_cycle(fx3, T0 + 3600)
         exits = [e for e in cycle3.events if e["kind"] == "exit" and e["strategyId"] == "scalp-8095"]
         self.assertEqual(len(exits), 1)

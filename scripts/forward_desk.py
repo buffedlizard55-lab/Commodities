@@ -50,7 +50,7 @@ NWS_EVENT_PREFIX = "KXHIGHNY-"
 MAX_NEW_FILLS_PER_STRATEGY = 2
 MAX_OPEN_POSITIONS_PER_STRATEGY = 8
 MAX_BOOKS_PER_CYCLE = 160
-BOOK_DEPTH = 40
+BOOK_DEPTH = 20
 MAX_CANDIDATES_PER_STRATEGY = 2
 MAX_QUEUED_INTENTS = 1
 MAX_TECHNICAL_MARKETS = 8
@@ -509,13 +509,28 @@ class Cycle:
                         if not reason:
                             position["lastCloseError"] = {"at": iso(self.now_ts), "reason": pre,
                                                           "detail": "exit condition did not hold on the fresh order book"}
-            # mark-to-bid
+            # mark: best bid for the held side (liquidation) and bid-else-last-trade (mark)
             quotes = self.quotes_for(ticker)
-            bid = quotes.get(f"{position['side']}_bid")
-            position["lastMark"] = {"bid": bid, "value": None if bid is None else round(bid * position["contracts"], 4),
-                                    "at": iso(self.now_ts), "source": "book" if ticker in self.books else ("market" if live else "record")}
+            last = self.last_for_side(ticker, position["side"])
+            position["lastMark"] = self.mark(position, quotes.get(f"{position['side']}_bid"), last,
+                                             "book" if ticker in self.books else ("market" if live else "record"))
             remaining.append(position)
         account["positions"] = remaining
+
+    def last_for_side(self, ticker: str, side: str):
+        m = self.markets.get(ticker) or (self.market_records.get(ticker) or {}).get("market")
+        last = None if not m else m.get("last")
+        if last is None or last <= 0:
+            return None
+        return round(last if side == "yes" else 1.0 - last, 4)
+
+    def mark(self, position: dict, bid, last, source: str) -> dict:
+        """Two marks per position: liquidation (best bid, 0 if none) and mark (bid, else last trade, else 0)."""
+        contracts = position["contracts"]
+        liquidation = 0.0 if bid is None else round(bid * contracts, 4)
+        mark_price = bid if bid is not None else last
+        return {"bid": bid, "last": last, "value": liquidation, "markPrice": mark_price,
+                "markValue": 0.0 if mark_price is None else round(mark_price * contracts, 4), "at": iso(self.now_ts), "source": source}
 
     def settle(self, strategy, account, position, record):
         m = record["market"]
@@ -687,11 +702,10 @@ class Cycle:
             "entryAt": self.book_meta[m["ticker"]]["at"], "entryCycle": self.cycle_id, "entryReason": signal["reason"],
             "closeTs": m["close_ts"], "closeTime": iso(m["close_ts"]), "exchangeIndex": m["exchange_index"],
             "feeMultiplier": multiplier, "quoteAtEntry": {k: m.get(k) for k in ("yes_bid", "yes_ask", "no_bid", "no_ask", "last", "previous", "volume", "volume_24h", "open_interest")},
-            "evidence": evidence, "lastMark": {"bid": None, "value": None, "at": iso(self.now_ts), "source": "book"},
+            "evidence": evidence, "lastMark": None,
         }
-        bid = book_quotes(self.books[m["ticker"]]).get(f"{signal['side']}_bid")
-        position["lastMark"]["bid"] = bid
-        position["lastMark"]["value"] = None if bid is None else round(bid * position["contracts"], 4)
+        position["lastMark"] = self.mark(position, book_quotes(self.books[m["ticker"]]).get(f"{signal['side']}_bid"),
+                                         self.last_for_side(m["ticker"], signal["side"]), "book")
         account["positions"].append(position)
         self.events.append({
             "kind": "fill", "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": strategy["id"], "username": strategy["username"],
@@ -706,20 +720,24 @@ class Cycle:
 
     # -- accounting ---------------------------------------------------------------------
     def mark_and_record(self, strategy, account):
-        liquidation = 0.0
+        liquidation = mark_value = 0.0
         marked = 0
         for position in account["positions"]:
-            value = (position.get("lastMark") or {}).get("value")
-            if value is not None:
-                liquidation += value
+            lm = position.get("lastMark") or {}
+            liquidation += lm.get("value") or 0.0
+            mark_value += lm.get("markValue") or 0.0
+            if lm.get("markPrice") is not None:
                 marked += 1
-        equity = round(account["cash"] + liquidation, 4)
+        equity = round(account["cash"] + mark_value, 4)
         account["lastEquity"] = equity
+        account["lastMarkValue"] = round(mark_value, 4)
         account["lastLiquidationValue"] = round(liquidation, 4)
+        account["lastLiquidationEquity"] = round(account["cash"] + liquidation, 4)
         account["lastMarkedAt"] = iso(self.now_ts)
         self.equity_rows.append([self.cycle_id, iso(self.now_ts), strategy["id"], strategy["username"], round(account["cash"], 4),
                                  len(account["positions"]), marked, round(liquidation, 4), equity,
-                                 round(account["realizedPnl"], 4), round(account["feesPaid"], 4), round(account["slippagePaid"], 4)])
+                                 round(account["realizedPnl"], 4), round(account["feesPaid"], 4), round(account["slippagePaid"], 4),
+                                 round(mark_value, 4)])
 
     def log_quotes(self):
         wanted = set(self.books)
@@ -777,7 +795,7 @@ class Cycle:
         append_jsonl(os.path.join(FORWARD_DIR, "cycles", f"{self.month}.jsonl"), [summary])
         append_csv(os.path.join(FORWARD_DIR, "equity", f"{self.month}.csv"),
                    ["cycle", "at", "strategyId", "username", "cash", "openPositions", "markedPositions", "liquidationValue", "equity",
-                    "realizedPnl", "feesPaid", "slippagePaid"], self.equity_rows)
+                    "realizedPnl", "feesPaid", "slippagePaid", "markValue"], self.equity_rows)
         append_csv(os.path.join(FORWARD_DIR, "quotes", f"{self.day}.csv"),
                    ["cycle", "ticker", "status", "yes_bid", "yes_ask", "no_bid", "no_ask", "last", "previous", "volume", "volume_24h",
                     "open_interest", "close_time", "quote_source"], self.quote_rows)
@@ -829,22 +847,36 @@ def build_leaderboard(state: dict) -> dict:
         if not account:
             continue
         equity = account.get("lastEquity", account["cash"])
+        liquidation_equity = account.get("lastLiquidationEquity", account["cash"])
         rows.append({
             "strategyId": strategy["id"], "username": strategy["username"], "name": strategy["name"], "group": strategy["group"],
             "source": strategy["source"], "rule": strategy["rule"], "why": strategy["why"],
             "startingCash": STARTING_CASH, "cash": round(account["cash"], 2), "equity": round(equity, 2),
             "returnPct": round((equity / STARTING_CASH - 1) * 100, 4), "openPositions": len(account["positions"]),
-            "liquidationValue": account.get("lastLiquidationValue", 0.0), "realizedPnl": round(account["realizedPnl"], 4),
+            "liquidationEquity": round(liquidation_equity, 2), "liquidationReturnPct": round((liquidation_equity / STARTING_CASH - 1) * 100, 4),
+            "liquidationValue": account.get("lastLiquidationValue", 0.0), "markValue": account.get("lastMarkValue", 0.0),
+            "realizedPnl": round(account["realizedPnl"], 4),
             "feesPaid": round(account["feesPaid"], 4), "slippagePaid": round(account["slippagePaid"], 4),
             "fills": account["fills"], "exits": account["exits"], "settlements": account["settlements"],
             "wins": account["wins"], "losses": account["losses"], "unfilledContracts": account["unfilledContracts"],
             "evidenceState": ("verified forward fills" if account["fills"] else "no fill yet (rule never confirmed on a fresh book)"),
         })
-    rows.sort(key=lambda r: (-r["returnPct"], r["username"]))
-    for i, row in enumerate(rows):
+    ranked = sorted([r for r in rows if r["fills"] > 0], key=lambda r: (-r["returnPct"], r["username"]))
+    unranked = sorted([r for r in rows if r["fills"] == 0], key=lambda r: r["username"])
+    for i, row in enumerate(ranked):
         row["rank"] = i + 1
+    for row in unranked:
+        row["rank"] = None
+    rows = ranked + unranked
     return {"schemaVersion": 1, "season": "2026", "generatedAt": (state.get("lastCycle") or {}).get("at"),
-            "cycles": state.get("cycles", 0), "participants": len(rows),
+            "cycles": state.get("cycles", 0), "participants": len(rows), "ranked": len(ranked),
+            "markPolicy": "equity = cash + sum(contracts x mark) where mark = best displayed bid for the held side, else the last "
+                          "official trade price, else 0; liquidationEquity uses the bid only (0 when no bid). Rank by equity; "
+                          "strategies without a verified fill are unranked.",
+            "fillPolicy": f"entries are immediate-or-cancel limit orders at min(rule bound, touch + {MARKETABLE_LIMIT_THROUGH:.2f}) sized at "
+                          f"50% of free cash, consuming displayed depth level by level; exits sell the full position into the bid ladder "
+                          f"within {EXIT_FLOOR_TOLERANCE:.2f} of the best bid or not at all; fee 0.07*q*p*(1-p)*series multiplier "
+                          f"rounded up to $0.0001; settlement at $1/$0 from the official result with no fee.",
             "gated": [{k: g[k] for k in ("id", "username", "name", "group", "source", "blocker")} for g in FS.GATED], "rows": rows}
 
 
