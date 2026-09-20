@@ -154,14 +154,19 @@ def main():
     check("series.fed_fee", fees["KXFED"] == ("quadratic_with_maker_fees", 1))
     check("series.cpi_fee", fees["KXCPI"] == ("quadratic_with_maker_fees", 1))
     check("series.btc_fee", fees["KXBTC"] == ("quadratic", 1))
+    check("series.gold_fee", fees["KXGOLDH"] == ("quadratic", 1))
 
-    # ---- Hashes ----
+    # ---- Hashes (recursive: raw/ holds the verbatim API responses) ----
     lines = []
-    for name in sorted(os.listdir(BASE)):
-        if name in ("SHA256SUMS.txt",):
-            continue
-        with open(os.path.join(BASE, name), "rb") as fh:
-            lines.append(f"{hashlib.sha256(fh.read()).hexdigest()}  {name}")
+    for root, dirs, files in os.walk(BASE):
+        dirs.sort()
+        for name in sorted(files):
+            if name == "SHA256SUMS.txt":
+                continue
+            path = os.path.join(root, name)
+            rel = os.path.relpath(path, BASE)
+            with open(path, "rb") as fh:
+                lines.append(f"{hashlib.sha256(fh.read()).hexdigest()}  {rel}")
     with open(os.path.join(BASE, "SHA256SUMS.txt"), "w") as fh:
         fh.write("\n".join(lines) + "\n")
     print(f"WROTE SHA256SUMS.txt ({len(lines)} files)")
