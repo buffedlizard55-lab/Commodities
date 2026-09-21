@@ -33,6 +33,10 @@ GAZ_ROWS = [
     "IL|1714000|00428736|Chicago|C1|588733032|17408890|227.312|6.722|+41.8375511|-087.6818441",
     "CA|0644000|02410786|Los Angeles|C1|1214359273|121494649|469.059|46.948|+34.1139177|-118.4067823",
     "IL|1799999|00000000|Chicago Heights|C1|1|1|1|1|+41.5000000|-087.6000000",
+    "DC|1152000|01500965|Washington|C1|1|1|1|1|+38.9072000|-077.0369000",
+    "PA|4283000|02412012|Washington|C1|1|1|1|1|+40.1781000|-080.2539000",
+    "GA|1304000|00328600|Atlanta|C1|1|1|1|1|+33.7490000|-084.3880000",
+    "TX|4805000|03881100|Austin city|C1|1|1|1|1|+30.2672000|-097.7431000",
 ]
 
 
@@ -141,6 +145,50 @@ class NwsCityTests(unittest.TestCase):
         self.assertEqual(cached["gridId"], "LOT")
         self.assertFalse(any("/points/" in c for c in calls))
 
+    def test_noncanonical_titles_are_parsed_from_the_series_title_alone(self):
+        # the six title shapes seen in the committed cycle errors (IRR-32): all are Kalshi's own words
+        cases = {
+            "Highest temperature in Chicago": ("Chicago", None),
+            "Atlanta Max Temperature": ("Atlanta", None),
+            "Boston Maximum Daily Temperature": ("Boston", None),
+            "Daily High Temperature Houston": ("Houston", None),
+            "Newark, NJ (EWR) Daily Max Temp": ("Newark", "NJ"),
+            "Washington DC Daily Max Temp": ("Washington", "DC"),
+        }
+        for title, expected in cases.items():
+            self.assertEqual(SIG.NwsCities.parse_city_state(title), expected, title)
+        for title in ("Highest Inflation", "", "When will the Fed cut rates?"):
+            self.assertIsNone(SIG.NwsCities.parse_city_state(title), title)
+
+    def test_city_state_resolves_through_the_census_file(self):
+        centroids = SIG.PlaceCentroids(cache_path=os.path.join(self.tmp, "places.json"), fetcher=fetcher)
+        nws = SIG.NwsCities(gridpoints_path=os.path.join(self.tmp, "gridpoints.json"), fetcher=fetcher,
+                            centroids=centroids)
+        entry = nws.resolve("KXHIGHTATL", "Atlanta Max Temperature")
+        self.assertIsNotNone(entry, nws.errors + centroids.errors)
+        self.assertEqual(entry["city"], "Atlanta")
+        self.assertEqual(entry["stateHint"], None)
+
+    def test_ambiguous_names_need_an_exact_state(self):
+        centroids = SIG.PlaceCentroids(cache_path=os.path.join(self.tmp, "places.json"), fetcher=fetcher)
+        # the alias table (normalised keys) pins 'Washington' to the District of Columbia row
+        row = centroids.lookup("Washington")
+        self.assertEqual((row["censusPlace"], row["state"]), ("Washington", "DC"))
+        # an explicit state hint from a title overrides the alias
+        row = centroids.lookup("Washington", "PA")
+        self.assertEqual(row["state"], "PA")
+
+    def test_name_suffix_forms_and_diagnostics(self):
+        centroids = SIG.PlaceCentroids(cache_path=os.path.join(self.tmp, "places.json"), fetcher=fetcher)
+        row = centroids.lookup("Austin")  # the file stores 'Austin city' - suffix pass must find it
+        # the place name is kept verbatim as the Census file publishes it
+        self.assertEqual((row["censusPlace"], row["state"]), ("Austin city", "TX"))
+        self.assertAlmostEqual(row["lat"], 30.2672, places=4)
+        centroids2 = SIG.PlaceCentroids(cache_path=os.path.join(self.tmp, "places2.json"), fetcher=fetcher)
+        self.assertIsNone(centroids2.lookup("Atlantis"))
+        # a failed match says what was scanned (row count + response hash), not just 'no match'
+        self.assertTrue(any("scanned 7 gazetteer rows" in e for e in centroids2.errors), centroids2.errors)
+
 
 class EspnTests(unittest.TestCase):
     def market(self, **extra):
@@ -239,6 +287,38 @@ class OpenFdaTests(unittest.TestCase):
         signal = SIG.fda_signal({"series_ticker": "KXFDAAPPROVE",
                                  "title": "Will the FDA approve unobtanium before Oct 1, 2026?"}, adapter)
         self.assertFalse(signal["approvedRecord"])
+
+    def test_404_is_a_verified_absence_not_an_error(self):
+        import urllib.error
+
+        def fetcher_404(url):
+            raise urllib.error.HTTPError(url, 404, "Not Found", {},
+                                         io.BytesIO(b'{"error":"HTTP 404 Not Found"}'))
+
+        adapter = SIG.OpenFdaRecords(cache_path=os.path.join(self.tmp, "fda-404.json"), fetcher=fetcher_404)
+        record = adapter.lookup({"name": "retatrutide", "code": "LY3437943"})
+        self.assertIsNotNone(record)
+        self.assertEqual(record["status"], "no-record")
+        self.assertFalse(record["approvedRecord"])
+        self.assertEqual(len(record["attempts"]), 3)  # substance, brand, code - all answered 404
+        self.assertTrue(record["url"].startswith("https://api.fda.gov/drug/drugsfda.json"))
+        self.assertEqual(len(record["sha256"]), 64)   # the 404 body is bound as the response hash
+        self.assertEqual(adapter.errors, [])           # absence is not an error
+        # an absence still yields a signal object, so the persona abstains visibly, not silently
+        signal = SIG.fda_signal({"series_ticker": "KXFDAAPPROVE",
+                                 "title": "When will the FDA approve retatrutide (LY3437943)?"}, adapter)
+        self.assertIsNotNone(signal)
+        self.assertFalse(signal["approvedRecord"])
+
+    def test_server_errors_stay_errors(self):
+        import urllib.error
+
+        def fetcher_500(url):
+            raise urllib.error.HTTPError(url, 500, "Server Error", {}, io.BytesIO(b""))
+
+        adapter = SIG.OpenFdaRecords(cache_path=os.path.join(self.tmp, "fda-500.json"), fetcher=fetcher_500)
+        self.assertIsNone(adapter.lookup({"name": "who-knows", "code": None}))
+        self.assertTrue(any("HTTP Error 500" in e for e in adapter.errors))
 
     def test_politics_series_are_gated_out(self):
         adapter = self.adapter()

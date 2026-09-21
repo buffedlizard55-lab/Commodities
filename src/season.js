@@ -26,7 +26,7 @@ async function fetchJson(path) {
   return response.json();
 }
 
-const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, tab: 'positions', error: null };
+const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, audit: null, tab: 'positions', error: null };
 
 export async function loadSeasonsIndex() {
   try {
@@ -69,15 +69,16 @@ export async function loadForwardDesk() {
   const label = $('#forward-state');
   if (!seasonMeta.loaded) await loadSeasonsIndex();
   try {
-    const [leaderboard, state, recent, curves, execution, today] = await Promise.all([
+    const [leaderboard, state, recent, curves, execution, today, audit] = await Promise.all([
       fetchJson(`${FORWARD_BASE()}leaderboard.json`),
       fetchJson(`${FORWARD_BASE()}state.json`),
       fetchJson(`${FORWARD_BASE()}recent.json`).catch(() => ({ events: [], intents: [], cycles: [] })),
       fetchJson(`${FORWARD_BASE()}curves.json`).catch(() => ({ recent: {}, daily: {} })),
       fetchJson(`${FORWARD_BASE()}execution/summary.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}summary/today.json`).catch(() => null),
+      fetchJson(`${FORWARD_BASE()}audit/latest.json`).catch(() => null),
     ]);
-    forward.execution = execution; forward.today = today;
+    forward.execution = execution; forward.today = today; forward.audit = audit;
     Object.assign(forward, { leaderboard, state, recent, curves, error: null });
     if (label) { label.textContent = `Committed desk state · Season ${esc(leaderboard.season ?? seasonMeta.activeSeason)} · ${leaderboard.cycles} cycle(s)`; label.classList.add('ok'); }
     const updated = $('#forward-updated');
@@ -91,6 +92,7 @@ export async function loadForwardDesk() {
   renderForwardBoard();
   renderForwardLedger();
   renderExecutionRealism();
+  renderSeasonHealth();
   renderToday();
   renderMasterSiteMap();
   return forward;
@@ -139,7 +141,8 @@ function renderForwardBoard() {
   body.innerHTML = leaderboard.rows.map((row) => {
     const curve = forward.curves?.recent?.[row.strategyId] ?? [];
     const evidence = row.fills ? ['verified forward fills', ''] : ['unranked · no fill yet', 'none'];
-    return `<tr class="board-row" data-strategy="${esc(row.strategyId)}">
+    const searchTerm = `${row.username} ${row.name} ${row.strategyId} ${row.group ?? ''} ${row.rule ?? ''}`.toLowerCase();
+    return `<tr class="board-row" data-strategy="${esc(row.strategyId)}" data-search="${esc(searchTerm)}">
       <td class="rank">${row.rank ?? '—'}</td>
       <td><div class="persona-cell"><span class="avatar">${esc(row.username.slice(0, 2).toUpperCase())}</span><div><strong><a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">${esc(row.username)}</a></strong><small>${esc(row.name)} · <a class="text-link" href="${esc(row.source?.url ?? '#')}" target="_blank" rel="noreferrer">${esc(row.source?.kind ?? 'source')} ↗</a> · <a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">strategy page</a></small></div></div></td>
       <td><b>${money(row.equity)}</b></td>
@@ -157,7 +160,31 @@ function renderForwardBoard() {
     ['Fill policy', leaderboard.fillPolicy],
     ['Mark policy', leaderboard.markPolicy],
   ].map(([label, text]) => `<div class="policy-card"><span>${esc(label)}</span><p>${esc(text ?? '')}</p></div>`).join('');
+  applyBoardFilter();
 }
+
+// Shared client-side filter for the board and the ledger tables: a substring match on the row's
+// own rendered text (username, strategy id, series, ticker).  It hides rows; it never removes data.
+function applyTextFilter(tableSelector, inputSelector, countSelector) {
+  const input = document.querySelector(inputSelector);
+  const term = (input?.value ?? '').trim().toLowerCase();
+  const rows = document.querySelectorAll(`${tableSelector} tbody tr`);
+  let shown = 0;
+  rows.forEach((tr) => {
+    if (tr.classList.contains('board-detail')) return; // detail rows follow their board row
+    const searchable = (tr.dataset.search ?? tr.textContent ?? '').toLowerCase();
+    const hit = !term || searchable.includes(term);
+    tr.hidden = !hit;
+    if (hit) shown += 1;
+    const detail = document.querySelector(`${tableSelector} [data-strategy-detail="${tr.dataset.strategy ?? '__'}"]`);
+    if (detail && tr.classList.contains('board-row') && !hit) detail.hidden = true;
+  });
+  const note = document.querySelector(countSelector);
+  if (note) note.textContent = term ? `${shown} / ${[...rows].filter((r) => !r.classList.contains('board-detail')).length} shown` : '';
+}
+
+function applyBoardFilter() { applyTextFilter('#forward-leaderboard', '#board-filter', '#board-filter-count'); }
+function applyLedgerFilter() { applyTextFilter('#forward-ledger-table', '#ledger-filter', '#ledger-filter-count'); }
 
 function evidenceLink(evidence) {
   if (!evidence) return '—';
@@ -235,8 +262,21 @@ function renderForwardLedger() {
     if (nws) rows.push(`<tr><td><b>NWS point forecast · Central Park (OKX/34,45)</b><br><small>drives WeatherCatalyst / WeatherFader on KXHIGHNY</small></td><td><small>${esc(formatDate(nws.at))}<br>forecast updateTime ${esc(nws.updateTime ?? '—')}</small></td><td><a class="text-link" href="${esc(nws.source)}" target="_blank" rel="noreferrer">api.weather.gov ↗</a><br><small>archived in signals/nws-central-park.jsonl</small></td><td><small>${esc((nws.daytime ?? []).map((d) => `${d.date} ${d.name}: ${d.high_f}°F`).join(' · '))}<br>mapped: ${esc(Object.entries(nws.mapped ?? {}).map(([k, v]) => `${k} → ${v}°F`).join(', ') || 'no open KXHIGHNY event matched')}</small></td></tr>`);
     rows.push(`<tr><td><b>Official candlesticks</b><br><small>daily bars for PinePilotX (SMA cross); 1-minute bars for PanicFader</small></td><td><small>each cycle</small></td><td><small>GET /series/{series}/markets/{ticker}/candlesticks</small></td><td><small>${esc(forward.state?.lastCycle?.candleMarkets ?? 0)} daily-candle market(s) in the last cycle</small></td></tr>`);
     rows.push(`<tr><td><b>Kalshi market fields</b><br><small>last / previous (a day ago) / volume / close_time / strike bounds</small></td><td><small>each cycle</small></td><td><small>GET /markets?series_ticker=…&status=open</small></td><td><small>${esc(forward.state?.lastCycle?.marketsSeen ?? 0)} open contracts across ${esc(forward.state?.lastCycle?.seriesTracked ?? 0)} tracked series</small></td></tr>`);
+    const espn = forward.recent?.espn ?? [];
+    const espnSignals = Object.entries(forward.recent?.espnSignals ?? {});
+    const liveSignals = espnSignals.filter(([, s]) => s.state === 'in');
+    rows.push(`<tr><td><b>ESPN scoreboards · NFL / NCAAF / NBA / MLB</b><br><small>drives ScorePulse (live scoreboard leader) and the game-persona review links</small></td><td><small>${espn.length} snapshot(s) in the last window</small></td><td><small>site.api.espn.com scoreboard JSON (public)</small></td><td><small>${esc(espn.map((s) => `${s.league} ${s.date}: ${s.events} event(s)`).join(' · ') || 'none fetched')}<br>${esc(liveSignals.length ? `${liveSignals.length} live mapped: ${liveSignals.slice(0, 3).map(([t, s]) => `${t} ${s.detail ?? ''} ${s.awayScore ?? '?'}-${s.homeScore ?? '?'} (${s.matchedVia ?? ''})`).join('; ')}` : 'no in-progress mapped game at the cycle time - ScorePulse abstains unless a side leads past its threshold while still <= 85c')}<br>every snapshot archived with its URL + SHA-256 in signals/espn-scoreboard.jsonl</small></td></tr>`);
+    const cities = forward.recent?.nwsCities ?? [];
+    rows.push(`<tr><td><b>NWS city gridpoints · other KXHIGH* series</b><br><small>Census Gazetteer place - api.weather.gov /points - forecast</small></td><td><small>${cities.length ? `${cities.length} city capture(s) in the window` : 'none in the window'}</small></td><td><small>see the season-health abstentions below when the gazetteer step fails</small></td><td><small>${esc(cities.slice(0, 4).map((c) => `${c.series} (${c.city}): ${c.highF ?? '?'} F`).join(' - ') || '-')}</small></td></tr>`);
+    const fda = forward.recent?.openfda ?? [];
+    rows.push(`<tr><td><b>openFDA Drugs@FDA lookups</b><br><small>drives FdaRecordCheck; an openFDA 404 is recorded as a verified absence, never turned into a price</small></td><td><small>${fda.length} lookup record(s) in the window</small></td><td><small>api.fda.gov/drug/drugsfda.json (public, no key)</small></td><td><small>${esc(fda.slice(0, 4).map((r) => `${r.drug}: ${r.approvedRecord ? `record (${(r.applications ?? [])[0]?.application_number ?? ''})` : `no record as of ${r.retrievedAt ?? ''}`}`).join(' - ') || 'no FDA-decision market with a named drug was open at the cycle time')}</small></td></tr>`);
+    const sigErrors = forward.recent?.signalErrors ?? [];
+    if (sigErrors.length) {
+      rows.push(`<tr><td><b>Adapter abstentions (last window)</b><br><small>fail-closed notes - no default value is ever invented</small></td><td><small>${esc(forward.state?.lastCycle?.signalErrorCount ?? sigErrors.length)} line(s) recorded</small></td><td><small>forward/cycles/*.jsonl</small></td><td><small class="mono">${esc(sigErrors.slice(0, 8).join(' | '))}</small></td></tr>`);
+    }
     body.innerHTML = rows.join('');
   }
+  applyLedgerFilter();
 }
 
 
@@ -245,30 +285,92 @@ function renderExecutionRealism() {
   if (!panel) return;
   const summary = forward.execution;
   const status = $('#execution-state');
-  if (!summary || !summary.statuses) {
+  if (!summary || !summary.compared) {
     panel.innerHTML = '<div class="empty-state"><span class="empty-icon">◎</span><h3>Not compared yet</h3><p><code>scripts/execution_realism.py --live</code> writes <code>forward/execution/summary.json</code> after a runner cycle. The desk fills stay what they always were — verified order-book fills — this file only measures them against the official tape.</p></div>';
     if (status) { status.textContent = 'not compared yet (runner-only)'; status.classList.add('error'); }
     return;
   }
-  const s = summary.statuses;
   const median = summary.medianAbsCentsDiff;
   if (status) {
-    status.textContent = median === null ? `${s.compared ?? 0} fill(s) compared` : `median |desk − tape| = ${median.toFixed(2)}¢`;
+    status.textContent = median === null ? `${summary.compared} fill(s) compared` : `median |desk − tape| = ${Number(median).toFixed(2)}¢`;
     status.classList.toggle('ok', median !== null && median <= 1);
     status.classList.toggle('error', median !== null && median > 1);
   }
   const cards = [
     ['Desk fills compared', String(summary.compared ?? 0), 'against GET /markets/trades on the same ticker'],
-    ['Covered by the tape', `${summary.tapeCoveredPct ?? 0}%`, 'official prints existed in the comparison window'],
-    ['Within 1¢ of the tape', `${summary.withinOneCentPct ?? 0}%`, 'median |desk − tape| = ' + (median === null ? 'n/a' : `${median.toFixed(2)}¢`)],
+    ['Covered by the tape', `${summary.tapeCoveredPct ?? 0}%`, `${summary.noTapeInWindow ?? 0} window(s) had no print; ${summary.tapeFetchFailed ?? 0} fetch failure(s)`],
+    ['Within 1¢ of the tape', `${summary.withinOneCentPct ?? 0}%`, 'median |desk − tape| = ' + (median === null || median === undefined ? 'n/a' : `${Number(median).toFixed(2)}¢`)],
     ['Desk price inside the tape range', `${summary.insideTapeRangePct ?? 0}%`, 'the desk never claims a better print than happened'],
   ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
   const byStrategy = Object.entries(summary.byStrategy ?? {}).sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([id, row]) => `<tr><td><a class="text-link" href="strategy.html?id=${esc(id)}">${esc(id)}</a></td><td>${esc(row.compared)}</td><td>${row.medianAbsCentsDiff === null ? '—' : row.medianAbsCentsDiff.toFixed(2) + '¢'}</td><td>${esc(row.withinOneCentPct ?? 0)}%</td><td>${esc(row.tapeCoveredPct ?? 0)}%</td></tr>`).join('');
+    .map(([id, row]) => `<tr><td><a class="text-link" href="strategy.html?id=${esc(id)}">${esc(id)}</a></td><td>${esc(row.compared)}</td><td>${row.medianAbsCentsDiff === null || row.medianAbsCentsDiff === undefined ? '—' : Number(row.medianAbsCentsDiff).toFixed(2) + '¢'}</td></tr>`).join('');
   panel.innerHTML = `<div class="metrics-grid">${cards}</div>
     <p class="verdict">${esc(summary.verdict ?? '')}</p>
-    <div class="table-shell"><table><thead><tr><th>Strategy</th><th>Fills compared</th><th>Median |desk − tape|</th><th>Within 1¢</th><th>Tape covered</th></tr></thead><tbody>${byStrategy || '<tr><td colspan="5" class="empty-cell">No fill has been compared yet.</td></tr>'}</tbody></table></div>
-    <p class="micro-note"><span>Evidence</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/execution/summary.json" target="_blank" rel="noreferrer">execution/summary.json ↗</a> · <a class="text-link" href="https://docs.kalshi.com/api-reference/trade/get-trades" target="_blank" rel="noreferrer">official trade tape docs ↗</a> · window ±${esc(summary.window)}s · compared at ${esc(formatDate(summary.comparedAt))}</p>`;
+    <div class="table-shell"><table><thead><tr><th>Strategy</th><th>Fills compared</th><th>Median |desk − tape|</th></tr></thead><tbody>${byStrategy || '<tr><td colspan=\"3\" class=\"empty-cell\">No fill has been compared yet.</td></tr>'}</tbody></table></div>
+    <p class="micro-note"><span>Evidence</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/execution/summary.json" target="_blank" rel="noreferrer">execution/summary.json ↗</a> · <a class="text-link" href="https://docs.kalshi.com/api-reference/trade/get-trades" target="_blank" rel="noreferrer">official trade tape docs ↗</a> · window ±120s · compared at ${esc(formatDate(summary.generatedAt))} · ${esc(summary.method ?? '')}</p>`;
+}
+
+function renderSeasonHealth() {
+  const panel = $('#season-health-panel');
+  if (!panel) return;
+  const status = $('#health-state');
+  const audit = forward.audit;
+  if (!audit) {
+    if (status) { status.textContent = 'awaiting first runner audit'; status.classList.add('error'); }
+    panel.innerHTML = '<div class="empty-state"><span class="empty-icon">◎</span><h3>No season audit committed yet</h3><p><code>scripts/audit_season.py --live</code> runs on every collector cycle (schedule gaps, ledger coverage, storage compaction, signal coverage, tape summary, and a re-read of settled markets against <code>GET /markets/{ticker}</code>) and commits <code>forward/audit/latest.json</code>. Until that file exists this panel stays empty rather than showing a guess.</p></div>';
+    return;
+  }
+  if (status) {
+    status.textContent = `audit ${audit.status} · ${formatDate(audit.generatedAt)}`;
+    status.classList.toggle('ok', audit.status === 'PASS');
+    status.classList.toggle('error', audit.status !== 'PASS');
+  }
+  const sched = audit.schedule ?? {};
+  const ledger = audit.ledger ?? {};
+  const storage = audit.storage ?? {};
+  const signals = audit.signals ?? {};
+  const tape = audit.tape ?? {};
+  const live = audit.live ?? {};
+  const cards = [
+    ['Cron slots executed', `${sched.executed ?? 0} / ${sched.expectedSlots ?? 0}`, `on-time ${sched.onTime ?? 0} · late ${sched.late ?? 0} · missed ${sched.missed ?? 0} · extra manual ${sched.extraManual ?? 0}`],
+    ['Longest gap', sched.maxGapHours === undefined ? '—' : `${sched.maxGapHours} h`, 'hours between consecutive cycles'],
+    ['Ledger events', String(ledger.events ?? 0), `${ledger.eventKinds?.fill ?? 0} fills · ${ledger.eventKinds?.exit ?? 0} exits · ${ledger.eventKinds?.settlement ?? 0} settlements · ${ledger.openPositions ?? 0} open`],
+    ['Ledger coverage', ledger.fillsWithoutExitOrPosition === 0 ? 'complete' : `${ledger.fillsWithoutExitOrPosition} orphan fill(s)`, 'every fill has a position or a recorded close'],
+    ['Storage compaction', `${storage.compactedFiles ?? 0} file(s)`, `${((storage.bytesBefore ?? 0) / 1024).toFixed(0)} KB → ${((storage.bytesAfter ?? 0) / 1024).toFixed(0)} KB gz · hashes verify: ${storage.hashVerifyPass ?? 0} ok / ${(storage.hashVerifyFailures ?? []).length} bad`],
+    ['Tape comparison', tape.available ? `${tape.compared ?? 0} fills` : 'pending', tape.available ? `median ${tape.medianAbsCentsDiff}¢ · ${tape.withinOneCentPct}% within 1¢` : 'execution/summary.json not written yet'],
+    ['Live settlement re-read', live.available ? `${live.matches ?? 0}/${live.attempts ?? 0} match` : 'pending (runner)', live.available ? `${(live.mismatches ?? []).length} mismatch(es) - every comparison re-issued GET /markets/{ticker}` : 'the offline audit never fakes this line'],
+  ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
+  const sig = signals.totals ?? {};
+  const signalChips = [
+    ['NWS Central Park captures', sig.nwsCentralPark], ['NWS city forecasts', sig.nwsCityForecasts],
+    ['ESPN signals (last window)', sig.espnSignals], ['ESPN live-game signals', sig.espnLiveSignals],
+    ['openFDA lookups', sig.fdaSignals], ['openFDA verified absences', sig.fdaNoRecord],
+    ['archived candle files', sig.candlesArchived], ['signal error lines', sig.signalErrors],
+  ].map(([label, value]) => `<span class="evidence-pill ${(String(label).startsWith('signal error') && Number(value) > 0) ? 'blocked' : ''}">${esc(label)}: ${esc(value ?? 0)}</span>`).join(' ');
+  const errorLines = (signals.latestSignalErrors ?? []).slice(0, 10)
+    .map((e) => `<li class="mono">${esc(e)}</li>`).join('');
+  const liveRows = (live.samples ?? []).map((s) => `<tr>
+      <td><a class="text-link" href="${KALSHI_MARKET_URL(s.ticker)}" target="_blank" rel="noreferrer">${esc(s.ticker)} ↗</a></td>
+      <td><small>${esc(s.strategyId ?? '')}</small></td>
+      <td><small>${esc(String(s.ledgerResult ?? ''))} @ ${esc(s.ledgerSettlementTs ?? '')}</small></td>
+      <td><small>${esc(String(s.apiResult ?? s.status ?? 'fetch failed'))}${s.apiSettlementTs ? ` @ ${esc(s.apiSettlementTs)}` : ''}</small></td>
+      <td>${s.status === 'unreachable' ? '<span class="evidence-pill none">unreachable</span>' : (s.resultMatches && s.settlementMatches ? '<span class="evidence-pill">match</span>' : '<span class="evidence-pill blocked">MISMATCH</span>')}</td>
+      <td><small class="mono">${esc(shortHash(s.responseSha256))}</small></td></tr>`).join('');
+  const mismatchBanner = (live.mismatches ?? []).length
+    ? `<div class="notice notice-amber"><div class="notice-icon">!</div><div><strong>${live.mismatches.length} settled market(s) where the ledger and the live official record disagree</strong><p>The audit never adjusts the ledger: the mismatch stands here, and the affected positions are named in the table below.</p></div></div>` : '';
+  const details = [
+    `median cycle start delay ${sched.medianDelayMin ?? '—'} min`,
+    (sched.missedSlotsSample ?? []).length ? `missed slot sample: ${sched.missedSlotsSample.slice(0, 6).join(', ')}${sched.missedSlotsSample.length > 6 ? ` (+${sched.missedSlotsSample.length - 6} more)` : ''}` : 'no missed cron slots',
+    (ledger.orphanFillSample ?? []).length ? `orphan fills: ${ledger.orphanFillSample.join(', ')}` : 'no orphan fills',
+    (ledger.equityCsvVsStateMismatches ?? 0) ? `${ledger.equityCsvVsStateMismatches} equity CSV drift row(s)` : 'equity CSV matches account state',
+    live.available ? 'live settlement re-read attempted' : esc(live.note ?? 'live re-read pending (needs runner network)'),
+  ].join(' · ');
+  panel.innerHTML = `${mismatchBanner}<div class="metrics-grid">${cards}</div>
+    <p class="micro-note"><span>Signal coverage</span>${signalChips}</p>
+    ${errorLines ? `<details class="health-errors"><summary>Latest cycle's signal abstentions (${sig.signalErrors ?? 0} line(s)) - a source that answers nothing makes its personas abstain, never default</summary><ul>${errorLines}</ul></details>` : ''}
+    ${liveRows ? `<div class="table-shell"><table><thead><tr><th>Settled market</th><th>Strategy</th><th>Ledger says</th><th>Official API now</th><th>Verdict</th><th>Response hash</th></tr></thead><tbody>${liveRows}</tbody></table></div>` : ''}
+    <p class="micro-note"><span>Coverage details</span>${esc(details)}</p>
+    <p class="micro-note"><span>Audit files</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/latest.json" target="_blank" rel="noreferrer">forward/audit/latest.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/COMPRESSED.json" target="_blank" rel="noreferrer">COMPRESSED.json ↗</a> · cron ${esc(sched.cron ?? '—')} · cycles ${esc(sched.cycles ?? 0)} · ${esc(sched.note ?? '')}</p>`;
 }
 
 function renderToday() {
@@ -315,6 +417,9 @@ export async function loadArchiveBacktest() {
     ]);
   } catch { /* not built yet */ }
   try { explanations = await fetchJson(`${SEASON_BASE()}backtest-archive/explanations.json`); } catch { /* optional */ }
+  let curves = null; let walk = null;
+  try { curves = await fetchJson(`${SEASON_BASE()}backtest-archive/curves.json`); } catch { /* optional */ }
+  try { walk = await fetchJson(`${SEASON_BASE()}backtest-archive/walkforward.json`); } catch { /* optional */ }
   if (!archive || !Array.isArray(board) || !board.length) {
     panel.innerHTML = '<div class="empty-state"><span class="empty-icon">◎</span><h3>No archive backtest for this season yet</h3><p><code>python3 scripts/backtest_archive.py</code> replays the committed candle archive and writes <code>backtest-archive/</code>. Nothing is shown until those files exist.</p></div>';
     if (statePill) { statePill.textContent = 'not built for this season'; statePill.classList.add('error'); }
@@ -339,8 +444,67 @@ export async function loadArchiveBacktest() {
   if (statePill) { statePill.textContent = `${archive.marketCount} markets · ${archive.verifiedBars} bars · ${board.length} rule sets`; statePill.classList.add('ok'); }
   panel.innerHTML = `<div class="metrics-grid">${facts}</div>
     <div class="table-shell"><table><thead><tr><th>#</th><th>Rule set</th><th>Return on $10,000</th><th>Trading profile</th><th>Cost of trading</th><th>Entry rule</th><th>Why it won or lost</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="micro-note"><span>Evidence</span>Replayed bar by bar by <code>scripts/backtest_archive.py</code> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/trades.json" target="_blank" rel="noreferrer">every trade ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/explanations.json" target="_blank" rel="noreferrer">per-rule explanations ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/candles/index.jsonl" target="_blank" rel="noreferrer">candle index ↗</a> · a market is never traded before it has an official result.</p>`;
+    ${renderArchiveCurves(curves, board)}
+    ${renderArchiveFolds(walk)}
+    <p class="micro-note"><span>Evidence</span>Replayed bar by bar by <code>scripts/backtest_archive.py</code> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/trades.json" target="_blank" rel="noreferrer">every trade ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/explanations.json" target="_blank" rel="noreferrer">per-rule explanations ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/curves.json" target="_blank" rel="noreferrer">curve data ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}backtest-archive/walkforward.json" target="_blank" rel="noreferrer">walk-forward data ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/candles/index.jsonl" target="_blank" rel="noreferrer">candle index ↗</a> · a market is never traded before it has an official result.</p>`;
   return { archive, board, explanations };
+}
+
+const CURVE_COLORS = ['#54c98e', '#e0b13c', '#4ea1ff', '#e06c75', '#b48ead', '#56b6c2', '#d19a66', '#7f9f7f', '#c678dd', '#61afef', '#98c379'];
+
+function renderArchiveCurves(curves, board) {
+  if (!curves || !curves.strategies) return '';
+  const series = Object.entries(curves.strategies)
+    .map(([id, row]) => ({ id, username: row.username, points: row.points ?? [], startTs: row.startTs }))
+    .filter((row) => row.points.length);
+  if (!series.length) {
+    return '<div class="panel"><div class="panel-header"><div><h3>Archive-backtest equity curves</h3>'
+      + '<p>every rule set abstained; no curve to draw</p></div><span class="source-badge">realized only</span></div></div>';
+  }
+  const returnById = Object.fromEntries((board ?? []).map((row) => [row.strategyId, row]));
+  const xs = series.flatMap((row) => [row.startTs ?? row.points[0][0], ...row.points.map(([ts]) => ts)]);
+  const ys = series.flatMap((row) => row.points.map(([, cum]) => (curves.startingCash ?? 10000) + cum));
+  const x0 = Math.min(...xs); const x1 = Math.max(...xs);
+  const y0 = Math.min(...ys, curves.startingCash ?? 10000); const y1 = Math.max(...ys, curves.startingCash ?? 10000);
+  const W = 720; const H = 220; const pad = 8;
+  const sx = (t) => pad + ((t - x0) / Math.max(1, x1 - x0)) * (W - 2 * pad);
+  const sy = (v) => H - pad - ((v - y0) / Math.max(1e-9, y1 - y0)) * (H - 2 * pad);
+  const zeroY = sy(curves.startingCash ?? 10000);
+  const lines = series.map((row, i) => {
+    const pts = [[row.startTs ?? row.points[0][0], curves.startingCash ?? 10000], ...row.points]
+      .map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
+    return `<polyline fill="none" stroke="${CURVE_COLORS[i % CURVE_COLORS.length]}" stroke-width="2" points="${pts}"/>`;
+  }).join('');
+  const legend = series.map((row, i) => {
+    const final = returnById[row.id] ?? {};
+    return `<span class="curve-legend-item"><i style="background:${CURVE_COLORS[i % CURVE_COLORS.length]}"></i>${esc(row.username)} <b class="${cls(final.returnPct)}">${esc(pct(final.returnPct))}</b></span>`;
+  }).join('');
+  return `<div class="panel"><div class="panel-header"><div><h3>Realized-equity curves — one point per closed trade</h3>
+      <p>entry fills at the bar's verified ask, exits at a later verified bid or the official result; positions carry at cost until closed (no unrealized mark)</p></div>
+      <span class="source-badge">backtest-archive/curves.json</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="archive backtest realized equity curves" class="curve-svg">
+      <line x1="${pad}" y1="${zeroY}" x2="${W - pad}" y2="${zeroY}" stroke="rgba(255,255,255,.18)" stroke-dasharray="4 4"/>
+      ${lines}
+    </svg>
+    <div class="curve-legend">${legend}</div>
+    <p class="micro-note"><span>Note</span>${esc(curves.method ?? '')} · the curve ends exactly at the leaderboard number; scripts/verify_data.py checks that identity.</p></div>`;
+}
+
+function renderArchiveFolds(walk) {
+  if (!walk || !Array.isArray(walk.rows) || !walk.rows.length) return '';
+  const windows = Object.fromEntries((walk.windows ?? []).map((w) => [w.fold, w]));
+  const rows = walk.rows.map((r) => `<tr>
+      <td><b>${esc(r.username)}</b></td>
+      <td><small>fold ${esc(r.fold)} · ${esc(windows[r.fold] ? `${windows[r.fold].startAt} → ${windows[r.fold].endAt}` : `#${r.fold}`)}</small></td>
+      <td><small>${esc(r.trades)} trade(s) · ${esc(r.wins)}W ${esc(r.losses)}L</small></td>
+      <td class="${cls(r.realizedPnl)}"><small>${esc(money(r.realizedPnl))}</small></td>
+      <td class="${cls(r.returnPct)}"><b>${esc(pct(r.returnPct))}</b></td>
+    </tr>`).join('');
+  return `<div class="panel"><div class="panel-header"><div><h3>Walk-forward windows — stability, not a train/test split</h3>
+      <p>the replay horizon cut into ${esc(walk.folds ?? '?')} equal windows by entry time; exits and settlements still use the real later bars; each window restarts from $10,000</p></div>
+      <span class="source-badge">backtest-archive/walkforward.json</span></div>
+    <div class="table-shell"><table><thead><tr><th>Rule set</th><th>Window</th><th>Entries</th><th>Realized</th><th>Return (reset per window)</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="micro-note"><span>Caveat</span>${esc(walk.caveat ?? '')}</p></div>`;
 }
 
 export async function loadStrategyDetail(strategyId) {
@@ -349,6 +513,10 @@ export async function loadStrategyDetail(strategyId) {
 }
 
 export function bindForwardEvents() {
+  for (const [inputSelector, apply] of [['#board-filter', applyBoardFilter], ['#ledger-filter', applyLedgerFilter]]) {
+    const input = document.querySelector(inputSelector);
+    if (input) input.addEventListener('input', apply);
+  }
   document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-forward-tab]');
     if (tab) { forward.tab = tab.dataset.forwardTab; renderForwardLedger(); return; }

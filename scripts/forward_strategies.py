@@ -366,6 +366,74 @@ def entry_weather_fade(m, ctx):
             "reason": f"bracket is {distance:.0f}F away from the NWS forecast high {forecast['high_f']}F (issued {forecast['updated']}); NO ask {ask:.2f} <= 0.92"}
 
 
+HEAT_CONFIRM_FORECAST_F = 77.0   # the community post's gate: "forecast high above 77 degrees"
+HEAT_CONFIRM_MAX_ASK = 0.42      # "... a YES price below 42 cents"
+HEAT_CONFIRM_MAX_SPREAD = 0.08   # "... and a spread < 8c"
+
+
+def _bracket_contains_strikes(strikes, value):
+    """Same containment logic as _bracket_contains, on the strike fields a position stored at entry."""
+    kind, lo, hi = strikes.get("strikeType"), strikes.get("floorStrike"), strikes.get("capStrike")
+    if value is None or kind is None:
+        return None
+    if kind == "between":
+        return lo is not None and hi is not None and lo <= value <= hi
+    if kind == "greater":
+        return lo is not None and value > lo
+    if kind == "greater_or_equal":
+        return lo is not None and value >= lo
+    if kind == "less":
+        return hi is not None and value < hi
+    if kind == "less_or_equal":
+        return hi is not None and value <= hi
+    return None
+
+
+def entry_heat_confirm(m, ctx):
+    """The top rule from a 500-bot community weather backtest, recreated mechanically.
+
+    r/PredictionsMarkets "I backtested 500 Weather Kalshi Bots" (2026-05-22): the best bot "waited
+    for a forecast high above 77 degrees, a YES price below 42 cents, and a reasonably tight
+    spread" and "if the forecast cooled, it got out"; the median of all 500 was -41.61%, so the
+    post's own evidence says most weather bots lose - this persona measures the *survivor* rule on
+    official prices.  The forecast is the desk's point-in-time NWS capture (context); the bracket,
+    price and liquidity are Kalshi's.
+    """
+    forecast = (ctx.get("nws") or {}).get(m.get("event_ticker"))
+    if not forecast:
+        return None
+    high = forecast.get("high_f")
+    if high is None or high <= HEAT_CONFIRM_FORECAST_F:
+        return None
+    if not _bracket_contains(m, high):
+        return None
+    ask, bid = m.get("yes_ask"), m.get("yes_bid")
+    if ask is None or bid is None or not 0 < ask < HEAT_CONFIRM_MAX_ASK or (ask - bid) > HEAT_CONFIRM_MAX_SPREAD:
+        return None
+    return {"side": "yes", "price": ask, "limit": HEAT_CONFIRM_MAX_ASK,
+            "reason": f"NWS forecast high {high}F > {HEAT_CONFIRM_FORECAST_F:.0f}F and falls in this bracket; "
+                      f"YES ask {ask:.2f} < {HEAT_CONFIRM_MAX_ASK:.2f} with spread {ask - bid:.2f} "
+                      f"(500-bot top rule, forward recreation)",
+            "meta": {"forecastHighF": high, "forecastDate": forecast.get("date"),
+                     "forecastUpdated": forecast.get("updated"), "forecastSource": forecast.get("source"),
+                     "strikeType": m.get("strike_type"), "floorStrike": m.get("floor_strike"),
+                     "capStrike": m.get("cap_strike")}}
+
+
+def exit_heat_forecast_cools(position, quotes, ctx):
+    """Exit when the CURRENT NWS forecast no longer falls inside the bracket that was bought."""
+    meta = position.get("signalMeta") or {}
+    if meta.get("forecastHighF") is None:
+        return None
+    forecast = (ctx.get("nws") or {}).get(position.get("eventTicker"))
+    if not forecast or forecast.get("high_f") is None:
+        return None  # no fresh forecast -> hold; never sell on an adapter gap
+    if _bracket_contains_strikes(meta, forecast["high_f"]):
+        return None
+    return (f"NWS forecast for {meta.get('forecastDate')} moved {meta['forecastHighF']}F -> "
+            f"{forecast['high_f']}F and no longer falls in the entered bracket")
+
+
 def entry_live_score(m, ctx):
     """Buy the side of the team ESPN's official scoreboard shows leading, late in the game.
 
@@ -538,6 +606,21 @@ STRATEGIES = [
      "universe": SELECTOR_WEATHER, "entry": entry_weather_fade, "exit": exit_hold, "fraction": 0.5, "needs_nws": True,
      "rule": "Buy NO on daily-high brackets (any tracked KXHIGH* city) at least 4F away from that city's NWS forecast high when the NO ask is <= 92c; hold to settlement.",
      "why": "Sells far-from-forecast tails. Small steady gains unless the forecast busts by 4F+."},
+    {"id": "heat-confirm", "username": "HeatConfirm", "name": "Weather Heat Confirm (500-bot top rule)",
+     "group": "weather",
+     "source": {"kind": "community backtest",
+                "label": "r/PredictionsMarkets 'I backtested 500 Weather Kalshi Bots' (2026-05-22): the "
+                         "best bot bought forecast-confirmed heat while YES was still cheap; median ROI "
+                         "of the 500 was -41.61% (discovery only; prices and fills here are Kalshi's)",
+                "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1tko1iw/i_backtested_500_weather_kalshi_bots_the_best_bot/"},
+     "universe": SELECTOR_WEATHER, "entry": entry_heat_confirm, "exit": exit_heat_forecast_cools,
+     "fraction": 0.5, "needs_nws": True,
+     "rule": "Buy YES (<= 42c ask, displayed spread <= 8c) on a daily-high bracket that the city's current NWS "
+             "point forecast puts at > 77F and inside the bracket; exit when the latest forecast no longer falls "
+             "in the bracket, else hold to settlement.",
+     "why": "Confirmation, not argument: the post's losers all fought the market on one bearish variable; the "
+            "winner waited for the forecast to corroborate a cheap YES. Forward-only test - no verified weather "
+            "candle archive exists to replay this rule, so it earns or bleeds on the live tape."},
     {"id": "fda-premium", "username": "FDAReaction", "name": "FDA Decision Premium", "group": "biotech",
      "source": {"kind": "MasterSite project", "label": "DrugAnalysis - FDA Decisions & Biotech Reactions -> Kalshi KXFDA* series", "url": "https://buffedlizard55-lab.github.io/DrugAnalysis/"},
      "universe": SELECTOR_FDA, "entry": entry_fda_premium, "exit": exit_hold, "fraction": 0.5,

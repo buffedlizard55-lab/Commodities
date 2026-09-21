@@ -161,6 +161,80 @@ class ArchiveBacktestTests(unittest.TestCase):
             closed = [t for t in out["trades"] if t["strategyId"] == row["strategyId"]]
             self.assertAlmostEqual(row["realizedPnl"], sum(t["pnl"] for t in closed), places=6)
 
+    # ---- curves + walk-forward + series filter (grown-archive machinery) -------------------
+    def test_curves_end_exactly_at_the_leaderboard_numbers(self):
+        self.add_market("KXBTC15M-F1", "KXBTC15M", bars_favourite(), "yes")
+        self.add_market("KXBTC15M-L1", "KXBTC15M", bars_longshot(), "no")
+        out = BA.build(self.season, min_bars=8)
+        curves = out["curves"]["strategies"]
+        total_points = 0
+        for row in out["board"]:
+            points = curves[row["strategyId"]]["points"]
+            total_points += len(points)
+            if not points:
+                self.assertEqual(row["trades"], 0, row["strategyId"])
+                continue
+            self.assertAlmostEqual(points[-1][1], row["realizedPnl"], places=6)
+            stamps = [ts for ts, _ in points]
+            self.assertEqual(stamps, sorted(stamps))  # a curve never steps backwards in time
+        self.assertEqual(total_points, len(out["trades"]))  # exactly one point per closed trade
+
+    def test_walk_forward_assigns_each_trade_to_one_fold(self):
+        self.add_market("KXBTC15M-F1", "KXBTC15M", bars_favourite(), "yes")
+        self.add_market("KXBTC15M-L1", "KXBTC15M", bars_longshot(), "no")
+        out = BA.build(self.season, min_bars=8, folds=3)
+        walk = out["walkForward"]
+        self.assertEqual(len(walk["windows"]), 3)
+        by_strategy = {}
+        for row in walk["rows"]:
+            by_strategy[row["strategyId"]] = by_strategy.get(row["strategyId"], 0) + row["trades"]
+        for row in out["board"]:
+            self.assertEqual(by_strategy.get(row["strategyId"], 0), row["trades"], row["strategyId"])
+        realized_by_fold = {}
+        for row in walk["rows"]:
+            realized_by_fold[row["strategyId"]] = round(realized_by_fold.get(row["strategyId"], 0.0) + row["realizedPnl"], 6)
+        for row in out["board"]:
+            if row["trades"]:
+                self.assertAlmostEqual(realized_by_fold[row["strategyId"]], row["realizedPnl"], places=6)
+
+    def test_series_filter_restricted_replay(self):
+        self.add_market("KXMLBGAME-1MIA-F", "KXMLBGAME", bars_favourite(), "yes")
+        self.add_market("KXBTC15M-1UP-L", "KXBTC15M", bars_longshot(), "no")
+        out = BA.build(self.season, min_bars=8, series_filter=["kxmlbgame"])
+        self.assertEqual(list(out["competition"]["markets"]), ["KXMLBGAME-1MIA-F"])
+        self.assertEqual(out["competition"]["seriesFilter"], ["KXMLBGAME"])
+        self.assertTrue(all(t["series"] == "KXMLBGAME" for t in out["trades"]))
+
+    # ---- the two new rules -----------------------------------------------------------------
+    def test_gap_fade_fades_both_directions_at_the_verified_ask(self):
+        start = 1_789_800_000
+        flat = (start, 0.50, 0.51, 0.49, 0.50, 0.49, 0.51, 5000, 1000)
+        gap_down = (start + 86_400, 0.38, 0.41, 0.37, 0.40, 0.39, 0.40, 5000, 1000)
+        recover = (start + 172_800, 0.45, 0.47, 0.44, 0.46, 0.46, 0.48, 5000, 1000)
+        self.add_market("KXBTC15M-GAP1", "KXBTC15M", [flat, gap_down, recover], "yes")
+        trades, totals = BA.replay({"id": "gap", "username": "U", "name": "n", "rule": BA.rule_gap_fade,
+                                    "exit": "profit"}, BA.load_archive(self.season, min_bars=3))
+        self.assertEqual(len(trades), 1)
+        trade = trades[0]
+        self.assertEqual(trade["side"], "yes")            # a 12c dump is faded by buying YES
+        self.assertEqual(trade["entryPrice"], 0.40)       # the gap bar's verified ask
+        self.assertEqual(trade["exitPrice"], 0.46)        # verified bid >= entry + 0.05
+        self.assertEqual(trade["exitType"], "bid_exit")
+        self.assertGreater(trade["pnl"], 0)
+
+    def test_favourite_stop_exits_when_the_bid_undermines_the_stop(self):
+        start = 1_789_800_000
+        good = [(start + i * 86_400, 0.88, 0.91, 0.87, 0.89, 0.88, 0.90, 5000, 1000) for i in range(6)]
+        crash = (start + 6 * 86_400, 0.79, 0.80, 0.77, 0.78, 0.77, 0.79, 5000, 1000)  # bid 0.77 <= stop 0.80
+        tail = [(start + (7 + i) * 86_400, 0.77, 0.78, 0.75, 0.76, 0.75, 0.78, 5000, 1000) for i in range(5)]
+        self.add_market("KXBTC15M-STOP1", "KXBTC15M", good + [crash] + tail, "no")
+        strategy = {"id": "stop", "username": "U", "name": "n", "rule": BA.rule_favourite_stop, "exit": "stop"}
+        trades, totals = BA.replay(strategy, BA.load_archive(self.season, min_bars=3))
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0]["exitType"], "bid_exit")   # stopped, NOT settled at zero
+        self.assertEqual(trades[0]["exitPrice"], 0.77)
+        self.assertIn("stop", trades[0]["exitReason"])
+
 
 if __name__ == "__main__":
     unittest.main()

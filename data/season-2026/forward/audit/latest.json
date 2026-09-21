@@ -1,0 +1,274 @@
+{
+ "generatedAt": "2026-09-21T04:13:39Z",
+ "ledger": {
+  "cycleErrorRows": 0,
+  "cyclesWithApiErrors": 4,
+  "equityCsvVsStateMismatches": [],
+  "eventKinds": {
+   "exit": 3,
+   "fill": 211,
+   "settlement": 147
+  },
+  "events": 361,
+  "eventsTotal": 361,
+  "evidenceBound": 361,
+  "fillsWithoutExitOrPosition": 0,
+  "intentStatusByStrategy": {
+   "book-edge": {
+    "filled": 8,
+    "not_confirmed_on_book": 12,
+    "queued": 9
+   },
+   "ceo-fav": {
+    "filled": 3
+   },
+   "depth-diver": {
+    "filled": 19,
+    "skipped_position_cap": 1
+   },
+   "dip-hunter": {
+    "filled": 18,
+    "not_confirmed_on_book": 2,
+    "queued": 1
+   },
+   "fda-premium": {
+    "filled": 7
+   },
+   "game-favourite": {
+    "filled": 11,
+    "not_confirmed_on_book": 1,
+    "queued": 1
+   },
+   "gold-leader": {
+    "not_confirmed_on_book": 1
+   },
+   "longshot-fader": {
+    "filled": 17,
+    "not_confirmed_on_book": 3,
+    "queued": 2
+   },
+   "micro-tail": {
+    "filled": 5
+   },
+   "panic-fade": {
+    "filled": 10
+   },
+   "pinepilot": {
+    "filled": 8
+   },
+   "scalp-8095": {
+    "filled": 6,
+    "not_confirmed_on_book": 6,
+    "queued": 1
+   },
+   "spike-surfer": {
+    "filled": 17
+   },
+   "sure-thing": {
+    "filled": 15
+   },
+   "tail-sprint": {
+    "filled": 20
+   },
+   "tick-chaser": {
+    "filled": 20
+   },
+   "underdog-sweep": {
+    "filled": 12
+   },
+   "weather-bracket": {
+    "filled": 3
+   },
+   "yield-sniper": {
+    "filled": 12,
+    "not_confirmed_on_book": 1,
+    "queued": 1,
+    "skipped_position_cap": 3
+   }
+  },
+  "openPositions": 61,
+  "orphanFillSample": [],
+  "settledOrExited": 150
+ },
+ "live": {
+  "available": false,
+  "note": "offline run: the settlement re-read only runs with --live on a machine with network egress (the GitHub runner does it each cycle)"
+ },
+ "schedule": {
+  "cron": "7,37 * * * * (UTC)",
+  "cycles": 10,
+  "executed": 10,
+  "expectedSlots": 42,
+  "extraManual": 3,
+  "firstCycle": "2026-09-20T03:21:26Z",
+  "lastCycle": "2026-09-21T00:26:04Z",
+  "late": 6,
+  "matchedSlots": 7,
+  "maxGapHours": 5.56,
+  "medianDelayMin": 45.9,
+  "missed": 35,
+  "missedSlotsSample": [
+   "2026-09-20T04:07Z",
+   "2026-09-20T04:37Z",
+   "2026-09-20T05:07Z",
+   "2026-09-20T05:37Z",
+   "2026-09-20T06:07Z",
+   "2026-09-20T06:37Z",
+   "2026-09-20T07:07Z",
+   "2026-09-20T07:37Z",
+   "2026-09-20T08:07Z",
+   "2026-09-20T09:07Z",
+   "2026-09-20T09:37Z",
+   "2026-09-20T10:07Z",
+   "2026-09-20T10:37Z",
+   "2026-09-20T11:07Z",
+   "2026-09-20T11:37Z",
+   "2026-09-20T12:07Z",
+   "2026-09-20T13:07Z",
+   "2026-09-20T13:37Z",
+   "2026-09-20T14:07Z",
+   "2026-09-20T14:37Z",
+   "2026-09-20T15:07Z",
+   "2026-09-20T15:37Z",
+   "2026-09-20T16:07Z",
+   "2026-09-20T17:07Z",
+   "2026-09-20T17:37Z",
+   "2026-09-20T18:07Z",
+   "2026-09-20T19:07Z",
+   "2026-09-20T19:37Z",
+   "2026-09-20T20:07Z",
+   "2026-09-20T20:37Z"
+  ],
+  "note": "GitHub's schedule trigger is best-effort: delayed and missed slots are expected behaviour of the platform, recorded here rather than smoothed away.",
+  "onTime": 1
+ },
+ "schemaVersion": 1,
+ "season": "2026",
+ "signals": {
+  "latestCycle": "20260921T002604Z",
+  "latestSignalErrors": [
+   "KXHIGHAUS: no official coordinates for 'Austin' - series skipped",
+   "KXHIGHCHI: no official coordinates for 'Chicago' - series skipped",
+   "KXHIGHDEN: no official coordinates for 'Denver' - series skipped",
+   "KXHIGHLAX: no official coordinates for 'Los Angeles' - series skipped",
+   "KXHIGHMIA: no official coordinates for 'Miami' - series skipped",
+   "KXHIGHPHIL: no official coordinates for 'Philadelphia' - series skipped",
+   "KXHIGHTATL: title 'Atlanta Max Temperature' does not name a city",
+   "KXHIGHTBOS: title 'Boston Maximum Daily Temperature' does not name a city",
+   "KXHIGHTDAL: title 'Dallas Maximum Temperature' does not name a city",
+   "KXHIGHTDC: title 'Washington DC Daily Max Temp' does not name a city",
+   "KXHIGHTEWR: title 'Newark, NJ (EWR) Daily Max Temp' does not name a city",
+   "KXHIGHTHOU: title 'Daily High Temperature Houston' does not name a city",
+   "no Census place match for 'Austin'",
+   "no Census place match for 'Chicago'",
+   "no Census place match for 'Denver'",
+   "no Census place match for 'Los Angeles'",
+   "no Census place match for 'Miami'",
+   "no Census place match for 'Philadelphia'",
+   "openfda openfda.substance_name:\"CYTISINICLINE\": HTTP Error 404: Not Found",
+   "openfda openfda.substance_name:\"RETATRUTIDE\": HTTP Error 404: Not Found"
+  ],
+  "note": "a source that answers nothing shows 0 here with its error lines below it - that is the adapter abstaining, never a defaulted value (the same fail-closed rule as the desk).",
+  "totals": {
+   "candlesArchived": 45,
+   "espnLiveSignals": 0,
+   "espnSignals": 45,
+   "fdaNoRecord": 0,
+   "fdaSignals": 0,
+   "nwsCentralPark": 10,
+   "nwsCityForecasts": 0,
+   "signalErrors": 78
+  }
+ },
+ "status": "PASS",
+ "storage": {
+  "bytesAfter": 0,
+  "bytesBefore": 0,
+  "compactedFiles": 0,
+  "hashVerifyFailures": [],
+  "hashVerifyPass": 0,
+  "indexUpdatedAt": "2026-09-21T00:27:28Z",
+  "linesPreserved": 0,
+  "note": "evidence/ and quotes/ captures older than the compaction horizon are gzipped with their SHA-256 kept (IRR-24); append-only ledgers are never compressed."
+ },
+ "tape": {
+  "available": true,
+  "byStrategy": {
+   "book-edge": {
+    "compared": 7,
+    "medianAbsCentsDiff": 4.3653
+   },
+   "depth-diver": {
+    "compared": 18,
+    "medianAbsCentsDiff": 0.9647
+   },
+   "dip-hunter": {
+    "compared": 10,
+    "medianAbsCentsDiff": 0.0785
+   },
+   "game-favourite": {
+    "compared": 11,
+    "medianAbsCentsDiff": 0.9512
+   },
+   "longshot-fader": {
+    "compared": 15,
+    "medianAbsCentsDiff": 1.1314
+   },
+   "micro-tail": {
+    "compared": 5,
+    "medianAbsCentsDiff": 1.8584
+   },
+   "panic-fade": {
+    "compared": 10,
+    "medianAbsCentsDiff": 5.5951
+   },
+   "pinepilot": {
+    "compared": 2,
+    "medianAbsCentsDiff": 1.9496
+   },
+   "scalp-8095": {
+    "compared": 6,
+    "medianAbsCentsDiff": 3.1139
+   },
+   "spike-surfer": {
+    "compared": 12,
+    "medianAbsCentsDiff": 1.8518
+   },
+   "sure-thing": {
+    "compared": 11,
+    "medianAbsCentsDiff": 0.843
+   },
+   "tail-sprint": {
+    "compared": 15,
+    "medianAbsCentsDiff": 0.2824
+   },
+   "tick-chaser": {
+    "compared": 17,
+    "medianAbsCentsDiff": 1.0
+   },
+   "underdog-sweep": {
+    "compared": 12,
+    "medianAbsCentsDiff": 0.6942
+   },
+   "weather-bracket": {
+    "compared": 2,
+    "medianAbsCentsDiff": 3.794
+   },
+   "yield-sniper": {
+    "compared": 5,
+    "medianAbsCentsDiff": 1.022
+   }
+  },
+  "compared": 158,
+  "generatedAt": "2026-09-21T00:27:26Z",
+  "insideTapeRangePct": 77.22,
+  "meanAbsCentsDiff": 1.8964,
+  "medianAbsCentsDiff": 1.0,
+  "method": "GET /markets/trades?ticker=&min_ts=&max_ts= (official, unauthenticated); desk fills from forward/trades.jsonl. Every comparison stores the tape response hash and URL.",
+  "noTapeInWindow": 42,
+  "tapeCoveredPct": 74.68,
+  "tapeFetchFailed": 0,
+  "verdict": "158 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 82.28% had a real print within 1c of the desk's VWAP, 74.68% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 77.22% of fills. The desk is close to the tape.",
+  "withinOneCentPct": 82.28
+ }
+}

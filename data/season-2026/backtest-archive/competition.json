@@ -1,7 +1,7 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-09-21T00:27:28Z",
+ "generatedAt": "2026-09-21T04:15:28Z",
  "marketCount": 45,
  "markets": {
   "KXBTC-26SEP2006-B80350": {
@@ -697,6 +697,7 @@
   "KXNCAAFGAME",
   "KXNFLGAME"
  ],
+ "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
  "verifiedBars": 1691

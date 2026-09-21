@@ -2,15 +2,22 @@
 
 An evidence-first paper-trading lab for Kalshi event contracts:
 
-* an **automated forward-test desk** — 22 return-seeking strategy personas that trade open Kalshi
+* an **automated forward-test desk** — 23 return-seeking strategy personas that trade open Kalshi
   contracts on paper twice an hour from a scheduled, read-only collector (GitHub Actions), with
-  every fill, exit, settlement, intent, mark and order book committed to this repository;
+  every fill, exit, settlement, intent, mark and order book committed to this repository — including
+  HeatConfirm, a socially discovered weather rule tested forward because its backtest claim is
+  third-party (discovery-only, never a price source);
 * **two backtests on verified official Kalshi price data** — the original hand-collected sample
   (3 settled markets, 130 verified bars, 5 personas) and an **archive backtest** replayed bar by bar
-  over the candle archive the collector now stores (19 markets, 825 verified bars, 87 trades, 7 rule
-  sets);
+  over the candle archive the collector now stores (45 markets, 1,691 verified bars, 199 trades,
+  9 rule sets, with per-trade equity curves and a walk-forward stability split);
 * an **execution-realism check** that re-reads every simulated fill against Kalshi's own published
-  trade tape (`GET /markets/trades`) and reports the difference in cents;
+  trade tape (`GET /markets/trades`) and reports the difference in cents — now with a committed
+  live result (158 fills compared, median |desk − tape| = 1.00¢);
+* a **season health audit** (`scripts/audit_season.py`) that checks the schedule, the ledger's
+  coverage, storage compaction, signal adapters, the tape summary and — on the runner — re-reads
+  settled markets against the official API, then refuses to let `verify_data.py` pass if anything
+  disagrees;
 * a **browser live desk** where you can inspect any open contract and simulate a fill yourself, and
   **one page per strategy** (`strategy.html?id=…`) with its rule, evidence, every trade, its equity
   curve and an analysis of why it worked or did not.
@@ -32,25 +39,29 @@ index.html, styles.css, src/        GitHub Pages site (published from the repo r
   src/app.js                        browser live desk: market list, books, intents, paper fills, local ledger
 scripts/
   forward_desk.py                   ONE collector cycle: scan universe -> signals -> intents -> book fills -> settle -> ledger
-  forward_strategies.py             the 22 forward personas (rule functions + provenance) and 4 gated ones
+  forward_strategies.py             the 23 forward personas (rule functions + provenance) and 4 gated ones
   signals.py                        official signal adapters: NWS city gridpoints (Census Gazetteer centroids),
                                     ESPN scoreboards (NFL/NCAAF/NBA/MLB), openFDA Drugs@FDA records
   season.py                         season = UTC year; create/roll over data/season-<year>/ and write data/seasons.json
   compact_storage.py                gzip old evidence/ + quotes/ captures, keep their hashes, verify on every run (IRR-24)
   backtest_archive.py               replay the committed candle archive bar by bar -> data/season-*/backtest-archive/
+                                    (--series for analysis of one series; writes curves.json + walkforward.json)
   execution_realism.py              compare each simulated fill with the official trade tape (GET /markets/trades)
+  audit_season.py                   season health: cron-slot delivery, ledger coverage, compaction, signal
+                                    adapters, tape summary, live settlement re-read -> forward/audit/latest.json
   archive_history.py                archive a market's full official candle history in bounded, hash-logged chunks
   render_pages.py                   re-render the committed view files (strategy pages, today, season index) offline
   paper_engine.py                   pure fill/fee/mark arithmetic shared by the collector and the tests
   kalshi_client.py                  stdlib read-only client (pacing, backoff, call log) + offline fixture client
   discover_universe.py              weekly GET /series catalog (13,607 series) -> data/universe/
-  verify_data.py                    1,089 season assertions + forward-ledger invariants + SHA-256 manifest
+  verify_data.py                    ~1,950 checks: season assertions, forward-ledger invariants, the season
+                                    audit file itself, SHA-256 manifest
   build_competition.py              deterministic backtest + committed competition memory
   candles_from_raw.py, regen_candles.py   raw-response -> CSV regeneration and diff guards
 .github/workflows/forward-desk.yml  cron 7,37 * * * * (desk cycle) + Monday 06:17 UTC (universe) + manual dispatch
 data/
   strategies.json                   persona roster (browser live-book, backtest, forward-desk, gated)
-  source-registry.json              69 official/primary sources + irregularities IRR-01..IRR-31
+  source-registry.json              70 official/primary sources + irregularities IRR-01..IRR-34
   seasons.json                      season index the site reads (active season, cycles, fills, frozen flag)
   universe/                         series-catalog.json (compact, all categories), series-index.json (fees, shards, tags)
   season-2026/                      COMMITTED SEASON MEMORY (durable store)
@@ -69,19 +80,29 @@ data/
       execution/                    trade-tape comparisons of the desk's own fills (runner-written)
       candles/                      archived official candlesticks + index.jsonl (url, sha256, result, fees)
       recent.json, curves.json      small windows for the site (latest events/intents/cycles, equity curves)
-    backtest-archive/               archive backtest outputs (competition / trades / leaderboard / explanations)
+      audit/                        season health audit: latest.json + append-only audit-history.jsonl
+    backtest-archive/               archive backtest outputs (competition / trades / leaderboard /
+                                    explanations / curves / walkforward)
     history/                        full official candle history per market (CSV + per-request chunk log)
     MANIFEST.md, SHA256SUMS.txt     retrieval log + hash binding for the committed backtest files
     candles-*.csv, raw/, ...        verified backtest inputs (see MANIFEST.md)
     competition.json, trades.json, leaderboard.json, intents.json, explanations.json   backtest outputs
 tests/
-  test_forward_desk.py              9 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal, evidence hashes
-  test_signals.py                   12 tests: Census gazetteer -> NWS gridpoint, ESPN scoreboard, openFDA records
+  test_forward_desk.py              12 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
+                                    evidence hashes, HeatConfirm gating (entry needs forecast in bracket, cheap
+                                    ask, tight spread; exit only when a fresh forecast leaves the bracket)
+  test_signals.py                   18 tests: Census gazetteer -> NWS gridpoint (alias/suffix matching),
+                                    ESPN scoreboard, openFDA records incl. the 404 = verified-absence path
   test_compaction.py                8 tests: gzip round-trip, hash check, tamper detection, season rollover
-  test_backtest_archive.py          9 tests: fee multipliers, no look-ahead, PnL arithmetic, per-strategy cash identity
+  test_backtest_archive.py          14 tests: fee multipliers, no look-ahead, PnL arithmetic, per-strategy
+                                    cash identity, --series filter, curve points, walk-forward fold sums
   test_execution_realism.py         6 tests: tape comparison, no-tape window, optimism verdict (fixtures only)
   test_archive_history.py           4 tests: chunk tiling, per-request hashes, diff detection, failed chunks
-  site-smoke.mjs                    32 jsdom checks: index.html + one strategy page against the committed data
+  test_audit_season.py              7 tests: slot on-time/late/missed counts, orphan-fill detection, equity
+                                    drift, signal totals, tape summary, live re-read unavailable offline
+  site-smoke.mjs                    40 jsdom checks: index.html + one strategy page against the committed data
+                                    (board, filters, ledger tabs, health panel, archive board + walk-forward,
+                                    execution realism)
   engine.test.mjs, season-memory.test.mjs   browser engine + committed-memory invariants (node --test)
 ```
 
@@ -131,7 +152,7 @@ bands now also require a displayed spread ≤ 5¢). Every change is a commit to
 `scripts/forward_strategies.py`; positions opened under an earlier rule stay in the ledger and the
 cycle ids make before/after results distinguishable. Nothing is ever re-simulated or deleted.
 
-### Personas (22 active, 4 gated)
+### Personas (23 active, 4 gated)
 
 | Username | Rule (short) | Source of the idea |
 |---|---|---|
@@ -147,6 +168,7 @@ cycle ids make before/after results distinguishable. Nothing is ever re-simulate
 | MetalMomentum | 60–80¢ leader with 5–12 min left on gold 15-minute markets | MasterSite **GOLD** is a ring-buyer directory → Kalshi `KXGOLD15M` (Pyth-settled) |
 | TailSprint15, HighProbScalp, PanicFader | ≤10¢ 15-minute tails · 75–80¢ in / 95¢ out · 1-minute-candle panic fade | r/KalshiBTCUporDown15, r/PredictionsMarkets (discovery only) |
 | LongshotFader | buy the 80–95¢ side against a 5–20¢ longshot (vol ≥5k) | CEPR favourite-longshot evidence |
+| HeatConfirm | buy YES on a daily-high market when the **NWS forecast high is inside the bracket**, the ask ≤ 42¢ and the spread ≤ 8¢; exit only when a fresh forecast leaves the bracket | r/PredictionsMarkets 500-weather-bots backtest post (discovery only — testing its claim forward IS the experiment) |
 | *gated:* Form4Flash, LeapMapper, SpreadSmith, TipoffTriage | — | no Kalshi mapping / unverifiable maker fills / no official feed |
 
 Full rule text, "why it should (or should not) work", provenance links and live results are in
@@ -179,7 +201,7 @@ start, and they join on the first runner cycle.
 ```bash
 python3 scripts/forward_desk.py --live                 # one real cycle (needs network egress)
 python3 scripts/forward_desk.py --fixtures DIR --now 2026-09-20T15:00:00Z --out /tmp/out   # offline replay
-python3 -m unittest discover -s tests -p 'test_*.py'    # 48 offline tests
+python3 -m unittest discover -s tests -p 'test_*.py'    # 69 offline tests
 python3 scripts/discover_universe.py                    # refresh data/universe/
 python3 scripts/backtest_archive.py --dry-run           # what the archive replay would trade
 python3 scripts/compact_storage.py --check              # verify compacted evidence still matches its hash
@@ -214,7 +236,7 @@ This pass fixed the informational slippage column only (IRR-20: settlement exits
 fake "slippage"; the entry half-spread is side-aware) — equity, returns and PnL are unchanged.
 
 ```bash
-python3 scripts/verify_data.py       # 1,089 assertions + forward ledger; rewrites SHA256SUMS.txt
+python3 scripts/verify_data.py       # ~1,950 checks + forward ledger; rewrites SHA256SUMS.txt
 python3 scripts/build_competition.py # recomputes trades / leaderboard / intents / explanations
 npm test                             # node --test (engine + season-memory invariants)
 ```
@@ -223,30 +245,38 @@ npm test                             # node --test (engine + season-memory invar
 
 The desk archives the official candlesticks of every market it trades (`forward/candles/`, each row
 bound to the response URL and SHA-256 in `candles/index.jsonl`). `scripts/backtest_archive.py`
-replays that archive bar by bar with the same accounting as the forward desk. First real run,
-committed in `data/season-2026/backtest-archive/`:
+replays that archive bar by bar with the same accounting as the forward desk. The workflow rebuilds
+the board every cycle as the archive grows; this is the 2026-09-21 run, committed in
+`data/season-2026/backtest-archive/`:
 
-**19 markets · 825 verified bars · 87 trades · 7 rule sets** · $10,000 start · 50% of cash per entry,
+**45 markets · 1,691 verified bars · 199 trades · 9 rule sets** · $10,000 start · 50% of cash per entry,
 capped at 25% of the bar's verified volume · entry at the bar's verified ask · exit at a later
 verified bid or at the official result.
 
 | Rank | Rule set | Entry rule | Return | Trades | W/L |
 |---|---|---|---|---|---|
-| 1 | ArchiveLongshot | verified ask 5–20¢, hold to the official result | **+37.03%** | 8 | 1 / 7 |
-| 2 | ArchivePanicFade | 1-minute-candle panic fade | +29.73% | 4 | 3 / 1 |
-| 3 | ArchiveFavourite | verified ask 80–96¢ | +25.09% | 8 | 8 / 0 |
-| 4 | ArchiveCloser | close of the last bar before settlement | +18.28% | 8 | 8 / 0 |
-| 5 | ArchiveSMA | SMA5/SMA10 cross on daily bars | −36.37% | 36 | 10 / 26 |
-| 6 | ArchiveFader | fade the 80–95¢ side | −42.99% | 8 | 7 / 1 |
-| 7 | ArchiveMomentum | 5-bar momentum with a +5¢ take-profit | −45.95% | 15 | 11 / 4 |
+| 1 | ArchiveLongshot | verified ask 5–20¢, hold to the official result | **+462.52%** | 18 | 3 / 15 |
+| 2 | ArchiveSMA | SMA5/SMA10 cross on daily bars | +207.23% | 71 | 20 / 51 |
+| 3 | ArchiveCloser | last-20% favourite at ≥ 90¢, hold to settlement | +28.55% | 12 | 12 / 0 |
+| 4 | ArchiveGapFade | fade a bar open ≥ 10¢ from the prior close | −2.36% | 6 | 3 / 3 |
+| 5 | ArchivePanicFade | 1-minute-candle panic fade | −4.32% | 11 | 6 / 5 |
+| 6 | ArchiveFavourite | verified ask 85–97¢, spread ≤ 5¢ | −28.31% | 14 | 13 / 1 |
+| 7 | ArchiveMomentum | ≥ 3¢ day-over-day move, +5¢ take-profit | −30.53% | 35 | 25 / 10 |
+| 8 | ArchiveFader | buy NO when YES is 5–20¢ on a tight spread | −75.00% | 18 | 15 / 3 |
+| 9 | ArchiveFavStop | ArchiveFavourite entry, stop at −10¢ | −97.24% | 14 | 7 / 7 |
 
-The one 37% winner is **1 win and 7 losses**: it bought cheap tickets, lost small seven times and won
-big once — convexity, not skill, and exactly what IRR-30 warns about reading into a 19-market
-sample. The SMA and momentum rules lost on fee churn (36 and 15 round trips). A market is never
-traded before it has an official `result`; series with a non-quadratic fee type are skipped; the fee
-multiplier comes from the series record (`KXMLBGAME` 0.5). `scripts/verify_data.py` re-checks the
-bar count against the index, the official results, the absence of look-ahead, every PnL line and the
-per-strategy cash identity.
+The 462% winner is **3 wins and 15 losses**: it bought cheap tickets, bled small losses and got paid
+big once — convexity, not skill, and exactly what IRR-30 warns about reading into a 45-market month.
+`backtest-archive/curves.json` carries every trade-by-trade realized curve behind that sentence (the
+site draws them), and `backtest-archive/walkforward.json` splits the same replay into two windows:
+ArchiveLongshot made its entire return in the second fold, and seven of the nine rule sets flip or
+survive — the split measures stability across time, not a train/test edge, because none of these
+rules has fitted parameters. `--series KXXX` re-runs one series as analysis only (it refuses to
+overwrite the committed board). A market is never traded before it has an official `result`; series
+with a non-quadratic fee type are skipped; the fee multiplier comes from the series record
+(`KXMLBGAME` 0.5). `scripts/verify_data.py` re-checks the bar count against the index, the official
+results, the absence of look-ahead, every PnL line, the per-strategy cash identity, that the number
+of curve points equals the number of trades, and that the walk-forward fold totals match the board.
 
 ```bash
 python3 scripts/backtest_archive.py --dry-run     # report only
@@ -265,13 +295,29 @@ window with no print is recorded as `no_tape_in_window`; a fetch failure as `tap
 Neither is ever turned into a price.
 
 The verdict is deliberately blunt: a median |desk − tape| above 1¢ is reported as *optimistic — treat
-the desk's returns as an upper bound*. **This comparison has not run live yet** (IRR-29): a sandbox
-session has no outbound network, so the script is exercised against recorded fixtures
-(`tests/test_execution_realism.py`, 6 tests) and the runner performs the first real comparison. Until
-then every fill remains an upper bound — queue position, latency and market impact are not modelled.
+the desk's returns as an upper bound*. **The first live comparison ran on the runner on 2026-09-21**
+(closed IRR-29): 158 desk fills compared, median |desk − tape| = **1.00¢**, 82.28% within 1¢, 77.22%
+inside the tape's real range, 42 windows with no print recorded as such — "The desk is close to the
+tape." Per-strategy medians range from 0.08¢ (dip-hunter) to 5.60¢ (panic-fade), and the workflow
+re-runs the comparison every cycle, so this number is a moving artifact, not a one-off claim.
+Queue position, latency and market impact are still not modelled: every fill remains an upper bound
+on what a taker order would have received, and where the desk price beats the whole tape window
+that shows up as a below-100% "inside range" percentage, not as a corrected fill.
 
 ## Seasons and storage
 
+* **Season health audit (every cycle).** `scripts/audit_season.py` writes
+  `forward/audit/latest.json` + `audit-history.jsonl`: which `:07/:37` cron slots were executed,
+  late or missed (median delay in minutes — GitHub's scheduler is best-effort, IRR-34); whether
+  every fill in the ledger still has a position or a recorded close; whether the equity CSV still
+  matches account state; signal adapter totals (captured vs. abstained, with the last cycles' error
+  lines); what the compactor squeezed and whether its hashes verify; the execution-realism summary;
+  and — with `--live`, on the runner — a re-read of sampled settled markets against
+  `GET /markets/{ticker}`, storing each response's SHA-256 and flagging any ledger-vs-API mismatch.
+  The audit never adjusts the ledger: a mismatch is a finding, and `verify_data.py` fails the run on
+  it. The site renders this as the "season health & storage" section. Seven tests in
+  `tests/test_audit_season.py` pin the slot accounting, orphan detection and the rule that an
+  offline run records "live re-read unavailable" instead of faking one.
 * **One-year competition, keyed by UTC year.** `scripts/season.py` decides the season from the
   cycle's own timestamp: the first cycle of a new year creates `data/season-<year>/` with every
   persona back at $10,000 and marks the finished season `frozen` in `data/seasons.json`. Nothing is
@@ -317,36 +363,49 @@ this browser's local storage (separate from the committed season). Fail-closed o
 
 ## Known limitations and next work (for the next session)
 
-**Done this session** (previously on the open list): storage compaction (IRR-24), ESPN / openFDA /
-multi-city NWS adapters, a backtest over the growing candle archive, execution realism against the
-trade tape, per-strategy pages, a collector-written daily summary, and season rollover.
+**Done this session** (previously on the open list): the first live execution-realism comparison and
+its committed verdict (IRR-29 closed); the season health audit with cron-delivery accounting
+(IRR-34 quantified) wired into the workflow and checked by `verify_data.py`; a rebuilt archive
+backtest on the grown archive (45 markets, curves + walk-forward + `--series` filter); the Census
+Gazetteer centroid fix for the other KXHIGH* cities (IRR-32); openFDA 404 = verified absence
+documented (IRR-33); the HeatConfirm persona from the weather-bot discovery post; and the site's
+board/ledger text filters, archive equity curves and season-health panel.
 
-* **Let the season run and audit it.** The desk started counting at cycle `20260920T032126Z`
-  (IRR-17). After a few days: compare settlements against `GET /markets/{ticker}` by hand for a
-  sample, check `cycles/*.jsonl` for skipped/late schedules (GitHub cron is best-effort and stops
-  after 60 days without repository activity), and review `intents/` for rules that never confirm on
-  the book.
-* **Run the runner-only pieces and read their output.** The first live
-  `execution_realism.py --live` comparison (IRR-29) is the single most informative missing number in
-  this project; then `archive_history.py --live` for the KXFED full history (the 90-day window in the
-  committed backtest is unchanged), the Census Gazetteer download for NWS city centroids, and the
-  first cycle that trades ScorePulse / FdaRecordCheck (IRR-31).
-* **Grow the archive backtest before believing any of it.** 19 markets / 87 trades cannot separate
-  skill from convexity (IRR-30). Every cycle adds markets; re-run `backtest_archive.py` weekly and
-  only then compare rule sets. A `--series` filter and a walk-forward split (fit on one month,
-  replay the next) are the obvious next steps.
+* **Let HeatConfirm run and judge it honestly.** Its entire premise is a third-party backtest claim
+  (discovery-only). After ~2–4 weeks of cycles, read `forward/strategies/heat-confirm.json`: did a
+  fresh forecast inside the bracket + cheap tight ask actually settle YES above breakeven? If the
+  sample is still thin, say so; do not promote, demote or retune the bracket thresholds mid-season.
+* **Read the season audit, not just the board.** `forward/audit/latest.json` now quantifies what the
+  runner actually achieved (last audit: 10 cycles over 42 expected slots, 1 on-time / 6 late / 35
+  missed, longest gap 5.56 h). Cadence, not correctness, is the binding constraint on how fast this
+  experiment accumulates evidence. Options if that matters: an external free ping to
+  `workflow_dispatch` is allowed (it is not a data source); simply accept ~5–10 cycles/day.
+* **The live settlement re-read is now automatic but sampled.** `audit_season.py --live --samples N`
+  spot-checks the most recent finalized positions each cycle; a full backfill over every settled
+  market of the season is cheap to script and worth one run per month (the ledger is never adjusted
+  automatically — mismatches stay findings until reviewed by a human).
+* **KXFED history still only covers 90 days.** The workflow re-runs `archive_history.py` for
+  `KXFED-26SEP-T4.75` every cycle, so the archive grows on its own; the committed hand-collected
+  backtest (3 markets / 130 bars) is intentionally frozen and should stay that way — extend the
+  *archive* backtest instead of editing history.
+* **ScorePulse / FdaRecordCheck are still untested, not refuted.** The adapters now run every cycle
+  (45 ESPN signals in the last window; 0 needed corrections since the openFDA lookups only fire
+  when a KXFDA market with a named drug is open). Zero fills is the honest state (IRR-31 closed).
+  Review intents weekly; do not loosen the 85¢ cap to manufacture trades.
 * **FDA target dates remain unverifiable.** Drugs@FDA publishes no PDUFA action date (IRR-27), so
   date-driven FDA personas stay out. `KXFDAAPPROVE` volume is small (76k) — check whether the series
   is even worth trading before adding rules.
 * **Maker behaviour.** SpreadSmith stays gated until a defensible resting-fill model exists. The
-  trade tape is now wired up, so the missing piece is matching posted quotes against it — still not a
-  verified fill, and it should stay labelled as a model.
+  trade tape is wired up and the desk's taker fills now have a measured error (1.00¢ median), so the
+  missing piece is matching *posted* quotes against it — still not a verified fill, and it should
+  stay labelled as a model.
 * **Signal coverage.** The ESPN adapter covers four leagues; Kalshi also lists soccer, tennis, F1 and
   hockey series in `data/universe/series-catalog.json`. LeapMapper still needs index/commodity range
   series. Adding a league is a `SERIES_*` entry plus a scoreboard URL, not new machinery.
-* **Site polish.** Series filters on the board, an archive-backtest equity curve per rule set
-  (`backtest-archive/trades.json` has the timestamps), and a compacted-storage panel showing how much
-  evidence is gzipped.
+* **Site polish left:** season-health sparkline history (append `audit-history.jsonl` rows per audit
+  and draw the executed-slot rate over time), a per-strategy archive-backtest page section mirroring
+  the forward one, and an evidence drill-down that opens the exact `trades.jsonl` line for a board
+  fill (deep-linking by line offset).
 
 ## Primary review links
 
