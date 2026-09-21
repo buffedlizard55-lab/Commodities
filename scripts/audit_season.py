@@ -19,7 +19,8 @@ number every strategy score rests on.  The audit makes all three observable:
              FAIL and flip the exit code - they are the irregularity, never re-simulated away.
              A network failure records `unreachable` and never fakes a pass.
 
-Writes data/season-<year>/forward/audit/<YYYY-MM-DD>.json and forward/audit/latest.json.
+Writes data/season-<year>/forward/audit/<YYYY-MM-DD>.json, forward/audit/latest.json, and the
+append-only audit-history.jsonl plus bounded browser view history.json.
 
 Usage:
   python3 scripts/audit_season.py            # offline parts only (safe anywhere)
@@ -241,6 +242,68 @@ def audit_tape(season_dir: str) -> dict:
             "byStrategy": summary.get("byStrategy", {}), "method": summary.get("method")}
 
 
+# ------------------------------------------------------------------------------ audit history
+AUDIT_HISTORY_JSONL = "audit-history.jsonl"
+AUDIT_HISTORY_JSON = "history.json"
+
+
+def audit_history_row(report: dict, report_sha256: str | None = None) -> dict:
+    """Return the small, append-only row used for the site's health sparkline.
+
+    The full audit remains in the dated JSON and latest.json files.  This row deliberately contains
+    only counters copied from that report, plus a hash of the full report, so a trend view cannot
+    silently become a second source of truth.
+    """
+    schedule = report.get("schedule") or {}
+    expected = int(schedule.get("expectedSlots") or 0)
+    matched = int(schedule.get("matchedSlots") or 0)
+    return {
+        "schemaVersion": 1,
+        "generatedAt": report.get("generatedAt"),
+        "season": report.get("season"),
+        "status": report.get("status"),
+        "expectedSlots": expected,
+        "matchedSlots": matched,
+        "executed": int(schedule.get("executed") or 0),
+        "onTime": int(schedule.get("onTime") or 0),
+        "late": int(schedule.get("late") or 0),
+        "missed": int(schedule.get("missed") or 0),
+        "extraManual": int(schedule.get("extraManual") or 0),
+        "slotRatePct": round(100 * matched / expected, 2) if expected else None,
+        "maxGapHours": schedule.get("maxGapHours"),
+        "events": int((report.get("ledger") or {}).get("events") or 0),
+        "signalErrors": int(((report.get("signals") or {}).get("totals") or {}).get("signalErrors") or 0),
+        "compactedFiles": int((report.get("storage") or {}).get("compactedFiles") or 0),
+        "tapeCompared": int((report.get("tape") or {}).get("compared") or 0),
+        "reportSha256": report_sha256,
+    }
+
+
+def append_audit_history(audit_dir: str, report: dict, payload: str | None = None) -> dict:
+    """Append one auditable trend row and regenerate the compact JSON view.
+
+    Both files live under forward/audit.  The JSONL is the append-only record; history.json is a
+    bounded browser view.  Existing rows are preserved byte-for-byte and duplicate report hashes
+    are ignored, which keeps retries from growing storage without evidence of a new report.
+    """
+    os.makedirs(audit_dir, exist_ok=True)
+    payload = payload if payload is not None else json.dumps(report, sort_keys=True, separators=(",", ":"))
+    report_hash = sha256_bytes(payload.encode())
+    row = audit_history_row(report, report_hash)
+    path = os.path.join(audit_dir, AUDIT_HISTORY_JSONL)
+    rows = read_jsonl(path)
+    if not any(existing.get("reportSha256") == report_hash for existing in rows):
+        with open(path, "a") as fh:
+            fh.write(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+        rows.append(row)
+    # Keep the browser artifact small while retaining the append-only source in JSONL.
+    view = rows[-365:]
+    with open(os.path.join(audit_dir, AUDIT_HISTORY_JSON), "w") as fh:
+        json.dump(view, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return row
+
+
 # ----------------------------------------------------------------------------------- live read
 def audit_live_settlements(forward_dir: str, samples: int) -> dict:
     """Re-read the settled markets from the official API and require the ledger's result+ts to match."""
@@ -338,6 +401,7 @@ def main(argv=None) -> int:
         if path:
             with open(path, "w") as fh:
                 fh.write(payload)
+    history_row = append_audit_history(audit_dir, report, payload)
     sched = report["schedule"]
     print(f"audit[{season}] {report['status']}: schedule {sched.get('executed', 0)}/{sched.get('expectedSlots', 0)} slots "
           f"(on-time {sched.get('onTime', 0)}, late {sched.get('late', 0)}, missed {sched.get('missed', 0)}, "

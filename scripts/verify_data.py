@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Verify every stored data file in data/season-2026 against its documented cross-checks.
+"""Verify the historical fixtures and the active season's stored forward ledger.
 
 Run: python3 scripts/verify_data.py
 Exit code 0 = all checks pass; non-zero = at least one check failed.
-Writes data/season-2026/SHA256SUMS.txt binding each stored file.
+The fixed 2026 fixture files remain the reference sample; forward/audit/compaction checks follow
+`data/seasons.json`, including after a 2027 UTC-year rollover.
 """
 import csv
 import hashlib
@@ -15,9 +16,30 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from compact_storage import check_index as check_compaction, read_maybe_compressed  # noqa: E402
 
-BASE = os.path.join(os.path.dirname(__file__), "..", "data", "season-2026")
+DATA_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+BASE = os.path.join(DATA_ROOT, "season-2026")  # fixed official fixture sample
+ACTIVE_BASE = BASE
 FAILURES = []
 PASSES = []
+
+
+def active_season_base() -> str:
+    index_path = os.path.join(DATA_ROOT, "seasons.json")
+    try:
+        with open(index_path) as fh:
+            season = str(json.load(fh).get("activeSeason"))
+        if season and season != "None":
+            return os.path.join(DATA_ROOT, f"season-{season}")
+    except (OSError, ValueError, TypeError):
+        pass
+    seasons = sorted(name for name in os.listdir(DATA_ROOT) if name.startswith("season-")
+                     and os.path.isdir(os.path.join(DATA_ROOT, name))) if os.path.isdir(DATA_ROOT) else []
+    return os.path.join(DATA_ROOT, seasons[-1]) if seasons else BASE
+
+
+def season_bases() -> list[str]:
+    return [os.path.join(DATA_ROOT, name) for name in sorted(os.listdir(DATA_ROOT))
+            if name.startswith("season-") and os.path.isdir(os.path.join(DATA_ROOT, name))]
 
 
 def check(name, condition, detail="", quiet=False):
@@ -59,6 +81,12 @@ def verify_archive_backtest(season_dir):
         trades = json.load(fh)
     with open(os.path.join(base, "leaderboard.json")) as fh:
         board = json.load(fh)
+    if not competition.get("markets"):
+        # A newly rolled UTC-year season can legitimately have no settled candle archive yet.
+        check("archive.empty_season_has_zero_verified_bars", competition.get("verifiedBars", 0) == 0
+              and not trades and all(row.get("trades", 0) == 0 for row in board), "fresh season archive")
+        print("INFO  archive backtest: no verified markets yet (fresh season)")
+        return
     check("archive.markets_gt_0", len(competition["markets"]) > 0, f"({len(competition['markets'])} markets)")
     check("archive.bars_match_index", competition["verifiedBars"] == sum(m["bars"] for m in competition["markets"].values()),
           f"({competition['verifiedBars']} bars)")
@@ -166,9 +194,10 @@ def verify_execution_realism(fwd):
           f"{summary.get('medianAbsCentsDiff')}c, {summary.get('withinOneCentPct')}% of fills within 1c of a real print")
 
 
-def verify_forward_ledger():
-    """Invariants of data/season-2026/forward (skipped when the desk has not run yet)."""
-    fwd = os.path.join(BASE, "forward")
+def verify_forward_ledger(season_dir: str | None = None):
+    """Invariants of the active season's forward ledger (skipped before its first cycle)."""
+    season_dir = season_dir or ACTIVE_BASE
+    fwd = os.path.join(season_dir, "forward")
     state_path = os.path.join(fwd, "state.json")
     if not os.path.exists(state_path):
         print("SKIP  forward ledger (no state.json yet)")
@@ -177,10 +206,15 @@ def verify_forward_ledger():
         state = json.load(fh)
     start = float(state["startingCash"])
     events = []
+    events_by_line = {}
     trades_path = os.path.join(fwd, "trades.jsonl")
     if os.path.exists(trades_path):
         with open(trades_path) as fh:
-            events = [json.loads(line) for line in fh if line.strip()]
+            for line_number, line in enumerate(fh, 1):
+                if line.strip():
+                    event = json.loads(line)
+                    events.append(event)
+                    events_by_line[line_number] = event
     by_strategy = {}
     for event in events:
         by_strategy.setdefault(event["strategyId"], []).append(event)
@@ -205,6 +239,24 @@ def verify_forward_ledger():
         check(f"forward.{strategy_id}.fees_match_events", abs(fees - account["feesPaid"]) < 0.01, f"{fees:.4f} vs {account['feesPaid']:.4f}", quiet=True)
         for p in account["positions"]:
             check(f"forward.{strategy_id}.{p['ticker']}.positive_size", p["contracts"] > 0 and 0 < p["entryPrice"] < 1, quiet=True)
+            ref = p.get("ledger") or {}
+            fill = events_by_line.get(ref.get("fillLine"))
+            check(f"forward.{strategy_id}.{p['ticker']}.fill_line_anchor",
+                  ref.get("fillFile") == "trades.jsonl" and isinstance(ref.get("fillLine"), int)
+                  and fill and fill.get("kind") == "fill" and fill.get("positionId") == p.get("id"), quiet=True)
+    intent_dir = os.path.join(fwd, "intents")
+    for name in sorted(os.listdir(intent_dir)) if os.path.isdir(intent_dir) else []:
+        if not name.endswith(".jsonl"):
+            continue
+        rel = os.path.join("intents", name)
+        with open(os.path.join(fwd, rel)) as fh:
+            for line_number, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                intent = json.loads(line)
+                check(f"forward.intent.{intent.get('id', intent.get('cycle', line_number))}.line_anchor",
+                      intent.get("ledgerFile") == rel and intent.get("ledgerLine") == line_number,
+                      f"{intent.get('ledgerFile')}#{intent.get('ledgerLine')}", quiet=True)
     # evidence binding: every event points at an evidence row whose sha256 exists
     hashes_by_file = {}
     for event in events:
@@ -229,6 +281,10 @@ def verify_forward_ledger():
             hashes_by_file[rel] = found
         check(f"forward.event.{event['positionId']}.{event['kind']}.evidence_bound", ev.get("sha256") in hashes_by_file.get(rel, set()),
               f"{rel} {ev.get('sha256', '')[:12]}", quiet=True)
+        line_number = event.get("ledgerLine")
+        check(f"forward.event.{event['positionId']}.{event['kind']}.line_anchor",
+              event.get("ledgerFile") == "trades.jsonl" and isinstance(line_number, int) and events_by_line.get(line_number) is event,
+              f"{event.get('ledgerFile')}#{line_number}", quiet=True)
         if event["kind"] == "settlement":
             check(f"forward.event.{event['positionId']}.settlement_official",
                   (event["result"] in ("yes", "no") or str(event["result"]).startswith("value:")) and bool(event["exitAt"]), quiet=True)
@@ -249,6 +305,8 @@ def verify_forward_ledger():
 
 
 def main():
+    global ACTIVE_BASE
+    ACTIVE_BASE = active_season_base()
     # ---- KXCPI daily candles ----
     cpi = read_csv("candles-KXCPI-26AUG-T0.8-daily.csv")
     check("cpi.rows==44", len(cpi) == 44, f"(got {len(cpi)})")
@@ -362,23 +420,25 @@ def main():
     check("series.gold_fee", fees["KXGOLDH"] == ("quadratic", 1))
 
     # ---- Forward desk ledger (appended by the scheduled collector) ----
-    verify_forward_ledger()
+    verify_forward_ledger(ACTIVE_BASE)
 
     # ---- Hashes (recursive: raw/ holds the verbatim API responses; forward/ is self-binding
-    #      through per-record sha256 fields and its own git history, so it is excluded) ----
-    lines = []
-    for root, dirs, files in os.walk(BASE):
-        dirs[:] = sorted(d for d in dirs if not (root == BASE and d == "forward"))
-        for name in sorted(files):
-            if name == "SHA256SUMS.txt":
-                continue
-            path = os.path.join(root, name)
-            rel = os.path.relpath(path, BASE)
-            with open(path, "rb") as fh:
-                lines.append(f"{hashlib.sha256(fh.read()).hexdigest()}  {rel}")
-    with open(os.path.join(BASE, "SHA256SUMS.txt"), "w") as fh:
-        fh.write("\n".join(lines) + "\n")
-    print(f"WROTE SHA256SUMS.txt ({len(lines)} files)")
+    #      through per-record sha256 fields and its own git history, so it is excluded).  Write a
+    #      manifest for every season so a 2027 rollover has the same integrity contract as 2026.
+    for season_base in season_bases():
+        lines = []
+        for root, dirs, files in os.walk(season_base):
+            dirs[:] = sorted(d for d in dirs if not (root == season_base and d == "forward"))
+            for name in sorted(files):
+                if name == "SHA256SUMS.txt":
+                    continue
+                path = os.path.join(root, name)
+                rel = os.path.relpath(path, season_base)
+                with open(path, "rb") as fh:
+                    lines.append(f"{hashlib.sha256(fh.read()).hexdigest()}  {rel}")
+        with open(os.path.join(season_base, "SHA256SUMS.txt"), "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+        print(f"WROTE {os.path.relpath(season_base, DATA_ROOT)}/SHA256SUMS.txt ({len(lines)} files)")
 
     print(f"\n{len(PASSES)} passed, {len(FAILURES)} failed")
     if FAILURES:

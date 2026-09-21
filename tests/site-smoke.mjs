@@ -34,7 +34,7 @@ const checks = [];
 const check = (name, ok, detail = '') => { checks.push([name, ok, detail]); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} ${detail}`); };
 const forwardPublished = fs.existsSync(path.join(ROOT, 'data/season-2026/forward/leaderboard.json'));
 if (forwardPublished) {
-  // the committed board has one row per funded account; 22 personas exist and 2 join on the next runner cycle
+  // the committed board has one row per funded account; an abstaining persona remains visible and unranked.
   check('forward board rows', count('#forward-leaderboard tbody tr.board-row') >= 20, String(count('#forward-leaderboard tbody tr.board-row')));
   check('board rows link to a strategy page', document.querySelectorAll('#forward-leaderboard tbody a[href^="strategy.html?id="]').length >= 20,
     String(document.querySelectorAll('#forward-leaderboard tbody a[href^="strategy.html?id="]').length));
@@ -83,6 +83,13 @@ if (fs.existsSync(path.join(ROOT, 'data/season-2026/backtest-archive/competition
 check('execution realism section renders', text('#execution-realism').length > 0, text('#execution-realism').slice(0, 60));
 check('execution realism shows the committed comparison', text('#execution-realism').includes('fills compared') && !text('#execution-realism').includes('Not compared yet'), text('#execution-state').slice(0, 40));
 check('season health panel renders', /audit (PASS|FAIL)/.test(text('#health-state')) && text('#season-health-panel').includes('Cron slots executed'), `${text('#health-state').slice(0, 30)} | ${text('#season-health-panel').slice(0, 40)}`);
+if (fs.existsSync(path.join(ROOT, 'data/season-2026/forward/audit/history.json'))) {
+  const history = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/forward/audit/history.json'), 'utf8'));
+  check('audit history trend section', text('#season-health-panel').includes('Scheduled-slot execution trend') && text('#season-health-panel').includes(`${history.length} audit point`) && count('#season-health-panel .audit-rate-sparkline') === 1, String(history.length));
+  check('audit history source is append-only', fs.existsSync(path.join(ROOT, 'data/season-2026/forward/audit/audit-history.jsonl')));
+} else {
+  check('audit history empty-state', text('#season-health-panel').includes('No season audit'));
+}
 {
   const totalBoardRows = count('#forward-leaderboard tbody tr.board-row');
   const bf = document.querySelector('#board-filter');
@@ -107,8 +114,11 @@ const strategyFiles = fs.existsSync(path.join(ROOT, 'data/season-2026/forward/st
   ? fs.readdirSync(path.join(ROOT, 'data/season-2026/forward/strategies')).filter((f) => f.endsWith('.json'))
   : [];
 if (strategyFiles.length) {
-  const id = strategyFiles[0].replace(/\.json$/, '');
-  const expectedUsername = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/forward/strategies', strategyFiles[0]), 'utf8')).strategy.username;
+  // PinePilot has an explicit archive-family mapping; exercise the mapped path rather than only
+  // the alphabetically first strategy, while the assertions below also check a no-match artifact.
+  const chosenFile = strategyFiles.includes('pinepilot.json') ? 'pinepilot.json' : strategyFiles[0];
+  const id = chosenFile.replace(/\.json$/, '');
+  const expectedUsername = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/forward/strategies', chosenFile), 'utf8')).strategy.username;
   const strategyHtml = fs.readFileSync(path.join(ROOT, 'strategy.html'), 'utf8');
   const strategyDom = new JSDOM(strategyHtml, { url: `https://example.test/strategy.html?id=${id}`, pretendToBeVisual: true });
   globalThis.document = strategyDom.window.document; globalThis.window = strategyDom.window;
@@ -127,6 +137,13 @@ if (strategyFiles.length) {
   check('strategy page tables have headers', scount('#strategy-events-table thead th') === 9 && scount('#strategy-positions-table thead th') === 8 && scount('#strategy-intents-table thead th') === 6,
     `${scount('#strategy-events-table thead th')}/${scount('#strategy-positions-table thead th')}/${scount('#strategy-intents-table thead th')}`);
   check('strategy page evidence links', scount('#strategy-evidence a') >= 3, String(scount('#strategy-evidence a')));
+  check('strategy page archive attachment', stext('#strategy-archive').toLowerCase().includes('matched') && scount('#strategy-archive .metric-card') >= 4,
+    `${stext('#strategy-archive-state')} / ${scount('#strategy-archive .metric-card')}`);
+  check('strategy page exact ledger line links', [...sdoc.querySelectorAll('#strategy-events-table a, #strategy-intents-table a')].some((a) => /#L\d+/.test(a.getAttribute('href') ?? '')),
+    String(scount('#strategy-events-table a')));
+  const unmatchedPage = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/forward/strategies/book-edge.json'), 'utf8'));
+  check('unmatched strategy is labeled', unmatchedPage.archiveBacktest?.available === true && unmatchedPage.archiveBacktest?.matched === false,
+    JSON.stringify(unmatchedPage.archiveBacktest ?? {}).slice(0, 120));
   check('strategy page no runtime errors', strategyErrors.length === 0, strategyErrors.join(' | ').slice(0, 300));
 } else {
   check('strategy pages committed', false, 'data/season-2026/forward/strategies/*.json missing — run scripts/render_pages.py');

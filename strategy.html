@@ -63,9 +63,18 @@
       <div id="strategy-analysis" class="explain-card"></div>
     </section>
 
+    <section class="section" aria-labelledby="archive-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">04 · archive replay</p><h2 id="archive-title">Archive backtest for this rule</h2></div>
+        <span id="strategy-archive-state" class="live-pill">Loading…</span>
+      </div>
+      <p class="section-lede">This section is attached only when a committed official-candle replay has an explicitly documented rule-family mapping. A shared topic is not treated as a match; unmatched strategies say so.</p>
+      <div id="strategy-archive"></div>
+    </section>
+
     <section class="section" aria-labelledby="positions-title">
       <div class="section-heading">
-        <div><p class="eyebrow">04 · open</p><h2 id="positions-title">Open positions</h2></div>
+        <div><p class="eyebrow">05 · open</p><h2 id="positions-title">Open positions</h2></div>
       </div>
       <p class="section-lede">Marked at the last verified bid, or the last official trade when no bid exists. The unfilled remainder is shown separately — a request is not a position.</p>
       <div class="table-shell"><table id="strategy-positions-table"><thead></thead><tbody></tbody></table></div>
@@ -73,7 +82,7 @@
 
     <section class="section" aria-labelledby="events-title">
       <div class="section-heading">
-        <div><p class="eyebrow">05 · placed trades</p><h2 id="events-title">Placed trades <span id="strategy-events-count" class="live-pill"></span></h2></div>
+        <div><p class="eyebrow">06 · placed trades</p><h2 id="events-title">Placed trades <span id="strategy-events-count" class="live-pill"></span></h2></div>
       </div>
       <p class="section-lede">Fills, bid exits and settlements in ledger order. Each row links to the captured order book that produced the fill and to the official market.</p>
       <div class="table-shell"><table id="strategy-events-table"><thead></thead><tbody></tbody></table></div>
@@ -81,7 +90,7 @@
 
     <section class="section" aria-labelledby="intents-title">
       <div class="section-heading">
-        <div><p class="eyebrow">06 · upcoming</p><h2 id="intents-title">Upcoming / intended trades</h2></div>
+        <div><p class="eyebrow">07 · upcoming</p><h2 id="intents-title">Upcoming / intended trades</h2></div>
       </div>
       <p class="section-lede">What the rule wanted to do, whether a fresh official book confirmed it, and what happened to the intent. A queued intent is the next candidate, not an order.</p>
       <div class="table-shell"><table id="strategy-intents-table"><thead></thead><tbody></tbody></table></div>
@@ -89,7 +98,7 @@
 
     <section class="section" aria-labelledby="evidence-title">
       <div class="section-heading">
-        <div><p class="eyebrow">07 · evidence</p><h2 id="evidence-title">Evidence &amp; ledger files</h2></div>
+        <div><p class="eyebrow">08 · evidence</p><h2 id="evidence-title">Evidence &amp; ledger files</h2></div>
       </div>
       <p class="section-lede">The committed artifacts behind everything above. Nothing on this page is typed by hand, and <code>scripts/verify_data.py</code> re-checks the cash identity and the evidence hashes.</p>
       <div id="strategy-evidence" class="file-list"></div>

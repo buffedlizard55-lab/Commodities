@@ -20,7 +20,7 @@ Truth rules (identical to scripts/build_competition.py, no exceptions):
   * No look-ahead: a rule sees bars[0..i] only and fills are timestamped at bars[i].end_period_ts.
 
 Usage:
-  python3 scripts/backtest_archive.py                 # rebuild data/season-2026/backtest-archive/
+  python3 scripts/backtest_archive.py                 # rebuild the newest data/season-<year>/backtest-archive/
   python3 scripts/backtest_archive.py --season 2027 --min-bars 8 --dry-run
   python3 scripts/backtest_archive.py --series KXNFLGAME,KXNCAAFGAME --dry-run   # ad-hoc subset
   python3 scripts/backtest_archive.py --folds 3       # walk-forward windows over the replay horizon

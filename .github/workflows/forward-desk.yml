@@ -7,7 +7,7 @@ name: Forward desk cycle
 #
 # Notes
 #  * GitHub runs `schedule` triggers only on the default branch and may delay them under load;
-#    every cycle records its own wall-clock time in data/season-2026/forward/cycles/*.jsonl.
+#    every cycle records its own wall-clock time in data/season-<UTC year>/forward/cycles/*.jsonl.
 #  * `workflow_dispatch` lets a maintainer run a cycle (or the universe discovery) on any branch.
 
 on:
@@ -83,11 +83,11 @@ jobs:
 
       # Storage: verify existing compacted evidence still matches its recorded hash, then compact
       # evidence/quotes older than 3 days.  Append-only ledger files are never touched.
-      - name: Check compacted storage
-        run: python3 scripts/compact_storage.py --check
+      - name: Check compacted storage (all seasons)
+        run: python3 scripts/compact_storage.py --all-seasons --check
 
-      - name: Compact old evidence and quote captures
-        run: python3 scripts/compact_storage.py --days 3 --apply
+      - name: Compact old evidence and quote captures (all seasons)
+        run: python3 scripts/compact_storage.py --all-seasons --days 3 --apply
 
       # Season health audit: cron-slot schedule gaps, ledger coverage, compaction state, signal
       # coverage, the tape summary, and (on cycle runs) a fresh re-read of settled markets from

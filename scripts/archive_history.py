@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Archive a market's full official candlestick history in bounded chunks (KXFED gap, IRR/gap list).
 
-The committed 2026 backtest uses a 90-day KXFED window; the full life of `KXFED-26SEP-T4.75`
-(2025-08 -> 2026-09) was only partly captured ("chunks 2-13 not archived").  This script closes that
-gap mechanically: it pages the official candlesticks endpoint over the market's whole life in small,
-verifiable chunks and writes
+The committed 2026 backtest uses a 90-day KXFED window; this script separately archives the
+market's requested life (2025-08 -> 2026-09) mechanically by paging the official candlesticks
+endpoint in small, verifiable chunks and writing
 
     data/season-<year>/history/<ticker>-p<period>.csv           deduplicated bars, one row per period
     data/season-<year>/history/<ticker>-p<period>.chunks.jsonl  one row per request: URL, SHA-256,
@@ -134,6 +133,62 @@ def diff(stored: dict[int, list], fresh: dict[int, list]) -> list[dict]:
     return changes
 
 
+def _chunk_key(row: dict) -> tuple:
+    """Identity for a request response; a changed response is retained as evidence."""
+    window = tuple(row.get("window") or [])
+    return (row.get("url"), window, row.get("sha256"), row.get("error"))
+
+
+def append_unique_chunks(path: str, rows: list[dict]) -> list[dict]:
+    """Rewrite the chunk log without identical retries, preserving changed responses."""
+    existing = []
+    if os.path.exists(path):
+        with open(path) as fh:
+            existing = [json.loads(line) for line in fh if line.strip()]
+    seen = set()
+    merged = []
+    for row in existing + rows:
+        key = _chunk_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        for row in merged:
+            fh.write(json.dumps(row, separators=(",", ":"), sort_keys=True) + "\n")
+    return merged
+
+
+def write_history_index(path: str, ticker: str, series_ticker: str, period: int, start_ts: int, end_ts: int,
+                        bars: dict[int, list], chunks: list[dict], market: dict) -> dict:
+    """Write explicit coverage metadata without claiming that absent exchange bars were zeroes."""
+    raw_csv = os.path.splitext(path)[0] + ".csv"
+    with open(raw_csv, "rb") as fh:
+        csv_hash = __import__("hashlib").sha256(fh.read()).hexdigest()
+    chunk_path = raw_csv + ".chunks.jsonl"
+    with open(chunk_path, "rb") as fh:
+        chunk_hash = __import__("hashlib").sha256(fh.read()).hexdigest()
+    errors = [row for row in chunks if row.get("error")]
+    payload = {
+        "schemaVersion": 1, "ticker": ticker, "series": series_ticker, "period": period,
+        "requestedWindow": [iso(start_ts), iso(end_ts)], "openTime": market.get("open_time"),
+        "closeTime": market.get("close_time"), "settlementTs": market.get("settlement_ts"),
+        "result": market.get("result"), "windowsAttempted": len(chunks), "windowsWithErrors": len(errors),
+        "barsReturned": len(bars), "firstBarAt": iso(min(bars)) if bars else None,
+        "lastBarAt": iso(max(bars)) if bars else None, "csvSha256": csv_hash,
+        "chunksSha256": chunk_hash, "csv": os.path.basename(raw_csv),
+        "chunks": os.path.basename(chunk_path),
+        "coverageNote": "Every requested window was attempted. The official endpoint may omit periods "
+                         "with no returned bar; no missing bar is synthesized or treated as a zero.",
+        "generatedAt": iso(int(time.time())),
+    }
+    with open(os.path.join(os.path.dirname(path), f"{safe(ticker)}-p{period}.index.json"), "w") as fh:
+        json.dump(payload, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return payload
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ticker", default="KXFED-26SEP-T4.75")
@@ -150,7 +205,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if not args.live and not args.fixtures:
         parser.error("choose --live or --fixtures DIR")
-    client = KalshiClient() if args.live else FixtureClient(json.load(open(os.path.join(args.fixtures, "kalshi.json"))))
+    if args.live:
+        client = KalshiClient()
+    else:
+        with open(os.path.join(args.fixtures, "kalshi.json")) as fh:
+            client = FixtureClient(json.load(fh))
     series_ticker = args.series or args.ticker.split("-")[0]
     start_ts = parse_ts(args.start) if args.start else None
     end_ts = parse_ts(args.end) if args.end else None
@@ -175,14 +234,15 @@ def main(argv=None) -> int:
                           "barsFetched": len(bars), "chunks": len(log), "changes": changes[:20]}, indent=1))
         return 1 if changes else 0
     written = write_csv(csv_path, bars)
-    with open(csv_path + ".chunks.jsonl", "a") as fh:
-        for row in log:
-            fh.write(json.dumps({"ticker": args.ticker, "series": series_ticker, "period": args.period, **row},
-                                separators=(",", ":"), sort_keys=True) + "\n")
+    chunk_rows = [{"ticker": args.ticker, "series": series_ticker, "period": args.period, **row} for row in log]
+    chunk_rows = append_unique_chunks(csv_path + ".chunks.jsonl", chunk_rows)
+    history_index = write_history_index(csv_path, args.ticker, series_ticker, args.period, start_ts, end_ts,
+                                        bars, chunk_rows, market)
     print(json.dumps({"ticker": args.ticker, "series": series_ticker, "period": args.period,
                       "window": [iso(start_ts), iso(end_ts)], "chunks": len(log),
-                      "barsWritten": written, "errors": [c for c in log if c.get("error")],
+                      "uniqueChunks": len(chunk_rows), "barsWritten": written, "errors": [c for c in log if c.get("error")],
                       "written": os.path.relpath(csv_path, ROOT),
+                      "historyIndex": os.path.relpath(os.path.join(history_dir, f"{safe(args.ticker)}-p{args.period}.index.json"), ROOT),
                       "result": market.get("result"), "settlementTs": market.get("settlement_ts"),
                       "apiCalls": len(client.calls)}, indent=1))
     return 0
