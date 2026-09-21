@@ -203,6 +203,19 @@ class EspnTests(unittest.TestCase):
         game = SIG.game_from_market(self.market())
         self.assertEqual((game["away"], game["home"], game["scheduled"]), ("Carolina", "Atlanta", "2026-09-20"))
 
+    def test_rules_primary_nickname_format_keeps_multi_word_teams(self):
+        # Verbatim format from the committed official response for KXNFLGAME-26SEP17DETBUF
+        # (data/season-2026/raw/refetch-20260920-markets-KXNFLGAME-settled-limit2.json).  IRR-36:
+        # the old lazy regex returned home="BUF" here and the market never matched an event.
+        row = self.market(series_ticker="KXNFLGAME",
+                          rules_primary="If Detroit wins the DET Lions vs BUF Bills Pro Football game "
+                                        "originally scheduled for Sep 17, 2026, then the market resolves to Yes.")
+        game = SIG.game_from_market(row)
+        self.assertEqual((game["away"], game["home"], game["scheduled"]), ("DET Lions", "BUF Bills", "2026-09-17"))
+        # a matchup without " vs " is refused, never guessed
+        self.assertIsNone(SIG.game_from_market(self.market(rules_primary="If X wins the game originally "
+                                                                         "scheduled for Sep 17, 2026")))
+
     def test_unique_match_and_live_score(self):
         espn = SIG.EspnScoreboard(fetcher=fetcher)
         espn.fetch("KXNFLGAME", "20260920")
@@ -238,6 +251,122 @@ class EspnTests(unittest.TestCase):
                                           SIG.date_keys_around(1789938000)))
         # a non-game series is ignored
         self.assertIsNone(espn.signal_for(self.market(series_ticker="KXFED"), SIG.date_keys_around(1789938000)))
+
+
+# Same scoreboard JSON family as the verified NFL fixture above (events[].competitions[].
+# competitors[].{homeAway,score,team.*}); the live NHL/WNBA endpoints themselves get their first
+# confirmation on the runner's next cycle (IRR-35), so these fixtures pin the shape the adapter
+# requires, not a claim about one observed response.
+ESPN_NHL = {"events": [{
+    "id": "401900001", "date": "2026-09-20T23:00Z", "name": "Boston Bruins at New York Rangers",
+    "shortName": "BOS @ NYR",
+    "competitions": [{"competitors": [
+        {"homeAway": "home", "score": "4", "winner": False,
+         "team": {"abbreviation": "NYR", "displayName": "New York Rangers", "shortDisplayName": "Rangers",
+                  "location": "New York"}},
+        {"homeAway": "away", "score": "1", "winner": False,
+         "team": {"abbreviation": "BOS", "displayName": "Boston Bruins", "shortDisplayName": "Bruins",
+                  "location": "Boston"}}],
+        "status": {"type": {"state": "in", "shortDetail": "3rd 5:12", "completed": False,
+                            "displayClock": "5:12"}}}]}]}
+
+ESPN_WNBA = {"events": [{
+    "id": "401900002", "date": "2026-09-20T23:00Z", "name": "New York Liberty at Las Vegas Aces",
+    "shortName": "NY @ LV",
+    "competitions": [{"competitors": [
+        {"homeAway": "home", "score": "71", "winner": False,
+         "team": {"abbreviation": "LV", "displayName": "Las Vegas Aces", "shortDisplayName": "Aces",
+                  "location": "Las Vegas"}},
+        {"homeAway": "away", "score": "84", "winner": False,
+         "team": {"abbreviation": "NY", "displayName": "New York Liberty", "shortDisplayName": "Liberty",
+                  "location": "New York"}}],
+        "status": {"type": {"state": "in", "shortDetail": "Q4 3:00", "completed": False,
+                            "displayClock": "3:00"}}}]}]}
+
+
+class EspnNewLeagueTests(unittest.TestCase):
+    """KXNHLGAME / KXWNBAGAME were added to the adapter on 2026-09-21 (README next-work item:
+    signal coverage).  These tests prove the mapping works on the documented scoreboard shape."""
+
+    def nhl_market(self, **extra):
+        row = {"series_ticker": "KXNHLGAME", "ticker": "KXNHLGAME-26SEP20BOSNYR-BOS",
+               "event_ticker": "KXNHLGAME-26SEP20BOSNYR", "title": "Boston wins", "yes_sub_title": "Boston",
+               "rules_primary": "If Boston wins the Boston vs New York Pro Hockey game originally scheduled "
+                                "for Sep 20, 2026, then the market resolves to Yes."}
+        row.update(extra)
+        return row
+
+    def wnba_market(self, **extra):
+        row = {"series_ticker": "KXWNBAGAME", "ticker": "KXWNBAGAME-26SEP20NYLV-NY",
+               "event_ticker": "KXWNBAGAME-26SEP20NYLV", "title": "New York wins",
+               "yes_sub_title": "New York",
+               "rules_primary": "If New York wins the New York vs Las Vegas Pro Basketball game originally "
+                                "scheduled for Sep 20, 2026, then the market resolves to Yes."}
+        row.update(extra)
+        return row
+
+    def test_nhl_league_is_registered_and_maps_by_rules_primary(self):
+        self.assertIn("KXNHLGAME", SIG.ESPN_LEAGUES)
+        self.assertEqual(SIG.ESPN_LEAGUES["KXNHLGAME"], ("hockey", "nhl"))
+        espn = SIG.EspnScoreboard(fetcher=lambda url: (ESPN_NHL, json.dumps(ESPN_NHL).encode()))
+        espn.fetch("KXNHLGAME", "20260920")
+        signal = espn.signal_for(self.nhl_market(), SIG.date_keys_around(1789938000))
+        self.assertIsNotNone(signal, espn.errors)
+        self.assertEqual(signal["espnEventId"], "401900001")
+        self.assertEqual(signal["marketSide"], "away")
+        self.assertEqual(signal["awayScore"], 1.0)
+        self.assertEqual(signal["homeScore"], 4.0)
+        self.assertEqual(signal["scoreDiff"], -3.0)  # goals: Boston trails by 3
+        self.assertEqual(signal["state"], "in")
+
+    def test_wnba_league_is_registered_and_maps_by_rules_primary(self):
+        self.assertIn("KXWNBAGAME", SIG.ESPN_LEAGUES)
+        self.assertEqual(SIG.ESPN_LEAGUES["KXWNBAGAME"], ("basketball", "wnba"))
+        espn = SIG.EspnScoreboard(fetcher=lambda url: (ESPN_WNBA, json.dumps(ESPN_WNBA).encode()))
+        espn.fetch("KXWNBAGAME", "20260920")
+        signal = espn.signal_for(self.wnba_market(), SIG.date_keys_around(1789938000))
+        self.assertIsNotNone(signal, espn.errors)
+        self.assertEqual(signal["marketSide"], "away")
+        self.assertEqual(signal["scoreDiff"], 13.0)  # points: Liberty lead by 13
+
+    def test_new_leagues_abstain_when_no_unique_match(self):
+        espn = SIG.EspnScoreboard(fetcher=lambda url: ({"events": []}, b'{"events": []}'))
+        espn.fetch("KXNHLGAME", "20260920")
+        self.assertIsNone(espn.signal_for(self.nhl_market(), SIG.date_keys_around(1789938000)))
+        self.assertIsNone(espn.signal_for(self.wnba_market(rules_primary=""), SIG.date_keys_around(1789938000)))
+
+
+# IRR-36 regression: Kalshi's verified NFL rules_primary uses the nickname form
+# "DET Lions vs BUF Bills".  The ESPN competitor fields use the full city + nickname
+# ("Detroit Lions"), so matching must survive via token overlap, not exact strings only.
+ESPN_NICKNAME = {"events": [{
+    "id": "401900003", "date": "2026-09-17T23:15Z", "name": "Detroit Lions at Buffalo Bills",
+    "shortName": "DET @ BUF",
+    "competitions": [{"competitors": [
+        {"homeAway": "home", "score": "21", "winner": False,
+         "team": {"abbreviation": "BUF", "displayName": "Buffalo Bills", "shortDisplayName": "Bills",
+                  "location": "Buffalo"}},
+        {"homeAway": "away", "score": "24", "winner": False,
+         "team": {"abbreviation": "DET", "displayName": "Detroit Lions", "shortDisplayName": "Lions",
+                  "location": "Detroit"}}],
+        "status": {"type": {"state": "in", "shortDetail": "Q4 1:00", "completed": False,
+                            "displayClock": "1:00"}}}]}]}
+
+
+class EspnNicknameFormatTests(unittest.TestCase):
+    def test_nickname_rules_match_full_city_teams_by_token_overlap(self):
+        espn = SIG.EspnScoreboard(fetcher=lambda url: (ESPN_NICKNAME, json.dumps(ESPN_NICKNAME).encode()))
+        espn.fetch("KXNFLGAME", "20260917")
+        market = {"series_ticker": "KXNFLGAME", "ticker": "KXNFLGAME-26SEP17DETBUF-DET",
+                  "event_ticker": "KXNFLGAME-26SEP17DETBUF", "title": "Detroit wins",
+                  "yes_sub_title": "Detroit",
+                  "rules_primary": "If Detroit wins the DET Lions vs BUF Bills Pro Football game originally "
+                                   "scheduled for Sep 17, 2026, then the market resolves to Yes."}
+        signal = espn.signal_for(market, SIG.date_keys_around(1789678800))  # 2026-09-17 21:00Z
+        self.assertIsNotNone(signal, espn.errors)
+        self.assertEqual(signal["espnEventId"], "401900003")
+        self.assertEqual(signal["marketSide"], "away")   # DET Lions are the away competitor
+        self.assertEqual(signal["scoreDiff"], 3.0)       # Detroit leads 24-21
 
 
 class OpenFdaTests(unittest.TestCase):

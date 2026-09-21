@@ -26,7 +26,7 @@ async function fetchJson(path) {
   return response.json();
 }
 
-const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, audit: null, auditHistory: [], tab: 'positions', error: null };
+const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, audit: null, auditHistory: [], backfill: null, tab: 'positions', error: null };
 
 export async function loadSeasonsIndex() {
   try {
@@ -69,7 +69,7 @@ export async function loadForwardDesk() {
   const label = $('#forward-state');
   if (!seasonMeta.loaded) await loadSeasonsIndex();
   try {
-    const [leaderboard, state, recent, curves, execution, today, audit, auditHistory] = await Promise.all([
+    const [leaderboard, state, recent, curves, execution, today, audit, auditHistory, backfill] = await Promise.all([
       fetchJson(`${FORWARD_BASE()}leaderboard.json`),
       fetchJson(`${FORWARD_BASE()}state.json`),
       fetchJson(`${FORWARD_BASE()}recent.json`).catch(() => ({ events: [], intents: [], cycles: [] })),
@@ -78,8 +78,9 @@ export async function loadForwardDesk() {
       fetchJson(`${FORWARD_BASE()}summary/today.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}audit/latest.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}audit/history.json`).catch(() => []),
+      fetchJson(`${FORWARD_BASE()}audit/settlement-backfill.json`).catch(() => null),
     ]);
-    forward.execution = execution; forward.today = today; forward.audit = audit;
+    forward.execution = execution; forward.today = today; forward.audit = audit; forward.backfill = backfill;
     forward.auditHistory = Array.isArray(auditHistory) ? auditHistory : [];
     Object.assign(forward, { leaderboard, state, recent, curves, error: null });
     if (label) { label.textContent = `Committed desk state · Season ${esc(leaderboard.season ?? seasonMeta.activeSeason)} · ${leaderboard.cycles} cycle(s)`; label.classList.add('ok'); }
@@ -293,7 +294,7 @@ function renderForwardLedger() {
     const espn = forward.recent?.espn ?? [];
     const espnSignals = Object.entries(forward.recent?.espnSignals ?? {});
     const liveSignals = espnSignals.filter(([, s]) => s.state === 'in');
-    rows.push(`<tr><td><b>ESPN scoreboards · NFL / NCAAF / NBA / MLB</b><br><small>drives ScorePulse (live scoreboard leader) and the game-persona review links</small></td><td><small>${espn.length} snapshot(s) in the last window</small></td><td><small>site.api.espn.com scoreboard JSON (public)</small></td><td><small>${esc(espn.map((s) => `${s.league} ${s.date}: ${s.events} event(s)`).join(' · ') || 'none fetched')}<br>${esc(liveSignals.length ? `${liveSignals.length} live mapped: ${liveSignals.slice(0, 3).map(([t, s]) => `${t} ${s.detail ?? ''} ${s.awayScore ?? '?'}-${s.homeScore ?? '?'} (${s.matchedVia ?? ''})`).join('; ')}` : 'no in-progress mapped game at the cycle time - ScorePulse abstains unless a side leads past its threshold while still <= 85c')}<br>every snapshot archived with its URL + SHA-256 in signals/espn-scoreboard.jsonl</small></td></tr>`);
+    rows.push(`<tr><td><b>ESPN scoreboards · NFL / NCAAF / NBA / MLB / NHL / WNBA</b><br><small>drives ScorePulse (live scoreboard leader) and the game-persona review links; NHL/WNBA added 2026-09-21 (IRR-35), team names matched from Kalshi's nickname-form rules_primary (IRR-36)</small></td><td><small>${espn.length} snapshot(s) in the last window</small></td><td><small>site.api.espn.com scoreboard JSON (public)</small></td><td><small>${esc(espn.map((s) => `${s.league} ${s.date}: ${s.events} event(s)`).join(' · ') || 'none fetched')}<br>${esc(liveSignals.length ? `${liveSignals.length} live mapped: ${liveSignals.slice(0, 3).map(([t, s]) => `${t} ${s.detail ?? ''} ${s.awayScore ?? '?'}-${s.homeScore ?? '?'} (${s.matchedVia ?? ''})`).join('; ')}` : 'no in-progress mapped game at the cycle time - ScorePulse abstains unless a side leads past its threshold while still <= 85c')}<br>every snapshot archived with its URL + SHA-256 in signals/espn-scoreboard.jsonl</small></td></tr>`);
     const cities = forward.recent?.nwsCities ?? [];
     rows.push(`<tr><td><b>NWS city gridpoints · other KXHIGH* series</b><br><small>Census Gazetteer place - api.weather.gov /points - forecast</small></td><td><small>${cities.length ? `${cities.length} city capture(s) in the window` : 'none in the window'}</small></td><td><small>see the season-health abstentions below when the gazetteer step fails</small></td><td><small>${esc(cities.slice(0, 4).map((c) => `${c.series} (${c.city}): ${c.highF ?? '?'} F`).join(' - ') || '-')}</small></td></tr>`);
     const fda = forward.recent?.openfda ?? [];
@@ -367,6 +368,7 @@ function renderSeasonHealth() {
     ['Storage compaction', `${storage.compactedFiles ?? 0} file(s)`, `${((storage.bytesBefore ?? 0) / 1024).toFixed(0)} KB → ${((storage.bytesAfter ?? 0) / 1024).toFixed(0)} KB gz · hashes verify: ${storage.hashVerifyPass ?? 0} ok / ${(storage.hashVerifyFailures ?? []).length} bad`],
     ['Tape comparison', tape.available ? `${tape.compared ?? 0} fills` : 'pending', tape.available ? `median ${tape.medianAbsCentsDiff}¢ · ${tape.withinOneCentPct}% within 1¢` : 'execution/summary.json not written yet'],
     ['Live settlement re-read', live.available ? `${live.matches ?? 0}/${live.attempts ?? 0} match` : 'pending (runner)', live.available ? `${(live.mismatches ?? []).length} mismatch(es) - every comparison re-issued GET /markets/{ticker}` : 'the offline audit never fakes this line'],
+    ['Settlement backfill (full)', forward.backfill?.mode === 'live' ? `${forward.backfill.matches ?? 0}/${forward.backfill.attempted ?? 0} match` : 'not run yet', forward.backfill?.mode === 'live' ? `every settled market re-read ${formatDate(forward.backfill.generatedAt)} · ${(forward.backfill.mismatches ?? []).length} mismatch(es) · ${(forward.backfill.unreachable ?? []).length} unreachable` : 'monthly: scripts/verify_settlements.py --live'],
   ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
   const sig = signals.totals ?? {};
   const signalChips = [
@@ -386,6 +388,9 @@ function renderSeasonHealth() {
       <td><small class="mono">${esc(shortHash(s.responseSha256))}</small></td></tr>`).join('');
   const mismatchBanner = (live.mismatches ?? []).length
     ? `<div class="notice notice-amber"><div class="notice-icon">!</div><div><strong>${live.mismatches.length} settled market(s) where the ledger and the live official record disagree</strong><p>The audit never adjusts the ledger: the mismatch stands here, and the affected positions are named in the table below.</p></div></div>` : '';
+  const backfill = forward.backfill;
+  const backfillBanner = backfill?.mode === 'live' && (backfill.mismatches ?? []).length
+    ? `<div class="notice notice-amber"><div class="notice-icon">!</div><div><strong>Full settlement backfill (${esc(formatDate(backfill.generatedAt))}): ${backfill.mismatches.length} ledger-vs-API mismatch(es) across ${esc(backfill.settledTickers ?? 0)} settled markets</strong><p>${esc(backfill.mismatches.map((m) => `${m.ticker}: ledger ${m.ledgerResult ?? ''}@${m.ledgerSettlementTs ?? ''} vs API ${m.apiResult ?? ''}@${m.apiSettlementTs ?? ''}`).join(' · '))}. The ledger was NOT adjusted - this is a finding for manual review (<a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/settlement-backfill.json" target="_blank" rel="noreferrer">settlement-backfill.json ↗</a>).</p></div></div>` : '';
   const details = [
     `median cycle start delay ${sched.medianDelayMin ?? '—'} min`,
     (sched.missedSlotsSample ?? []).length ? `missed slot sample: ${sched.missedSlotsSample.slice(0, 6).join(', ')}${sched.missedSlotsSample.length > 6 ? ` (+${sched.missedSlotsSample.length - 6} more)` : ''}` : 'no missed cron slots',
@@ -395,13 +400,13 @@ function renderSeasonHealth() {
   ].join(' · ');
   const historyRows = forward.auditHistory ?? [];
   const historyChart = `<div class="health-trend"><div class="panel-header"><div><h3>Scheduled-slot execution trend</h3><p>matched scheduled cron slots ÷ expected slots, from append-only audit rows; manual extra cycles do not inflate this rate</p></div><span class="source-badge">${historyRows.length} audit point(s)</span></div>${auditRateSparkline(historyRows)}<p class="micro-note"><span>Definition</span>Only <code>on-time + late</code> scheduled slots count in the numerator. Missed slots remain visible; an unavailable or zero-slot audit is not plotted.</p></div>`;
-  panel.innerHTML = `${mismatchBanner}<div class="metrics-grid">${cards}</div>
+  panel.innerHTML = `${mismatchBanner}${backfillBanner}<div class="metrics-grid">${cards}</div>
     ${historyChart}
     <p class="micro-note"><span>Signal coverage</span>${signalChips}</p>
     ${errorLines ? `<details class="health-errors"><summary>Latest cycle's signal abstentions (${sig.signalErrors ?? 0} line(s)) - a source that answers nothing makes its personas abstain, never default</summary><ul>${errorLines}</ul></details>` : ''}
     ${liveRows ? `<div class="table-shell"><table><thead><tr><th>Settled market</th><th>Strategy</th><th>Ledger says</th><th>Official API now</th><th>Verdict</th><th>Response hash</th></tr></thead><tbody>${liveRows}</tbody></table></div>` : ''}
     <p class="micro-note"><span>Coverage details</span>${esc(details)}</p>
-    <p class="micro-note"><span>Audit files</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/latest.json" target="_blank" rel="noreferrer">forward/audit/latest.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/audit-history.jsonl" target="_blank" rel="noreferrer">audit-history.jsonl ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/history.json" target="_blank" rel="noreferrer">history.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/COMPRESSED.json" target="_blank" rel="noreferrer">COMPRESSED.json ↗</a> · cron ${esc(sched.cron ?? '—')} · cycles ${esc(sched.cycles ?? 0)} · ${esc(sched.note ?? '')}</p>`;
+    <p class="micro-note"><span>Audit files</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/latest.json" target="_blank" rel="noreferrer">forward/audit/latest.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/audit-history.jsonl" target="_blank" rel="noreferrer">audit-history.jsonl ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/history.json" target="_blank" rel="noreferrer">history.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/settlement-backfill.json" target="_blank" rel="noreferrer">settlement-backfill.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/COMPRESSED.json" target="_blank" rel="noreferrer">COMPRESSED.json ↗</a> · cron ${esc(sched.cron ?? '—')} · cycles ${esc(sched.cycles ?? 0)} · ${esc(sched.note ?? '')}</p>`;
 }
 
 function renderToday() {

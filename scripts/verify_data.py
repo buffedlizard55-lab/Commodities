@@ -176,6 +176,36 @@ def verify_season_audit(season_dir):
     print(line)
 
 
+def verify_settlement_backfill(season_dir):
+    """The monthly full settlement backfill written by scripts/verify_settlements.py --live.
+
+    WARN-only by design (see the script header): a mismatch is a committed finding for human
+    review, displayed on the site's season-health panel.  Failing the twice-hourly verifier on a
+    monthly artifact would stall every ledger commit until a human arrived, so this function
+    surfaces the finding loudly without blocking the pipeline.
+    """
+    path = os.path.join(season_dir, "forward", "audit", "settlement-backfill.json")
+    if not os.path.exists(path):
+        print("INFO  settlement backfill: not run yet (scripts/verify_settlements.py --live, monthly)")
+        return
+    with open(path) as fh:
+        report = json.load(fh)
+    if report.get("mode") != "live":
+        print(f"INFO  settlement backfill: last report is offline/plan-only ({report.get('generatedAt')})")
+        return
+    line = (f"INFO  settlement backfill {report.get('generatedAt')}: "
+            f"{report.get('matches', 0)}/{report.get('attempted', 0)} settled markets re-read from "
+            f"GET /markets/{{ticker}} match the ledger ({report.get('settledTickers', 0)} unique tickers, "
+            f"{len(report.get('unreachable', []))} unreachable)")
+    print(line)
+    if report.get("mismatches"):
+        print(f"WARN  settlement backfill: {len(report['mismatches'])} ledger-vs-API mismatch(es) - "
+              f"review forward/audit/settlement-backfill.json; the ledger was NOT adjusted")
+        for bad in report["mismatches"][:5]:
+            print(f"WARN    {bad.get('ticker')}: ledger {bad.get('ledgerResult')}@{bad.get('ledgerSettlementTs')} "
+                  f"vs API {bad.get('apiResult')}@{bad.get('apiSettlementTs')}")
+
+
 def verify_execution_realism(fwd):
     """The desk's fills compared against the official trade tape (scripts/execution_realism.py)."""
     summary_path = os.path.join(fwd, "execution", "summary.json")
@@ -299,6 +329,7 @@ def verify_forward_ledger(season_dir: str | None = None):
     verify_archive_backtest(os.path.join(fwd, ".."))
     verify_execution_realism(fwd)
     verify_season_audit(os.path.join(fwd, ".."))
+    verify_settlement_backfill(os.path.join(fwd, ".."))
     forward_passes = sum(1 for p in PASSES if p.startswith("PASS forward."))
     forward_fails = sum(1 for f in FAILURES if f.startswith("FAIL forward."))
     print(f"INFO  forward ledger: {len(state['accounts'])} accounts, {len(events)} events, {forward_passes} checks passed, {forward_fails} failed")

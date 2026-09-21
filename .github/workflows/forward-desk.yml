@@ -16,10 +16,11 @@ on:
   schedule:
     - cron: "7,37 * * * *"      # desk cycle, twice an hour
     - cron: "17 6 * * 1"        # weekly series-catalog refresh (Monday 06:17 UTC)
+    - cron: "47 6 1 * *"        # monthly full settlement backfill (1st of month, 06:47 UTC)
   workflow_dispatch:
     inputs:
       mode:
-        description: "cycle | universe | both"
+        description: "cycle | universe | both | settlements"
         required: false
         default: "cycle"
 
@@ -53,7 +54,11 @@ jobs:
             esac
           fi
           if [ -z "$MODE" ]; then
-            if [ "${{ github.event.schedule }}" = "17 6 * * 1" ]; then MODE=universe; else MODE=cycle; fi
+            case "${{ github.event.schedule }}" in
+              "17 6 * * 1") MODE=universe ;;
+              "47 6 1 * *") MODE=settlements ;;
+              *) MODE=cycle ;;
+            esac
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Running mode: $MODE"
@@ -61,6 +66,15 @@ jobs:
       - name: Refresh series catalog (official GET /series by category)
         if: steps.mode.outputs.mode == 'universe' || steps.mode.outputs.mode == 'both'
         run: python3 scripts/discover_universe.py
+
+      # Full settlement backfill: re-read EVERY settled market in the ledger from
+      # GET /markets/{ticker} (official) and compare result + settlement_ts with the ledger.
+      # Runs monthly and on demand (workflow_dispatch mode=settlements).  Findings are committed
+      # to forward/audit/settlement-backfill.json; the ledger is never adjusted here.  Non-zero
+      # exit (a mismatch finding) must not abort the run, so it is surfaced but not fatal.
+      - name: Full settlement backfill (official re-read of every settled market)
+        if: steps.mode.outputs.mode == 'settlements' || steps.mode.outputs.mode == 'both'
+        run: python3 scripts/verify_settlements.py --live || echo "settlement backfill recorded finding(s) (see forward/audit/settlement-backfill.json)"
 
       - name: Run one desk cycle
         if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'
