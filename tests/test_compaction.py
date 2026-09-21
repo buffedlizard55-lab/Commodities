@@ -110,6 +110,20 @@ class CompactionTests(unittest.TestCase):
         CS.main(["--forward-dir", forward, "--days", "0", "--apply", "--now", str(self.now)])
         self.assertTrue(os.path.exists(os.path.join(forward, "trades.jsonl")))
 
+    def test_all_seasons_compacts_frozen_ledgers_after_rollover(self):
+        old_data_dir = CS.DATA_DIR
+        try:
+            CS.DATA_DIR = os.path.join(self.tmp, "data")
+            forward_2026, evidence_2026, _ = make_ledger(os.path.join(CS.DATA_DIR, "season-2026"))
+            forward_2027, evidence_2027, _ = make_ledger(os.path.join(CS.DATA_DIR, "season-2027"))
+            self.assertEqual(CS.main(["--all-seasons", "--days", "30", "--apply", "--now", str(self.now)]), 0)
+            for forward, evidence in ((forward_2026, evidence_2026), (forward_2027, evidence_2027)):
+                self.assertFalse(os.path.exists(evidence))
+                self.assertTrue(os.path.exists(evidence + ".gz"))
+            self.assertEqual(CS.main(["--all-seasons", "--check"]), 0)
+        finally:
+            CS.DATA_DIR = old_data_dir
+
 
 class SeasonTests(unittest.TestCase):
     def setUp(self):

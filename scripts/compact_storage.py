@@ -16,9 +16,9 @@ entry (gzip hash + decompressed hash + line count).  trades.jsonl, intents/, cyc
 candles/ are append-only analysis files and are deliberately NOT compacted.
 
 Usage:
-  python3 scripts/compact_storage.py --check
-  python3 scripts/compact_storage.py --days 30 --apply
-  python3 scripts/compact_storage.py --restore evidence/2026-09-20.jsonl
+  python3 scripts/compact_storage.py --all-seasons --check
+  python3 scripts/compact_storage.py --all-seasons --days 3 --apply
+  python3 scripts/compact_storage.py --forward-dir data/season-2026/forward --restore evidence/2026-09-20.jsonl
 """
 from __future__ import annotations
 
@@ -51,6 +51,16 @@ def default_forward_dir(now_ts: int | None = None) -> str:
     """data/season-<UTC year of now>/forward (the same rule the desk uses)."""
     now_ts = now_ts or int(__import__("time").time())
     return os.path.join(DATA_DIR, f"season-{datetime.fromtimestamp(now_ts, tz=timezone.utc).year}", "forward")
+
+
+def all_forward_dirs() -> list[str]:
+    """Every season ledger, oldest first, for rollover-safe maintenance."""
+    if not os.path.isdir(DATA_DIR):
+        return []
+    return [os.path.join(DATA_DIR, name, "forward")
+            for name in sorted(os.listdir(DATA_DIR))
+            if re.fullmatch(r"season-\d{4}", name)
+            and os.path.isdir(os.path.join(DATA_DIR, name, "forward"))]
 
 
 def load_index(forward_dir: str) -> dict:
@@ -183,41 +193,65 @@ def check_index(forward_dir: str) -> tuple[int, list[str]]:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--forward-dir", help="season forward directory (default: the current season)")
+    parser.add_argument("--all-seasons", action="store_true",
+                        help="check/compact every data/season-*/forward ledger (useful after rollover)")
     parser.add_argument("--days", type=int, default=30, help="compact files older than this many days")
     parser.add_argument("--apply", action="store_true", help="actually compress (default: report only)")
     parser.add_argument("--check", action="store_true", help="verify every entry in COMPRESSED.json")
     parser.add_argument("--restore", help="restore one compacted file (path relative to the forward dir)")
     parser.add_argument("--now", type=int, help="epoch seconds to use as 'now' (tests)")
     args = parser.parse_args(argv)
+    if args.all_seasons and args.forward_dir:
+        parser.error("--all-seasons and --forward-dir cannot be used together")
+    if args.all_seasons and args.restore:
+        parser.error("--restore requires --forward-dir so the target season is unambiguous")
     now_ts = args.now or int(__import__("time").time())
-    forward_dir = args.forward_dir or default_forward_dir(now_ts)
-    if not os.path.isdir(forward_dir):
-        print(f"no forward directory at {forward_dir}")
+    forward_dirs = all_forward_dirs() if args.all_seasons else [args.forward_dir or default_forward_dir(now_ts)]
+    forward_dirs = [path for path in forward_dirs if os.path.isdir(path)]
+    if not forward_dirs:
+        print("no forward directory found")
         return 1
-    index = load_index(forward_dir)
+
     if args.check:
-        passed, failures = check_index(forward_dir)
-        print(f"COMPRESSED.json: {passed} verified, {len(failures)} failed")
-        for failure in failures:
+        failures_total = []
+        passed_total = 0
+        for forward_dir in forward_dirs:
+            passed, failures = check_index(forward_dir)
+            passed_total += passed
+            failures_total.extend(f"{os.path.relpath(forward_dir, ROOT)}: {failure}" for failure in failures)
+            print(f"{os.path.relpath(forward_dir, ROOT)}/COMPRESSED.json: {passed} verified, {len(failures)} failed")
+        for failure in failures_total:
             print("  FAIL " + failure)
-        return 1 if failures else 0
+        return 1 if failures_total else 0
+
     if args.restore:
-        entry = restore_file(forward_dir, args.restore, index)
-        print(json.dumps({"restored": args.restore, "entry": entry}, indent=1))
+        forward_dir = forward_dirs[0]
+        entry = restore_file(forward_dir, args.restore, load_index(forward_dir))
+        print(json.dumps({"restored": args.restore, "forwardDir": os.path.relpath(forward_dir, ROOT), "entry": entry}, indent=1))
         return 0
-    todo = candidates(forward_dir, args.days, now_ts)
-    compacted = []
-    if args.apply:
-        for rel in todo:
-            compacted.append({"file": rel, **compact_file(forward_dir, rel, index)})
-        save_index(forward_dir, index)
-    saved = sum(c["gzBytes"] for c in compacted)
-    original = sum(c["bytes"] for c in compacted)
-    print(json.dumps({"forwardDir": os.path.relpath(forward_dir, ROOT), "mode": "apply" if args.apply else "dry-run",
-                      "days": args.days, "candidates": [os.path.relpath(os.path.join(forward_dir, r), forward_dir) for r in todo],
-                      "compacted": compacted, "bytesBefore": original, "bytesAfter": saved,
-                      "ratio": round(saved / original, 4) if original else None,
-                      "indexEntries": len(index.get("files", {}))}, indent=1))
+
+    reports = []
+    for forward_dir in forward_dirs:
+        index = load_index(forward_dir)
+        todo = candidates(forward_dir, args.days, now_ts)
+        compacted = []
+        if args.apply:
+            for rel in todo:
+                compacted.append({"file": rel, **compact_file(forward_dir, rel, index)})
+            if compacted or os.path.exists(os.path.join(forward_dir, INDEX_NAME)):
+                save_index(forward_dir, index)
+        saved = sum(c["gzBytes"] for c in compacted)
+        original = sum(c["bytes"] for c in compacted)
+        reports.append({"forwardDir": os.path.relpath(forward_dir, ROOT),
+                        "mode": "apply" if args.apply else "dry-run", "days": args.days,
+                        "candidates": [os.path.relpath(os.path.join(forward_dir, r), forward_dir) for r in todo],
+                        "compacted": compacted, "bytesBefore": original, "bytesAfter": saved,
+                        "ratio": round(saved / original, 4) if original else None,
+                        "indexEntries": len(index.get("files", {}))})
+    if args.all_seasons:
+        print(json.dumps({"seasons": reports}, indent=1))
+    else:
+        print(json.dumps(reports[0], indent=1))
     return 0
 
 

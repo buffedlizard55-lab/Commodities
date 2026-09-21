@@ -92,6 +92,16 @@ class ArchiveHistoryTests(unittest.TestCase):
         chunks = [json.loads(line) for line in open(csv_path + ".chunks.jsonl")]
         self.assertTrue(all(len(c["sha256"]) == 64 and c["url"] for c in chunks if not c.get("error")))
         self.assertTrue(all("/candlesticks?start_ts=" in c["url"] for c in chunks if c.get("url")))
+        index_path = os.path.join(self.season, f"{TICKER}-p1440.index.json")
+        index = json.load(open(index_path))
+        self.assertEqual(index["barsReturned"], len(bars))
+        self.assertEqual(index["windowsWithErrors"], 0)
+        self.assertIn("no missing bar is synthesized", index["coverageNote"])
+        # Rerunning an unchanged request is a no-op for the evidence log, not 5 more lines.
+        self.assertEqual(AH.main(["--fixtures", directory, "--ticker", TICKER, "--period", "1440",
+                                  "--bars-per-chunk", "90", "--season", "2026"]), 0)
+        chunks_again = [json.loads(line) for line in open(csv_path + ".chunks.jsonl")]
+        self.assertEqual(len(chunks_again), len(chunks))
 
     def test_diff_detects_an_exchange_side_change(self):
         directory = self.write_fixtures(build_fixtures())

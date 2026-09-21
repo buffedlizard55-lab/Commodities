@@ -293,6 +293,10 @@ class DeskCycleTests(unittest.TestCase):
         self.assertEqual(page["account"]["fills"], len([e for e in cycle.events
                                                         if e["strategyId"] == "score-pulse" and e["kind"] == "fill"]))
         self.assertTrue(page["analysis"] and page["equity"])
+        self.assertTrue(all(e["ledgerFile"] == "trades.jsonl" and isinstance(e["ledgerLine"], int) for e in page["events"]))
+        self.assertTrue(all(i["ledgerFile"].startswith("intents/") and isinstance(i["ledgerLine"], int) for i in page["intents"]))
+        self.assertIn("archiveBacktest", page)
+        self.assertFalse(page["archiveBacktest"]["available"], "isolated fixture has no archive directory")
         day = FD.read_json(os.path.join(self.tmp, "summary/2026-09-20.json"))
         self.assertEqual(day["fills"], sum(1 for e in cycle.events if e["kind"] == "fill"))
         # Ledger invariants per account: cash + entry notional + fees == starting cash (nothing realized yet).
@@ -336,6 +340,9 @@ class DeskCycleTests(unittest.TestCase):
         board = FD.read_json(os.path.join(self.tmp, "leaderboard.json"))
         self.assertEqual(board["rows"][0]["rank"], 1)
         self.assertTrue(all("analysis" in r and r["analysis"] for r in board["rows"]))
+        filled_rows = [r for r in board["rows"] if r["fills"]]
+        self.assertTrue(all(r["firstFill"]["ledgerFile"] == "trades.jsonl" and isinstance(r["firstFill"]["ledgerLine"], int) for r in filled_rows))
+        self.assertTrue(all(p.get("ledger", {}).get("fillLine") for a in cycle2.state["accounts"].values() for p in a["positions"]))
         # settled NFL market's official candles were archived once (period 60) and indexed with the response hash
         self.assertTrue(os.path.exists(os.path.join(self.tmp, "candles/KXNFLGAME/KXNFLGAME-26SEP20AAABBB-AAA-p60.csv")))
         with open(os.path.join(self.tmp, "candles/index.jsonl")) as fh:

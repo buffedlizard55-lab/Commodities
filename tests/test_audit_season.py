@@ -115,6 +115,26 @@ class SignalsAndTapeTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_audit_history_is_append_only_and_deduplicated_by_report_hash(self):
+        tmp = tempfile.mkdtemp(prefix="audit-history-")
+        try:
+            report = {"generatedAt": "2026-09-20T07:07:00Z", "season": "2026", "status": "PASS",
+                      "schedule": {"expectedSlots": 4, "matchedSlots": 3, "executed": 3, "onTime": 2,
+                                   "late": 1, "missed": 1, "extraManual": 0, "maxGapHours": 1.5},
+                      "ledger": {"events": 12}, "signals": {"totals": {"signalErrors": 2}},
+                      "storage": {"compactedFiles": 4}, "tape": {"compared": 8}}
+            payload = json.dumps(report, sort_keys=True, separators=(",", ":"))
+            row = AUD.append_audit_history(tmp, report, payload)
+            self.assertEqual(row["slotRatePct"], 75.0)
+            # A retry with the same full report must not add a second trend point.
+            AUD.append_audit_history(tmp, report, payload)
+            rows = AUD.read_jsonl(os.path.join(tmp, AUD.AUDIT_HISTORY_JSONL))
+            self.assertEqual(len(rows), 1)
+            view = json.load(open(os.path.join(tmp, AUD.AUDIT_HISTORY_JSON)))
+            self.assertEqual(view[0]["reportSha256"], row["reportSha256"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 class LiveSettlementTests(unittest.TestCase):
     def test_empty_ledger_never_invents_a_sample(self):

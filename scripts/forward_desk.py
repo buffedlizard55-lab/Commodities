@@ -120,8 +120,22 @@ def append_jsonl(path, rows):
     if not rows:
         return
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    rel = os.path.relpath(path, FORWARD_DIR)
+    add_line_refs = rel == "trades.jsonl" or rel.startswith("intents/")
+    existing_lines = 0
+    if add_line_refs and os.path.exists(path):
+        with open(path) as existing:
+            # The anchor is a physical JSONL line number, including any historical blank line.
+            existing_lines = sum(1 for _ in existing)
     with open(path, "a") as fh:
-        for row in rows:
+        for offset, source_row in enumerate(rows, 1):
+            row = dict(source_row)
+            if add_line_refs:
+                row["ledgerFile"] = rel
+                row["ledgerLine"] = existing_lines + offset
+                # Keep the in-memory event/intent used by the strategy page equally explicit.
+                source_row["ledgerFile"] = rel
+                source_row["ledgerLine"] = row["ledgerLine"]
             fh.write(json.dumps(row, separators=(",", ":"), sort_keys=True) + "\n")
 
 
@@ -1029,6 +1043,7 @@ class Cycle:
         if self.fda_adapter and self.fda_adapter.records:
             append_jsonl(os.path.join(FORWARD_DIR, "signals", "openfda.jsonl"), self.fda_adapter.records)
             self.fda_adapter.save()
+        attach_state_position_refs(self.state)
         write_json(os.path.join(FORWARD_DIR, "state.json"), self.state)
         write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state, self.state.get("season")))
         self.strategy_pages = write_strategy_pages(self.state, summary)
@@ -1088,6 +1103,90 @@ def safe(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "-", text)
 
 
+ARCHIVE_RULE_MATCHES = {
+    # Only rules with a documented same-family relationship are mapped.  A missing mapping is
+    # intentional: a shared topic (for example gold or sports) is not enough to claim a backtest.
+    "pinepilot": ("arch-sma", "same Pine-style SMA5/SMA10 cross family on verified candles"),
+    "panic-fade": ("arch-panic-fade", "same volatility-reversion family on verified one-minute candles"),
+    "longshot-fader": ("arch-fade-longshot", "same favourite-longshot fade family"),
+    "sure-thing": ("arch-favourite", "same high-probability favourite hold family"),
+    "game-favourite": ("arch-favourite", "closest verified favourite-hold rule; archive markets are not a sports-only subset"),
+    "tick-chaser": ("arch-momentum", "same direction-of-change momentum family"),
+    "dip-hunter": ("arch-longshot", "same cheap-longshot entry family"),
+    "tail-sprint": ("arch-longshot", "same cheap-tail entry family; archive rule holds to official result"),
+    "micro-tail": ("arch-longshot", "same cheap-tail entry family; archive rule holds to official result"),
+    "underdog-sweep": ("arch-longshot", "same underdog/longshot sweep family"),
+}
+
+
+def read_jsonl_with_lines(rel: str) -> list[dict]:
+    """Read a ledger file while retaining its stable 1-based GitHub line anchor."""
+    path = os.path.join(FORWARD_DIR, rel)
+    if not os.path.exists(path):
+        return []
+    out = []
+    with open(path) as fh:
+        for line_number, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            row["ledgerFile"] = rel
+            row["ledgerLine"] = line_number
+            out.append(row)
+    return out
+
+
+def archive_backtest_attachment(strategy_id: str) -> dict:
+    """Attach only a committed archive rule that has an explicit family mapping."""
+    archive_dir = os.path.join(os.path.dirname(FORWARD_DIR), "backtest-archive")
+    required = ["competition.json", "leaderboard.json", "trades.json", "curves.json", "walkforward.json"]
+    if not all(os.path.exists(os.path.join(archive_dir, name)) for name in required):
+        return {"available": False, "matched": False, "note": "No committed archive backtest is available for this season.",
+                "archivePath": "backtest-archive/"}
+    competition = read_json(os.path.join(archive_dir, "competition.json"), {})
+    board = read_json(os.path.join(archive_dir, "leaderboard.json"), [])
+    trades = read_json(os.path.join(archive_dir, "trades.json"), [])
+    curves = read_json(os.path.join(archive_dir, "curves.json"), {})
+    walk = read_json(os.path.join(archive_dir, "walkforward.json"), {})
+    explanations = read_json(os.path.join(archive_dir, "explanations.json"), [])
+    mapping = ARCHIVE_RULE_MATCHES.get(strategy_id)
+    catalog = [{"strategyId": row.get("strategyId"), "username": row.get("username"), "name": row.get("name"),
+                "rule": row.get("rule"), "trades": row.get("trades"), "returnPct": row.get("returnPct")}
+               for row in board]
+    base = {"available": True, "matched": bool(mapping), "archivePath": "backtest-archive/",
+            "catalog": catalog, "files": {"competition": "backtest-archive/competition.json", "leaderboard": "backtest-archive/leaderboard.json",
+                                            "trades": "backtest-archive/trades.json", "curves": "backtest-archive/curves.json",
+                                            "walkForward": "backtest-archive/walkforward.json"}}
+    if not competition.get("marketCount"):
+        base["matched"] = False
+        base["note"] = "Archive output exists for this fresh season, but no verified candle market has been archived yet."
+        return base
+    if not mapping:
+        base["note"] = "No archive rule is claimed as a verified match for this forward rule; shared topic or source is not enough."
+        return base
+    archive_id, mapping_note = mapping
+    metric = next((row for row in board if row.get("strategyId") == archive_id), None)
+    if metric is None:
+        base["matched"] = False
+        base["note"] = f"Mapping names {archive_id}, but that archive rule is absent from the committed leaderboard."
+        return base
+    explanation = next((row for row in explanations if row.get("strategyId") == archive_id), {})
+    base.update({"archiveStrategyId": archive_id, "mappingNote": mapping_note, "metrics": metric,
+                 "rule": {"id": archive_id, "username": metric.get("username"), "name": metric.get("name"),
+                          "text": metric.get("rule"), "explanation": explanation.get("explanation")},
+                 "trades": [row for row in trades if row.get("strategyId") == archive_id],
+                 "curve": (curves.get("strategies") or {}).get(archive_id),
+                 "walkForward": [row for row in walk.get("rows", []) if row.get("strategyId") == archive_id],
+                 "walkForwardCaveat": walk.get("caveat"), "competition": {
+                     "generatedAt": competition.get("generatedAt"), "marketCount": competition.get("marketCount"),
+                     "verifiedBars": competition.get("verifiedBars"), "series": competition.get("series"),
+                     "source": competition.get("source")}})
+    return base
+
+
 def analysis_for(strategy: dict, account: dict, equity: float) -> str:
     """Result narrative derived only from the account's own verified ledger counters."""
     if not account["fills"]:
@@ -1123,6 +1222,7 @@ def analysis_for(strategy: dict, account: dict, equity: float) -> str:
 
 def build_leaderboard(state: dict, season: str | None = None) -> dict:
     rows = []
+    ledger_events = read_jsonl_with_lines("trades.jsonl")
     for strategy in FS.STRATEGIES:
         account = state["accounts"].get(strategy["id"])
         if not account:
@@ -1143,6 +1243,10 @@ def build_leaderboard(state: dict, season: str | None = None) -> dict:
             "bestTradePnl": account.get("bestTradePnl"), "worstTradePnl": account.get("worstTradePnl"),
             "evidenceState": ("verified forward fills" if account["fills"] else "no fill yet (rule never confirmed on a fresh book)"),
             "analysis": analysis_for(strategy, account, equity),
+            "firstFill": next(({k: event.get(k) for k in ("ledgerFile", "ledgerLine", "positionId", "ticker")}
+                                for event in ledger_events if event.get("strategyId") == strategy["id"] and event.get("kind") == "fill"), None),
+            "latestFill": next(({k: event.get(k) for k in ("ledgerFile", "ledgerLine", "positionId", "ticker")}
+                                 for event in reversed(ledger_events) if event.get("strategyId") == strategy["id"] and event.get("kind") == "fill"), None),
         })
     ranked = sorted([r for r in rows if r["fills"] > 0], key=lambda r: (-r["returnPct"], r["username"]))
     unranked = sorted([r for r in rows if r["fills"] == 0], key=lambda r: r["username"])
@@ -1197,20 +1301,51 @@ def read_equity_rows() -> list[dict]:
     return rows
 
 
+def evidence_storage_ref(event: dict, compressed_index: dict) -> dict:
+    """Copy an event and make an IRR-24 evidence link explicit without changing its hash binding."""
+    out = dict(event)
+    evidence = dict(event.get("evidence") or {})
+    file = evidence.get("file")
+    entry = (compressed_index.get("files") or {}).get(file) if file else None
+    if entry:
+        evidence["compressedFile"] = entry.get("compressedFile", f"{file}.gz")
+        evidence["compacted"] = True
+    out["evidence"] = evidence
+    return out
+
+
+def attach_state_position_refs(state: dict):
+    """Add fill/close line anchors to open positions before state.json is written."""
+    events = read_jsonl_with_lines("trades.jsonl")
+    compressed_index = read_json(os.path.join(FORWARD_DIR, "COMPRESSED.json"), {})
+    fills = {event.get("positionId"): event for event in events if event.get("kind") == "fill" and event.get("positionId")}
+    closes = {event.get("positionId"): event for event in events if event.get("kind") in ("exit", "settlement") and event.get("positionId")}
+    for account in state.get("accounts", {}).values():
+        for position in account.get("positions") or []:
+            fill = fills.get(position.get("id")); close = closes.get(position.get("id"))
+            position["ledger"] = {"fillFile": fill.get("ledgerFile") if fill else "trades.jsonl",
+                                  "fillLine": fill.get("ledgerLine") if fill else None,
+                                  "closeFile": close.get("ledgerFile") if close else "trades.jsonl",
+                                  "closeLine": close.get("ledgerLine") if close else None}
+            if position.get("evidence"):
+                position["evidence"] = evidence_storage_ref({"evidence": position["evidence"]}, compressed_index)["evidence"]
+
+
 def write_strategy_pages(state: dict, summary: dict) -> list[str]:
     """One committed JSON file per persona: identity, rule, analysis, full trade + equity history.
 
     These are the data files behind strategy.html?id=<strategyId>; everything in them is copied
     from the ledger the cycle just appended, so the page cannot disagree with trades.jsonl.
     """
-    events = read_jsonl("trades.jsonl")
+    events = read_jsonl_with_lines("trades.jsonl")
+    compressed_index = read_json(os.path.join(FORWARD_DIR, "COMPRESSED.json"), {})
     equity = read_equity_rows()
     intents: list[dict] = []
     intents_dir = os.path.join(FORWARD_DIR, "intents")
     if os.path.isdir(intents_dir):
         for name in sorted(os.listdir(intents_dir)):
             if name.endswith(".jsonl"):
-                intents.extend(read_jsonl(os.path.join("intents", name)))
+                intents.extend(read_jsonl_with_lines(os.path.join("intents", name)))
     written = []
     for strategy in FS.STRATEGIES:
         account = state["accounts"].get(strategy["id"])
@@ -1221,9 +1356,27 @@ def write_strategy_pages(state: dict, summary: dict) -> list[str]:
                       float(r["realizedPnl"]), float(r["feesPaid"]), float(r["slippagePaid"])]
                      for r in equity if r.get("strategyId") == strategy["id"]]
         my_intents = [i for i in intents if i.get("strategyId") == strategy["id"]][-RECENT_INTENTS:]
+        fill_by_position = {e.get("positionId"): e for e in mine if e.get("kind") == "fill" and e.get("positionId")}
+        close_by_position = {e.get("positionId"): e for e in mine if e.get("kind") in ("exit", "settlement") and e.get("positionId")}
+        my_positions = []
+        for position in account.get("positions") or []:
+            enriched = dict(position)
+            fill = fill_by_position.get(position.get("id"))
+            close = close_by_position.get(position.get("id"))
+            enriched["ledger"] = {
+                "fillFile": fill.get("ledgerFile") if fill else "trades.jsonl",
+                "fillLine": fill.get("ledgerLine") if fill else None,
+                "closeFile": close.get("ledgerFile") if close else "trades.jsonl",
+                "closeLine": close.get("ledgerLine") if close else None,
+            }
+            my_positions.append(enriched)
         equity_now = account.get("lastEquity", account["cash"])
+        my_events = [evidence_storage_ref(event, compressed_index) for event in mine[-RECENT_EVENTS:]]
+        for position in my_positions:
+            position["evidence"] = (evidence_storage_ref({"evidence": position.get("evidence")}, compressed_index).get("evidence")
+                                     if position.get("evidence") else {})
         payload = {
-            "schemaVersion": 1, "season": state.get("season", SEASON), "generatedAt": summary.get("at"),
+            "schemaVersion": 2, "season": state.get("season", SEASON), "generatedAt": summary.get("at"),
             "cycle": summary.get("cycle"),
             "strategy": {k: strategy[k] for k in ("id", "username", "name", "group", "rule", "why", "source")},
             "account": {k: account.get(k) for k in ("cash", "realizedPnl", "feesPaid", "slippagePaid", "fills",
@@ -1234,14 +1387,15 @@ def write_strategy_pages(state: dict, summary: dict) -> list[str]:
             "returnPct": round((equity_now / STARTING_CASH - 1) * 100, 4),
             "liquidationReturnPct": round((account.get("lastLiquidationEquity", account["cash"]) / STARTING_CASH - 1) * 100, 4),
             "analysis": analysis_for(strategy, account, equity_now),
-            "positions": account.get("positions") or [],
-            "events": mine[-RECENT_EVENTS:],
+            "positions": my_positions,
+            "events": my_events,
             "eventCount": len(mine),
             "equity": my_equity[-1000:],
             "intents": my_intents,
+            "archiveBacktest": archive_backtest_attachment(strategy["id"]),
             "evidenceFiles": sorted({(e.get("evidence") or {}).get("file") for e in mine if (e.get("evidence") or {}).get("file")}),
             "ledger": {"trades": "trades.jsonl", "intents": "intents/", "equity": "equity/", "evidence": "evidence/",
-                       "quotes": "quotes/", "cycles": "cycles/"},
+                       "quotes": "quotes/", "cycles": "cycles/", "compressed": "COMPRESSED.json"},
         }
         path = os.path.join(FORWARD_DIR, "strategies", f"{strategy['id']}.json")
         write_json(path, payload, compact=True)

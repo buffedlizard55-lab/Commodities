@@ -1,6 +1,6 @@
-// Committed season memory: the automated forward desk (data/season-2026/forward/*) and the
-// committed backtest (data/season-2026/*.json).  Everything rendered here is read from files
-// the collector or the backtest script wrote; the browser never computes a result of its own.
+// Committed season memory: the automated forward desk (data/season-<UTC year>/forward/*) and
+// each season's committed backtest. Everything rendered here is read from files the collector or
+// backtest script wrote; the browser never computes a result of its own.
 import { formatContracts, formatDate, formatDollars } from './engine.js';
 
 const SEASONS_PATH = 'data/seasons.json';
@@ -26,7 +26,7 @@ async function fetchJson(path) {
   return response.json();
 }
 
-const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, audit: null, tab: 'positions', error: null };
+const forward = { leaderboard: null, state: null, recent: null, curves: null, execution: null, today: null, audit: null, auditHistory: [], tab: 'positions', error: null };
 
 export async function loadSeasonsIndex() {
   try {
@@ -69,7 +69,7 @@ export async function loadForwardDesk() {
   const label = $('#forward-state');
   if (!seasonMeta.loaded) await loadSeasonsIndex();
   try {
-    const [leaderboard, state, recent, curves, execution, today, audit] = await Promise.all([
+    const [leaderboard, state, recent, curves, execution, today, audit, auditHistory] = await Promise.all([
       fetchJson(`${FORWARD_BASE()}leaderboard.json`),
       fetchJson(`${FORWARD_BASE()}state.json`),
       fetchJson(`${FORWARD_BASE()}recent.json`).catch(() => ({ events: [], intents: [], cycles: [] })),
@@ -77,8 +77,10 @@ export async function loadForwardDesk() {
       fetchJson(`${FORWARD_BASE()}execution/summary.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}summary/today.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}audit/latest.json`).catch(() => null),
+      fetchJson(`${FORWARD_BASE()}audit/history.json`).catch(() => []),
     ]);
     forward.execution = execution; forward.today = today; forward.audit = audit;
+    forward.auditHistory = Array.isArray(auditHistory) ? auditHistory : [];
     Object.assign(forward, { leaderboard, state, recent, curves, error: null });
     if (label) { label.textContent = `Committed desk state · Season ${esc(leaderboard.season ?? seasonMeta.activeSeason)} · ${leaderboard.cycles} cycle(s)`; label.classList.add('ok'); }
     const updated = $('#forward-updated');
@@ -121,6 +123,23 @@ function sparkline(points) {
   return `<svg class="spark ${last >= first ? 'up' : 'down'}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-label="equity curve"><polyline points="${coords.join(' ')}" fill="none" stroke-width="1.6"/></svg>`;
 }
 
+function auditRateSparkline(rows) {
+  const points = (rows ?? []).filter((row) => row && Number(row.expectedSlots) > 0 && Number.isFinite(Number(row.slotRatePct)))
+    .map((row) => ({ at: row.generatedAt, value: Number(row.slotRatePct) }));
+  if (!points.length) return '<span class="spark-empty">No audited scheduled slots to plot</span>';
+  const values = points.map((point) => point.value);
+  const w = 560; const h = 110; const pad = 12;
+  const min = 0; const max = 100;
+  const denominator = Math.max(1, points.length - 1);
+  const coords = points.map((point, i) => `${(pad + (i / denominator) * (w - 2 * pad)).toFixed(1)},${(h - pad - ((point.value - min) / (max - min)) * (h - 2 * pad)).toFixed(1)}`);
+  const last = values.at(-1);
+  const series = points.length > 1
+    ? `<polyline points="${coords.join(' ')}" fill="none" stroke="var(--accent, #54c98e)" stroke-width="2.4"/>`
+    : `<circle cx="${coords[0].split(',')[0]}" cy="${coords[0].split(',')[1]}" r="4" fill="var(--accent, #54c98e)"/>`;
+  const note = points.length > 1 ? '' : ' · one point, trend pending';
+  return `<div class="audit-rate-chart"><svg class="audit-rate-sparkline" viewBox="0 0 ${w} ${h}" role="img" aria-label="scheduled cron slots matched rate over time, latest ${last.toFixed(2)} percent${note}"><line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="rgba(255,255,255,.18)"/><line x1="${pad}" y1="${pad}" x2="${w - pad}" y2="${pad}" stroke="rgba(255,255,255,.12)" stroke-dasharray="4 4"/>${series}</svg><div class="audit-rate-labels"><span>0%</span><b>${last.toFixed(2)}% latest${points.length > 1 ? '' : ' · pending trend'}</b><span>100%</span></div></div>`;
+}
+
 function renderForwardBoard() {
   const metrics = $('#forward-metrics');
   const body = $('#forward-leaderboard tbody');
@@ -154,7 +173,7 @@ function renderForwardBoard() {
       <td>${sparkline(curve)}</td>
       <td><span class="evidence-pill ${evidence[1]}">${esc(evidence[0])}</span></td>
     </tr>
-    <tr class="board-detail" data-strategy-detail="${esc(row.strategyId)}" hidden><td colspan="10"><div class="detail-grid"><div><span>Rule</span><p>${esc(row.rule)}</p></div><div><span>Why it should (or should not) work</span><p>${esc(row.why)}</p></div><div><span>Provenance</span><p>${esc(row.source?.label ?? '')}</p></div><div class="span-2"><span>Result analysis (from the ledger)</span><p>${esc(row.analysis ?? '')}</p></div><div><span>Ledger</span><p><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/trades.jsonl" target="_blank" rel="noreferrer">trades.jsonl ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/state.json" target="_blank" rel="noreferrer">state.json ↗</a> · <a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">full strategy page</a> · unfilled remainder ${formatContracts(row.unfilledContracts)} contracts</p></div></div></td></tr>`;
+    <tr class="board-detail" data-strategy-detail="${esc(row.strategyId)}" hidden><td colspan="10"><div class="detail-grid"><div><span>Rule</span><p>${esc(row.rule)}</p></div><div><span>Why it should (or should not) work</span><p>${esc(row.why)}</p></div><div><span>Provenance</span><p>${esc(row.source?.label ?? '')}</p></div><div class="span-2"><span>Result analysis (from the ledger)</span><p>${esc(row.analysis ?? '')}</p></div><div><span>Ledger</span><p><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/trades.jsonl" target="_blank" rel="noreferrer">trades.jsonl ↗</a> · ${ledgerLineLink(row.firstFill, 'first fill')} ${ledgerLineLink(row.latestFill, 'latest fill')} · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/state.json" target="_blank" rel="noreferrer">state.json ↗</a> · <a class="text-link" href="strategy.html?id=${esc(row.strategyId)}">full strategy page</a> · unfilled remainder ${formatContracts(row.unfilledContracts)} contracts</p></div></div></td></tr>`;
   }).join('') || '<tr><td colspan="10" class="empty-cell">No strategies in the committed board.</td></tr>';
   if (policies) policies.innerHTML = [
     ['Fill policy', leaderboard.fillPolicy],
@@ -186,11 +205,20 @@ function applyTextFilter(tableSelector, inputSelector, countSelector) {
 function applyBoardFilter() { applyTextFilter('#forward-leaderboard', '#board-filter', '#board-filter-count'); }
 function applyLedgerFilter() { applyTextFilter('#forward-ledger-table', '#ledger-filter', '#ledger-filter-count'); }
 
+function ledgerLineLink(ref, label = 'ledger line') {
+  if (!ref || !ref.ledgerFile || !Number.isInteger(Number(ref.ledgerLine))) return '';
+  const file = String(ref.ledgerFile);
+  const line = Number(ref.ledgerLine);
+  return `<a class="text-link ledger-line-link" href="${REPO_TREE}${SEASON_BASE()}forward/${esc(file)}#L${line}" target="_blank" rel="noreferrer">${esc(label)} #L${line} ↗</a>`;
+}
+
 function evidenceLink(evidence) {
   if (!evidence) return '—';
-  const file = evidence.file ? `<a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/${esc(evidence.file)}" target="_blank" rel="noreferrer">${esc(evidence.file.split('/').pop())} ↗</a>` : '';
+  const storedFile = evidence.compacted && evidence.compressedFile ? evidence.compressedFile : evidence.file;
+  const file = storedFile ? `<a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/${esc(storedFile)}" target="_blank" rel="noreferrer">${esc(evidence.compacted ? `${evidence.file} (gz)` : evidence.file.split('/').pop())} ↗</a>` : '';
   const url = evidence.url ? `<a class="text-link" href="${esc(evidence.url)}" target="_blank" rel="noreferrer">official ↗</a>` : '';
-  return `${file}${file && url ? ' · ' : ''}${url}<br><small class="mono">sha256 ${esc(shortHash(evidence.sha256))} · ${esc(formatDate(evidence.retrievedAt))}</small>`;
+  const compactNote = evidence.compacted ? ` · original bytes in ${esc(evidence.compressedFile)}; hash preserved in COMPRESSED.json` : '';
+  return `${file}${file && url ? ' · ' : ''}${url}<br><small class="mono">sha256 ${esc(shortHash(evidence.sha256))} · ${esc(formatDate(evidence.retrievedAt))}${compactNote}</small>`;
 }
 
 function renderForwardLedger() {
@@ -225,7 +253,7 @@ function renderForwardLedger() {
         <td><small>${p.lastMark?.markPrice === null || p.lastMark?.markPrice === undefined ? 'no bid / no trade' : `${px(p.lastMark.markPrice)} (${esc(p.lastMark.bid !== null && p.lastMark.bid !== undefined ? 'bid' : 'last')})`}<br>${esc(formatDate(p.lastMark?.at))}</small></td>
         <td class="${cls(unrealized)}">${unrealized === null ? '—' : money(unrealized)}</td>
         <td><small>${esc(formatDate(p.closeTime))}</small></td>
-        <td><small>${evidenceLink(p.evidence)}</small><br><small class="reason" title="${esc(p.entryReason)}">${esc(p.entryReason)}</small></td></tr>`;
+        <td><small>${ledgerLineLink({ ledgerFile: p.ledger?.fillFile, ledgerLine: p.ledger?.fillLine }, 'fill')} ${ledgerLineLink({ ledgerFile: p.ledger?.closeFile, ledgerLine: p.ledger?.closeLine }, 'close')}</small><br><small>${evidenceLink(p.evidence)}</small><br><small class="reason" title="${esc(p.entryReason)}">${esc(p.entryReason)}</small></td></tr>`;
     }).join('') : '<tr><td colspan="9" class="empty-cell">No open paper position. Positions appear only after a rule was confirmed on a fresh official order book.</td></tr>';
   } else if (forward.tab === 'events') {
     head.innerHTML = '<tr><th>When</th><th>Strategy</th><th>Event</th><th>Contract</th><th>Side · size</th><th>Entry</th><th>Exit</th><th>Fees · slippage</th><th>PnL</th><th>Evidence</th></tr>';
@@ -242,7 +270,7 @@ function renderForwardLedger() {
         <td>${exit}</td>
         <td><small>${fees}</small></td>
         <td class="${cls(e.pnl)}">${e.kind === 'fill' ? '—' : money(e.pnl)}</td>
-        <td><small>${evidenceLink(e.evidence)}</small>${e.reason ? `<br><small class="reason" title="${esc(e.reason)}">${esc(e.reason)}</small>` : ''}</td></tr>`;
+        <td><small>${ledgerLineLink(e, e.kind === 'fill' ? 'fill' : 'event')}</small><br><small>${evidenceLink(e.evidence)}</small>${e.reason ? `<br><small class="reason" title="${esc(e.reason)}">${esc(e.reason)}</small>` : ''}</td></tr>`;
     }).join('') : '<tr><td colspan="10" class="empty-cell">No fill, exit or settlement has been recorded yet.</td></tr>';
   } else if (forward.tab === 'intents') {
     head.innerHTML = '<tr><th>Cycle</th><th>Strategy</th><th>Contract</th><th>Side · quote</th><th>Rule reason</th><th>Book check</th><th>Status</th></tr>';
@@ -250,7 +278,7 @@ function renderForwardLedger() {
     body.innerHTML = intents.length ? intents.map((i) => {
       const [text, pill] = label[i.status] ?? [i.status, 'none'];
       const book = i.bookQuotes ? `YES ${px(i.bookQuotes.yes_bid)} / ${px(i.bookQuotes.yes_ask)} · NO ${px(i.bookQuotes.no_bid)} / ${px(i.bookQuotes.no_ask)}<br>${esc(formatDate(i.bookAt))}` : 'not fetched';
-      return `<tr><td><small>${esc(formatDate(i.at))}<br>${esc(i.cycle)}</small></td><td><b>${esc(i.username)}</b></td><td><b>${esc(i.title)}</b><br><small>${esc(i.subtitle ? `${i.subtitle} · ` : '')}<a class="text-link" href="${KALSHI_MARKET_URL(i.ticker)}" target="_blank" rel="noreferrer">${esc(i.ticker)} ↗</a> · closes ${esc(formatDate(i.closeTime))}</small></td><td><b>${esc(i.side.toUpperCase())}</b> @ ${px(i.quotePrice)}<br><small>limit ${px(i.limit)} · vol ${formatContracts(i.volume)}</small></td><td><small>${esc(i.reason)}</small></td><td><small>${book}</small></td><td><span class="evidence-pill ${pill}">${esc(text)}</span>${i.positionId ? `<br><small>${formatContracts(i.contracts)} @ ${px(i.fillPrice)}</small>` : ''}</td></tr>`;
+      return `<tr><td><small>${esc(formatDate(i.at))}<br>${esc(i.cycle)}<br>${ledgerLineLink(i, 'intent')}</small></td><td><b>${esc(i.username)}</b></td><td><b>${esc(i.title)}</b><br><small>${esc(i.subtitle ? `${i.subtitle} · ` : '')}<a class="text-link" href="${KALSHI_MARKET_URL(i.ticker)}" target="_blank" rel="noreferrer">${esc(i.ticker)} ↗</a> · closes ${esc(formatDate(i.closeTime))}</small></td><td><b>${esc(i.side.toUpperCase())}</b> @ ${px(i.quotePrice)}<br><small>limit ${px(i.limit)} · vol ${formatContracts(i.volume)}</small></td><td><small>${esc(i.reason)}</small></td><td><small>${book}</small></td><td><span class="evidence-pill ${pill}">${esc(text)}</span>${i.positionId ? `<br><small>${formatContracts(i.contracts)} @ ${px(i.fillPrice)}</small>` : ''}</td></tr>`;
     }).join('') : '<tr><td colspan="7" class="empty-cell">No intent recorded in the current window.</td></tr>';
   } else if (forward.tab === 'cycles') {
     head.innerHTML = '<tr><th>Cycle (UTC)</th><th>Duration</th><th>API reads</th><th>Series · markets</th><th>Books</th><th>Intents · fills · exits · settlements</th><th>Signals</th><th>Errors</th></tr>';
@@ -365,12 +393,15 @@ function renderSeasonHealth() {
     (ledger.equityCsvVsStateMismatches ?? 0) ? `${ledger.equityCsvVsStateMismatches} equity CSV drift row(s)` : 'equity CSV matches account state',
     live.available ? 'live settlement re-read attempted' : esc(live.note ?? 'live re-read pending (needs runner network)'),
   ].join(' · ');
+  const historyRows = forward.auditHistory ?? [];
+  const historyChart = `<div class="health-trend"><div class="panel-header"><div><h3>Scheduled-slot execution trend</h3><p>matched scheduled cron slots ÷ expected slots, from append-only audit rows; manual extra cycles do not inflate this rate</p></div><span class="source-badge">${historyRows.length} audit point(s)</span></div>${auditRateSparkline(historyRows)}<p class="micro-note"><span>Definition</span>Only <code>on-time + late</code> scheduled slots count in the numerator. Missed slots remain visible; an unavailable or zero-slot audit is not plotted.</p></div>`;
   panel.innerHTML = `${mismatchBanner}<div class="metrics-grid">${cards}</div>
+    ${historyChart}
     <p class="micro-note"><span>Signal coverage</span>${signalChips}</p>
     ${errorLines ? `<details class="health-errors"><summary>Latest cycle's signal abstentions (${sig.signalErrors ?? 0} line(s)) - a source that answers nothing makes its personas abstain, never default</summary><ul>${errorLines}</ul></details>` : ''}
     ${liveRows ? `<div class="table-shell"><table><thead><tr><th>Settled market</th><th>Strategy</th><th>Ledger says</th><th>Official API now</th><th>Verdict</th><th>Response hash</th></tr></thead><tbody>${liveRows}</tbody></table></div>` : ''}
     <p class="micro-note"><span>Coverage details</span>${esc(details)}</p>
-    <p class="micro-note"><span>Audit files</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/latest.json" target="_blank" rel="noreferrer">forward/audit/latest.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/COMPRESSED.json" target="_blank" rel="noreferrer">COMPRESSED.json ↗</a> · cron ${esc(sched.cron ?? '—')} · cycles ${esc(sched.cycles ?? 0)} · ${esc(sched.note ?? '')}</p>`;
+    <p class="micro-note"><span>Audit files</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/latest.json" target="_blank" rel="noreferrer">forward/audit/latest.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/audit-history.jsonl" target="_blank" rel="noreferrer">audit-history.jsonl ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/audit/history.json" target="_blank" rel="noreferrer">history.json ↗</a> · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/COMPRESSED.json" target="_blank" rel="noreferrer">COMPRESSED.json ↗</a> · cron ${esc(sched.cron ?? '—')} · cycles ${esc(sched.cycles ?? 0)} · ${esc(sched.note ?? '')}</p>`;
 }
 
 function renderToday() {

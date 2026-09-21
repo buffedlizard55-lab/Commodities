@@ -23,7 +23,6 @@ import { loadSeasonMemory, loadForwardDesk, bindForwardEvents, forwardRowFor, fo
 
 const STORAGE_PREFIX = 'research-exchange-paper-v1';
 const SEASON_YEAR = new Date().getUTCFullYear();
-const SEASON_BASE = 'data/season-2026/';
 const state = {
   seasonYear: SEASON_YEAR,
   markets: [],
