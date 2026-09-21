@@ -89,6 +89,13 @@ jobs:
       - name: Compact old evidence and quote captures
         run: python3 scripts/compact_storage.py --days 3 --apply
 
+      # Season health audit: cron-slot schedule gaps, ledger coverage, compaction state, signal
+      # coverage, the tape summary, and (on cycle runs) a fresh re-read of settled markets from
+      # GET /markets/{ticker}.  A mismatched settlement flips the report to FAIL and is then
+      # caught by the verifier below, which fails the run - the issue stays in the repo log.
+      - name: Season health audit
+        run: python3 scripts/audit_season.py --live || echo "season audit recorded issues (see data/season-*/forward/audit/latest.json)"
+
       - name: Verify season memory (invariants + hashes)
         run: python3 scripts/verify_data.py
 

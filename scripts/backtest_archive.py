@@ -22,6 +22,9 @@ Truth rules (identical to scripts/build_competition.py, no exceptions):
 Usage:
   python3 scripts/backtest_archive.py                 # rebuild data/season-2026/backtest-archive/
   python3 scripts/backtest_archive.py --season 2027 --min-bars 8 --dry-run
+  python3 scripts/backtest_archive.py --series KXNFLGAME,KXNCAAFGAME --dry-run   # ad-hoc subset
+  python3 scripts/backtest_archive.py --folds 3       # walk-forward windows over the replay horizon
+The committed run always replays the WHOLE archive; a --series run prints and refuses to overwrite.
 """
 from __future__ import annotations
 
@@ -226,6 +229,36 @@ def rule_late_favourite(bar, bars, i, market):
     return {"side": "yes", "reason": f"late favourite: verified ask {ask:.4f} >= 0.90 on bar {i + 1}/{len(bars)}"}
 
 
+def rule_gap_fade(bar, bars, i, market):
+    """Fade an opening gap of >= 10c against the previous bar's verified close.
+
+    Mean reversion is the archetype the r/PredictionsMarkets 5,000-strategy KXBTC15M backtest
+    reported as the only profitable family (the same source as the desk's PanicFader - discovery
+    only, no number from that post is used here).  Deterministic: a gap up is faded by buying NO,
+    a gap down by buying YES, with the same +5c verified-bid take-profit as the momentum rules.
+    """
+    if i < 1 or bar.get("open") is None or bars[i - 1].get("close") is None:
+        return None
+    prev_close = bars[i - 1]["close"]
+    gap = round(bar["open"] - prev_close, 6)
+    if abs(gap) < 0.10:
+        return None
+    side = "no" if gap > 0 else "yes"
+    return {"side": side, "reason": f"open {bar['open']:.4f} gapped {gap:+.4f} vs prior close {prev_close:.4f}; "
+                                    f"fade toward the prior close (verified {side} side only)",
+            "exit": "profit"}
+
+
+def rule_favourite_stop(bar, bars, i, market):
+    """ArchiveFavourite's entry with a 10c protective exit added - measures what the stop is worth."""
+    ask, spread = bar.get("ask"), _spread(bar)
+    if ask is None or spread is None or not (0.85 <= ask <= 0.97) or spread > 0.05:
+        return None
+    return {"side": "yes", "reason": f"verified ask {ask:.4f} in [0.85, 0.97] with spread {spread:.4f}; "
+                                     f"stop if the verified bid drops 10c under entry",
+            "exit": "stop", "stopLevel": round(ask - 0.10, 6)}
+
+
 STRATEGIES = [
     {"id": "arch-favourite", "username": "ArchiveFavourite", "name": "Archive Favourite Band",
      "rule": rule_favourite_band, "exit": "hold",
@@ -262,6 +295,19 @@ STRATEGIES = [
      "rule": rule_late_favourite, "exit": "hold",
      "text": "Inside the last 20% of the archived tape, enter a favourite quoted at or above 90c; hold to settlement.",
      "why": "Late certainty: the tape shows what the last few cents of a near-decided market actually paid."},
+    {"id": "arch-gap-fade", "username": "ArchiveGapFade", "name": "Archive Opening-Gap Fade",
+     "rule": rule_gap_fade, "exit": "profit",
+     "text": "When a bar opens >= 10c away from the previous bar's close, fade the gap (buy the cheap side) and "
+             "exit at the verified bid 5c above entry, else hold to settlement.",
+     "why": "The mean-reversion archetype the r/PredictionsMarkets 5,000-strategy KXBTC15M backtest reported as "
+            "the only profitable family (discovery only; measured here on official bars). Distinguishes a true "
+            "overreaction from ordinary noise on each market's own tape."},
+    {"id": "arch-favourite-stop", "username": "ArchiveFavStop", "name": "Archive Favourite with 10c Stop",
+     "rule": rule_favourite_stop, "exit": "stop",
+     "text": "Same entry as ArchiveFavourite (verified ask 85-97c with a spread <= 5c) but sell at the first "
+             "verified bid 10c under the entry price; otherwise hold to settlement.",
+     "why": "Isolates one design choice against its own twin: what cutting losers at 10c does to a hold-to-"
+            "settlement favourite strategy on the same markets, same fees, same bars."},
 ]
 
 
@@ -304,7 +350,8 @@ def replay(strategy: dict, markets: list[dict]) -> tuple[list[dict], dict]:
                                          "yes_ask_close": bar.get("ask"), "volume": volume},
                             "entryFee": entry_fee, "entryNotional": round(cost, 6), "slippageEntry": slip,
                             "reason": signal["reason"], "exitMode": signal.get("exit") or strategy["exit"],
-                            "exitTarget": None if (signal.get("exit") or strategy["exit"]) != "profit" else round(price + 0.05, 6)}
+                            "exitTarget": None if (signal.get("exit") or strategy["exit"]) != "profit" else round(price + 0.05, 6),
+                            "stopLevel": signal.get("stopLevel")}
                 continue
             # exits: only on a bar with a verified bid for the held side
             exit_price = _exit_price(bar, position["side"])
@@ -312,6 +359,9 @@ def replay(strategy: dict, markets: list[dict]) -> tuple[list[dict], dict]:
             if position["exitMode"] == "profit" and position["exitTarget"] and exit_price is not None \
                     and exit_price >= position["exitTarget"]:
                 reason = f"verified bid {exit_price:.4f} >= take-profit {position['exitTarget']:.4f}"
+            elif position["exitMode"] == "stop" and exit_price is not None \
+                    and position.get("stopLevel") is not None and exit_price <= position["stopLevel"] + 1e-9:
+                reason = f"verified bid {exit_price:.4f} at/below protective stop {position['stopLevel']:.4f}"
             elif position["exitMode"] == "sma" and exit_price is not None:
                 closes = [b["close"] for b in bars[:i + 1] if b.get("close") is not None]
                 if len(closes) >= 10 and closes[-1] is not None and closes[-1] < sum(closes[-10:]) / 10:
@@ -402,8 +452,89 @@ def analysis(strategy, totals, markets) -> str:
     return " ".join(parts)
 
 
-def build(season_dir: str, min_bars: int) -> dict:
+def curves_from_trades(trades: list[dict], strategies: list[dict]) -> dict:
+    """Cumulative realized PnL timeline per rule set, one point per closed trade.
+
+    Honest label: positions are carried at cost until they close (no unrealized per-bar mark), so
+    the curve steps at each exit/settlement timestamp.  Equity = starting cash + cumulative
+    realized PnL; the final point is exactly the leaderboard's return (verified by verify_data).
+    """
+    by_strategy: dict[str, list[dict]] = {}
+    for trade in trades:
+        by_strategy.setdefault(trade["strategyId"], []).append(trade)
+    curves = {"schemaVersion": 1, "generatedAt": iso(),
+              "method": "cumulative realized PnL at each trade's exit/settlement timestamp; entries marked at "
+                        "cost until closed (no unrealized mark); equity = 10000 + cumulative PnL",
+              "startingCash": STARTING_CASH, "strategies": {}}
+    for strategy in strategies:
+        rows = sorted(by_strategy.get(strategy["id"], []), key=lambda t: (t["exitTs"], t["id"]))
+        if not rows:
+            curves["strategies"][strategy["id"]] = {"username": strategy["username"], "startTs": None, "points": []}
+            continue
+        cum = 0.0
+        points = []
+        for trade in rows:
+            cum = round(cum + trade["pnl"], 6)
+            points.append([trade["exitTs"], cum])
+        curves["strategies"][strategy["id"]] = {"username": strategy["username"], "startTs": rows[0]["entryTs"],
+                                                "points": points}
+    return curves
+
+
+def walk_forward(trades: list[dict], strategies: list[dict], folds: int) -> dict:
+    """Split the replay horizon into equal windows by ENTRY time; a fold holds the trades entered in it.
+
+    Exits and settlements always use the real later bars, so a fold is out-of-sample for its own
+    entries: no bar is re-simulated, moved or invented.  Each fold restarts from $10,000 so folds
+    are comparable.  With one month of archived bars the folds are short - the output says so
+    instead of pretending to be robust (IRR-30).
+    """
+    entries = [t["entryTs"] for t in trades]
+    exits = [t["exitTs"] for t in trades]
+    result = {"schemaVersion": 1, "generatedAt": iso(), "folds": folds,
+              "method": "trades assigned to equal-duration windows by entry time; exits/settlements on the real "
+                        "later bars; each fold resets to $10,000",
+              "windows": [], "rows": []}
+    if not entries:
+        return result
+    tmin, tmax = min(entries), max(max(exits), max(entries))
+    folds = max(1, min(folds, 6))
+    span = max(tmax - tmin, 1)
+    edges = [tmin + span * k / folds for k in range(folds)] + [tmax + 1]
+    for k in range(folds):
+        result["windows"].append({"fold": k + 1, "startTs": int(edges[k]), "endTs": int(min(edges[k + 1], tmax)),
+                                  "startAt": iso(int(edges[k])), "endAt": iso(int(min(edges[k + 1], tmax)))})
+
+    def fold_of(ts):
+        for k in range(folds):
+            if edges[k] <= ts < edges[k + 1]:
+                return k + 1
+        return folds
+
+    for strategy in strategies:
+        rows = [t for t in trades if t["strategyId"] == strategy["id"]]
+        per_fold = {k: [] for k in range(1, folds + 1)}
+        for trade in rows:
+            per_fold[fold_of(trade["entryTs"])].append(trade)
+        for k, fold_rows in per_fold.items():
+            if not fold_rows:
+                continue
+            wins = sum(1 for t in fold_rows if t["pnl"] > 0)
+            realized = round(sum(t["pnl"] for t in fold_rows), 6)
+            result["rows"].append({"strategyId": strategy["id"], "username": strategy["username"], "fold": k,
+                                   "trades": len(fold_rows), "wins": wins, "losses": len(fold_rows) - wins,
+                                   "realizedPnl": realized, "returnPct": round(realized / STARTING_CASH * 100, 4)})
+    result["caveat"] = ("Folds are windows over ONE continuous replay of the same bars; the rules have no fitted "
+                        "parameters, so this measures stability across time, not a train/test split. Short windows "
+                        "are noise - do not promote a rule set on a single fold (IRR-30).")
+    return result
+
+
+def build(season_dir: str, min_bars: int, series_filter: list[str] | None = None, folds: int = 2) -> dict:
     markets = load_archive(season_dir, min_bars)
+    if series_filter:
+        wanted = {s.upper() for s in series_filter}
+        markets = [m for m in markets if m["series"].upper() in wanted]
     board, explanations, all_trades = [], [], []
     for strategy in STRATEGIES:
         trades, totals = replay(strategy, markets)
@@ -439,6 +570,7 @@ def build(season_dir: str, min_bars: int) -> dict:
         "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at "
                     "the official result (1/0) at the archived settlement_ts",
         "series": sorted({m["series"] for m in markets}),
+        "seriesFilter": sorted({s.upper() for s in series_filter}) if series_filter else None,
         "periods": sorted({int(m["period"] or 0) for m in markets}),
         "markets": {m["ticker"]: {"series": m["series"], "file": m["file"], "bars": m["barCount"], "period": m["period"],
                                   "result": m["result"], "settlementTs": m["settlementTs"], "openTs": m["openTs"],
@@ -446,13 +578,17 @@ def build(season_dir: str, min_bars: int) -> dict:
                                   "archivedByCycle": m["cycle"], "feeType": m["feeType"],
                                   "feeMultiplier": m["feeMultiplier"]} for m in markets},
     }
-    return {"competition": competition, "trades": all_trades, "board": board, "explanations": explanations}
+    return {"competition": competition, "trades": all_trades, "board": board, "explanations": explanations,
+            "curves": curves_from_trades(all_trades, STRATEGIES),
+            "walkForward": walk_forward(all_trades, STRATEGIES, folds)}
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--season", help="season year (default: the newest data/season-* directory)")
     parser.add_argument("--min-bars", type=int, default=8, help="skip archived markets with fewer bars")
+    parser.add_argument("--series", help="comma-separated series filter, e.g. KXBTC15M,KXGOLD15M")
+    parser.add_argument("--folds", type=int, default=2, help="walk-forward windows over the replay horizon")
     parser.add_argument("--dry-run", action="store_true", help="compute and print, do not write")
     args = parser.parse_args(argv)
     season = args.season
@@ -464,24 +600,32 @@ def main(argv=None) -> int:
             return 1
         season = seasons[-1]
     season_dir = os.path.join(DATA_DIR, f"season-{season}")
-    out = build(season_dir, args.min_bars)
+    out = build(season_dir, args.min_bars,
+                series_filter=[s.strip() for s in args.series.split(",") if s.strip()] if args.series else None,
+                folds=args.folds)
     if args.dry_run:
         print(json.dumps({"season": season, "markets": out["competition"]["marketCount"],
                           "bars": out["competition"]["verifiedBars"], "trades": len(out["trades"]),
+                          "seriesFilter": out["competition"]["seriesFilter"],
                           "board": [{k: r[k] for k in ("rank", "username", "returnPct", "trades", "wins", "losses")}
                                     for r in out["board"]]}, indent=1))
         return 0
+    if out["competition"].get("seriesFilter"):
+        print("--series is an analysis filter; refusing to overwrite the committed full-archive outputs")
+        return 2
     target = os.path.join(season_dir, "backtest-archive")
     os.makedirs(target, exist_ok=True)
     for name, payload in (("competition.json", out["competition"]), ("trades.json", out["trades"]),
-                          ("leaderboard.json", out["board"]), ("explanations.json", out["explanations"])):
+                          ("leaderboard.json", out["board"]), ("explanations.json", out["explanations"]),
+                          ("curves.json", out["curves"]), ("walkforward.json", out["walkForward"])):
         with open(os.path.join(target, name), "w") as fh:
             json.dump(payload, fh, indent=1, sort_keys=True)
             fh.write("\n")
     print(json.dumps({"season": season, "markets": out["competition"]["marketCount"],
                       "verifiedBars": out["competition"]["verifiedBars"], "trades": len(out["trades"]),
                       "written": [os.path.relpath(os.path.join(target, n), ROOT) for n in
-                                  ("competition.json", "trades.json", "leaderboard.json", "explanations.json")]}, indent=1))
+                                  ("competition.json", "trades.json", "leaderboard.json", "explanations.json",
+                                   "curves.json", "walkforward.json")]}, indent=1))
     return 0
 
 

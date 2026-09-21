@@ -18,7 +18,7 @@
   "username": "ArchiveFader"
  },
  {
-  "explanation": "70 trade(s) on 36 of 45 archived market(s), 20 win / 50 loss (29% win rate), average entry notional $1,390.22. Realized $22,348.27 (+223.483% of the $10,000 start) after $2,481.73 of quadratic taker fees and $1,269.63 of half-spread slippage measured on the same bars. 4 signal(s) produced no trade because the bar had no verified volume or the 25% volume cap left nothing affordable. A Pine-style trend rule on official bars only - the same idea PinePilotX forward-tests, so the two can be compared on identical prices.",
+  "explanation": "71 trade(s) on 36 of 45 archived market(s), 20 win / 51 loss (28% win rate), average entry notional $1,372.39. Realized $20,722.83 (+207.228% of the $10,000 start) after $2,428.19 of quadratic taker fees and $1,252.12 of half-spread slippage measured on the same bars. 4 signal(s) produced no trade because the bar had no verified volume or the 25% volume cap left nothing affordable. A Pine-style trend rule on official bars only - the same idea PinePilotX forward-tests, so the two can be compared on identical prices.",
   "name": "Archive SMA Cross",
   "strategyId": "arch-sma",
   "username": "ArchiveSMA"
@@ -40,5 +40,17 @@
   "name": "Archive Late Favourite",
   "strategyId": "arch-late-favourite",
   "username": "ArchiveCloser"
+ },
+ {
+  "explanation": "6 trade(s) on 6 of 45 archived market(s), 3 win / 3 loss (50% win rate), average entry notional $38.47. Realized $-235.91 (-2.359% of the $10,000 start) after $11.41 of quadratic taker fees and $56.28 of half-spread slippage measured on the same bars. 4 signal(s) produced no trade because the bar had no verified volume or the 25% volume cap left nothing affordable. The mean-reversion archetype the r/PredictionsMarkets 5,000-strategy KXBTC15M backtest reported as the only profitable family (discovery only; measured here on official bars). Distinguishes a true overreaction from ordinary noise on each market's own tape.",
+  "name": "Archive Opening-Gap Fade",
+  "strategyId": "arch-gap-fade",
+  "username": "ArchiveGapFade"
+ },
+ {
+  "explanation": "14 trade(s) on 14 of 45 archived market(s), 7 win / 7 loss (50% win rate), average entry notional $799.84. Realized $-9,724.45 (-97.245% of the $10,000 start) after $115.25 of quadratic taker fees and $5,372.14 of half-spread slippage measured on the same bars. Isolates one design choice against its own twin: what cutting losers at 10c does to a hold-to-settlement favourite strategy on the same markets, same fees, same bars.",
+  "name": "Archive Favourite with 10c Stop",
+  "strategyId": "arch-favourite-stop",
+  "username": "ArchiveFavStop"
  }
 ]

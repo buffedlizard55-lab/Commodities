@@ -395,5 +395,53 @@ class DeskCycleTests(unittest.TestCase):
         self.assertGreater(exits[0]["pnl"], 0)
 
 
+class HeatConfirmTests(unittest.TestCase):
+    """The new persona's rule functions, exercised offline against synthetic NWS forecasts."""
+
+    def market(self, **over):
+        m = {"ticker": "KXHIGHTATL-26SEP21-B80.5", "event_ticker": "KXHIGHTATL-26SEP21",
+             "series_ticker": "KXHIGHTATL", "strike_type": "between", "floor_strike": 80.5, "cap_strike": 81.5,
+             "yes_ask": 0.40, "yes_bid": 0.38}
+        m.update(over)
+        return m
+
+    def ctx(self, high_f):
+        return {"nws": {"KXHIGHTATL-26SEP21": {"high_f": high_f, "date": "2026-09-21", "updated": "t",
+                                               "source": "https://api.weather.gov/gridpoints/HEC/60,95/forecast"}}}
+
+    def test_entry_requires_forecast_and_price_and_spread(self):
+        sig = FS.entry_heat_confirm(self.market(), self.ctx(81.0))
+        self.assertIsNotNone(sig)
+        self.assertEqual((sig["side"], sig["price"], sig["limit"]), ("yes", 0.40, 0.42))
+        self.assertEqual(sig["meta"]["forecastHighF"], 81.0)
+        self.assertEqual(sig["meta"]["capStrike"], 81.5)
+        # forecast at exactly 77F is NOT above the community threshold
+        self.assertIsNone(FS.entry_heat_confirm(self.market(floor_strike=76.5, cap_strike=77.5), self.ctx(77.0)))
+        # 42c ask is not "below 42c"
+        self.assertIsNone(FS.entry_heat_confirm(self.market(yes_ask=0.42), self.ctx(81.0)))
+        # spread 9c > 8c
+        self.assertIsNone(FS.entry_heat_confirm(self.market(yes_bid=0.31), self.ctx(81.0)))
+        # forecast above the threshold but outside the bracket -> no confirmation -> no trade
+        self.assertIsNone(FS.entry_heat_confirm(self.market(), self.ctx(78.5)))
+        # no forecast at all (adapter gap) -> abstain, never trade on price alone
+        self.assertIsNone(FS.entry_heat_confirm(self.market(), {"nws": {}}))
+
+    def test_exit_only_when_the_fresh_forecast_left_the_bracket(self):
+        sig = FS.entry_heat_confirm(self.market(), self.ctx(81.0))
+        position = {"eventTicker": "KXHIGHTATL-26SEP21", "side": "yes", "entryPrice": 0.40,
+                    "signalMeta": dict(sig["meta"])}
+        self.assertIsNone(FS.exit_heat_forecast_cools(position, {"yes_bid": 0.50}, self.ctx(81.0)))  # still inside
+        reason = FS.exit_heat_forecast_cools(position, {"yes_bid": 0.50}, self.ctx(75.0))
+        self.assertIsNotNone(reason)
+        self.assertIn("no longer falls in the entered bracket", reason)
+        # no fresh forecast -> hold; a missing adapter must never force an exit
+        self.assertIsNone(FS.exit_heat_forecast_cools(position, {"yes_bid": 0.50}, {"nws": {}}))
+
+    def test_desk_copies_signal_meta_into_the_position(self):
+        # open_position() is the one place the forward desk builds a position; the meta must survive
+        src = open(os.path.join(ROOT, "scripts", "forward_desk.py")).read()
+        self.assertIn('"signalMeta": dict(signal.get("meta") or {})', src)
+
+
 if __name__ == "__main__":
     unittest.main()

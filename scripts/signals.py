@@ -30,6 +30,7 @@ import json
 import os
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -98,6 +99,19 @@ def normalize_name(name: str) -> str:
 # forecast is a *signal*, never the settlement value (recorded as IRR-26 in data/source-registry.json).
 WEATHER_CITY_TITLES = re.compile(r"^Highest temperature in (?P<city>.+)$", re.IGNORECASE)
 
+# Kalshi daily-high series do not share one title convention (verified in the committed series
+# catalog: 'Highest temperature in X', 'Atlanta Max Temperature', 'Daily High Temperature Houston',
+# 'Newark, NJ (EWR) Daily Max Temp', 'Washington DC Daily Max Temp' ...).  These patterns only
+# re-arrange the words Kalshi itself chose for the series title: they extract the city token and an
+# optional two-letter state hint from the title text, add no names, and every extracted city must
+# still match an exact Census gazetteer place name to be used (an ambiguous remainder abstains).
+WEATHER_TEMP_NOISE = re.compile(
+    r"\b(max(?:imum)?\s+(?:daily\s+)?(?:high\s+)?temp(?:erature)?|daily\s+high\s+temp(?:erature)?|"
+    r"daily\s+max\s+temp(?:erature)?|high\s+temp(?:erature)?)\b", re.IGNORECASE)
+USPS_STATE = re.compile(r",\s*([A-Z]{2})\b")
+DC_TOKEN = re.compile(r"\bDC\b", re.IGNORECASE)
+PARENTHETICAL = re.compile(r"\([^)]*\)")
+
 # Cities where Kalshi's series title is not a Census place name verbatim.  Each alias is the
 # official Census place NAME; nothing else is invented (no hand-typed coordinates anywhere).
 CITY_ALIASES = {
@@ -123,6 +137,13 @@ CITY_ALIASES = {
     "san antonio": ("San Antonio", "TX"),
     "san diego": ("San Diego", "CA"),
 }
+# normalize_name() strips punctuation, so every lookup key must be normalised the same way
+# ("Los Angeles" -> "losangeles", never "los angeles" - the pre-normalised keys could never hit).
+CITY_ALIASES_NORMALISED = {normalize_name(alias): (place, state) for alias, (place, state) in CITY_ALIASES.items()}
+
+# Trailing Census place-class words that can appear in the NAME column; stripping is a
+# normalisation of the official place name, not a new name.
+PLACE_SUFFIX_WORDS = re.compile(r"\s+(city|town|village|borough|CDP|municipality|township)\b.*$", re.IGNORECASE)
 
 
 class PlaceCentroids:
@@ -152,6 +173,7 @@ class PlaceCentroids:
             raw = raw[-1]
         self.downloaded = True
         self._raw_sha256 = sha256_bytes(raw)
+        self._raw_bytes = len(raw)
         self._raw_at = iso(int(time.time()))
         rows: list[tuple[str, str, float, float]] = []
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
@@ -182,23 +204,49 @@ class PlaceCentroids:
         self._rows = rows
         return rows
 
-    def lookup(self, city: str) -> dict | None:
-        """Coordinates for a Kalshi weather city, or None (never guessed)."""
-        key = normalize_name(city)
+    def lookup(self, city: str, state: str | None = None) -> dict | None:
+        """Coordinates for a Kalshi weather city, or None (never guessed).
+
+        Matching is done against the Census NAME column only: exact normalized name first; if the
+        file stores names with a place-class suffix, the suffix-stripped form; a substring match is
+        accepted only when it is unique (or unique inside an explicit state).  A multi-state
+        ambiguity without a state hint abstains and lists the candidates in the error.
+        """
+        key = normalize_name(city) + ("|" + state.upper() if state else "")
         if key in self.cache["places"]:
             return self.cache["places"][key]
-        alias = CITY_ALIASES.get(key)
+        alias = CITY_ALIASES_NORMALISED.get(key)
         target_name = normalize_name(alias[0] if alias else city)
-        target_state = (alias[1] if alias else "").upper()
+        # an explicit state hint (from the series title) outranks the alias table's state
+        target_state = ((state or "").upper() or (alias[1] if alias else "").upper())
         try:
             rows = self._load_rows()
         except Exception as error:  # network / archive problem: the weather personas abstain
             self.errors.append(f"gazetteer fetch failed: {error}")
             return None
+        if not rows:
+            self.errors.append(f"gazetteer parsed 0 place rows "
+                               f"(bytes={getattr(self, '_raw_bytes', '?')}, sha256={getattr(self, '_raw_sha256', '?')[:12]})")
+            return None
         matches = [row for row in rows
                    if normalize_name(row[0]) == target_name and (not target_state or row[1].upper() == target_state)]
+        if not matches:  # second pass: NAME with a trailing place-class suffix stripped
+            matches = [row for row in rows
+                       if normalize_name(PLACE_SUFFIX_WORDS.sub("", row[0])) == target_name
+                       and (not target_state or row[1].upper() == target_state)]
+        if not matches:  # third pass: unique substring only, never a fuzzy pick
+            substring = [row for row in rows if target_name in normalize_name(row[0])
+                         and (not target_state or row[1].upper() == target_state)]
+            distinct_states = sorted({row[1].upper() for row in substring})
+            if substring and len(distinct_states) == 1:
+                matches = substring
+            elif substring:
+                self.errors.append(f"'{city}' matches {len(substring)} Census places across states "
+                                   f"{distinct_states[:6]} - ambiguous, series skipped")
+                return None
         if not matches:
-            self.errors.append(f"no Census place match for '{city}'")
+            self.errors.append(f"no Census place match for '{city}' (state hint {target_state or 'none'}; "
+                               f"scanned {len(rows)} gazetteer rows, sha256 {getattr(self, '_raw_sha256', '?')[:12]})")
             return None
         name, state, lat, lon = matches[0]
         row = {"city": city, "censusPlace": name, "state": state, "lat": round(lat, 6), "lon": round(lon, 6),
@@ -236,9 +284,37 @@ class NwsCities:
         self.records: list[dict] = []
 
     # -- resolution --------------------------------------------------------------------
+    @staticmethod
+    def parse_city_state(series_title: str) -> tuple[str, str | None] | None:
+        """City (and optional state) from Kalshi's own series title; None when the title is not a
+        daily-high temperature title or the city token is not extractable.  Adds no names."""
+        title = (series_title or "").strip()
+        match = WEATHER_CITY_TITLES.match(title)
+        if match:
+            city_part = match.group("city").strip()
+        else:
+            cleaned = PARENTHETICAL.sub(" ", title)  # drop '(EWR)'-style station notes
+            if not re.search(r"temp", cleaned, re.IGNORECASE):
+                return None  # not a temperature series at all
+            cleaned = WEATHER_TEMP_NOISE.sub(" ", cleaned)
+            city_part = cleaned.strip(" ,-")
+            if not city_part or re.fullmatch(r"[A-Za-z. ]{0,3}", city_part):
+                return None
+        state = None
+        comma = USPS_STATE.search(city_part)
+        if comma:
+            state = comma.group(1).upper()
+            city_part = city_part[:comma.start()].strip(" ,")
+        elif DC_TOKEN.search(city_part) and "washington" in normalize_name(city_part):
+            state, city_part = "DC", re.sub(r"\s*\bD\.?C\.?\b.*$", "", city_part, flags=re.IGNORECASE).strip(" ,")
+        city_part = city_part.strip(" ,")
+        if not city_part:
+            return None
+        return city_part, state
+
     def city_for_series(self, series_title: str) -> str | None:
-        match = WEATHER_CITY_TITLES.match((series_title or "").strip())
-        return match.group("city").strip() if match else None
+        parsed = self.parse_city_state(series_title)
+        return parsed[0] if parsed else None
 
     def resolve(self, series_ticker: str, series_title: str) -> dict | None:
         entry = self.gridpoints["gridpoints"].get(series_ticker)
@@ -251,11 +327,12 @@ class NwsCities:
                 fresh = False
         if entry and entry.get("status") == 200 and fresh:
             return entry
-        city = self.city_for_series(series_title)
-        if not city:
+        parsed = self.parse_city_state(series_title)
+        if not parsed:
             self.errors.append(f"{series_ticker}: title '{series_title}' does not name a city")
             return None
-        place = self.centroids.lookup(city)
+        city, city_state = parsed
+        place = self.centroids.lookup(city, city_state)
         if not place:
             self.errors.append(f"{series_ticker}: no official coordinates for '{city}' - series skipped")
             return None
@@ -270,7 +347,7 @@ class NwsCities:
         if not forecast_url:
             self.errors.append(f"{series_ticker}: NWS point response had no 'forecast' link")
             return None
-        entry = {"series": series_ticker, "title": series_title, "city": city, "status": 200,
+        entry = {"series": series_ticker, "title": series_title, "city": city, "stateHint": city_state, "status": 200,
                  "censusPlace": place["censusPlace"], "state": place["state"],
                  "lat": place["lat"], "lon": place["lon"], "placeSource": place["source"],
                  "pointsUrl": points_url, "pointsSha256": sha256_bytes(raw),
@@ -600,9 +677,18 @@ class OpenFdaRecords:
         self.records: list[dict] = []
 
     def _search(self, query: str) -> tuple[list[dict], str, str] | None:
+        """One openFDA query.  openFDA answers a zero-result search with HTTP 404 (documented at
+        open.fda.gov); that is treated as a *verified absence* response (rows = []), not an error -
+        the difference between "the API said there is no record" and "we never reached the API"."""
         url = OPENFDA_DRUGSFDA + "?" + urllib.parse.urlencode({"search": query, "limit": 5})
         try:
             payload, raw = self.fetcher(url)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                body = error.read() or b""
+                return [], url, sha256_bytes(body if isinstance(body, bytes) else str(body).encode())
+            self.errors.append(f"openfda {query}: HTTP Error {error.code}")
+            return None
         except Exception as error:
             self.errors.append(f"openfda {query}: {error}")
             return None
@@ -616,7 +702,10 @@ class OpenFdaRecords:
         if cached and fetched:
             try:
                 age = time.time() - datetime.fromisoformat(fetched.replace("Z", "+00:00")).timestamp()
-                if age < self.max_age_days * 86400:
+                # an approval record ages slowly (Drugs@FDA is the record of approval); a verified
+                # absence is re-checked daily so a decision published overnight is seen next cycle
+                ttl = self.max_age_days if cached.get("approvedRecord") else 1
+                if age < ttl * 86400:
                     hit = dict(cached, cached=True)
                     self.records.append(hit)
                     return hit
@@ -627,6 +716,7 @@ class OpenFdaRecords:
         if drug.get("code"):
             queries.append(f'openfda.substance_name:"{drug["code"].upper()}"')
         applications: list[dict] = []
+        attempts: list[dict] = []
         used = None
         sha = None
         for query in queries:
@@ -634,6 +724,7 @@ class OpenFdaRecords:
             if found is None:
                 return None
             rows, url, digest = found
+            attempts.append({"query": query, "url": url, "sha256": digest, "results": len(rows)})
             if rows:
                 used, sha = url, digest
                 for row in rows:
@@ -653,9 +744,12 @@ class OpenFdaRecords:
                         "review_priority": (submissions[-1].get("review_priority") if submissions else None),
                     })
                 break
+        if not used and attempts:  # every query answered "no results" (openFDA 404): bind the absence
+            used, sha = attempts[0]["url"], attempts[0]["sha256"]
         record = {"kind": "openfda-drugsfda", "drug": drug["name"], "code": drug.get("code"),
                   "query": used, "url": used, "sha256": sha, "hits": len(applications),
                   "applications": applications[:5], "approvedRecord": bool(applications),
+                  "status": "record" if applications else "no-record", "attempts": attempts,
                   "retrievedAt": iso(int(time.time())), "cached": False,
                   "note": "openFDA Drugs@FDA: application/sponsor + ORIG submission status dates (YYYYMMDD). "
                           "No PDUFA target action date is published by this endpoint (IRR-27); absence of a "

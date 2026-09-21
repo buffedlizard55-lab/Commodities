@@ -870,6 +870,10 @@ class Cycle:
             "entryAt": self.book_meta[m["ticker"]]["at"], "entryCycle": self.cycle_id, "entryReason": signal["reason"],
             "closeTs": m["close_ts"], "closeTime": iso(m["close_ts"]), "exchangeIndex": m["exchange_index"],
             "feeMultiplier": multiplier, "quoteAtEntry": {k: m.get(k) for k in ("yes_bid", "yes_ask", "no_bid", "no_ask", "last", "previous", "volume", "volume_24h", "open_interest")},
+            # signalMeta: what the entry signal saw at decision time (e.g. the NWS forecast value a
+            # weather entry keyed on); exits may compare the live signal against it, never against
+            # anything re-fetched for the entry bar.  Carried verbatim from the signal dict.
+            "signalMeta": dict(signal.get("meta") or {}),
             "evidence": evidence, "lastMark": None,
         }
         position["lastMark"] = self.mark(position, book_quotes(self.books[m["ticker"]]).get(f"{signal['side']}_bid"),
@@ -985,7 +989,9 @@ class Cycle:
             "settlements": sum(1 for e in self.events if e["kind"] == "settlement"),
             "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles), "candlesArchived": len(self.archived),
             "nwsCityForecasts": len(getattr(self, "nws_forecasts", {}) or {}), "espnSignals": len(self.espn),
-            "fdaSignals": len(self.fda), "signalErrors": self.signal_errors[:20], "signalErrorCount": len(self.signal_errors),
+            "espnLiveSignals": sum(1 for s in self.espn.values() if s.get("state") == "in"),
+            "fdaSignals": len(self.fda), "fdaNoRecord": sum(1 for s in self.fda.values() if not s.get("approvedRecord")),
+            "signalErrors": self.signal_errors[:30], "signalErrorCount": len(self.signal_errors),
             "season": self.state.get("season", SEASON),
             "errors": self.errors[:40], "errorCount": len(self.errors),
         }
@@ -1056,7 +1062,7 @@ class Cycle:
                               "applications": r.get("applications")}
                              for r in (self.fda_adapter.records if self.fda_adapter else [])]
         recent["fdaSignals"] = self.fda
-        recent["signalErrors"] = self.signal_errors[:20]
+        recent["signalErrors"] = self.signal_errors[:30]
         write_json(path, recent, compact=True)
 
     def write_curves(self):

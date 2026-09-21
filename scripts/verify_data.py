@@ -83,8 +83,69 @@ def verify_archive_backtest(season_dir):
               abs(sum(t["pnl"] for t in closed) - row["realizedPnl"]) < 0.01, quiet=True)
         check(f"archive.{row['strategyId']}.cash_identity",
               abs((row["startingCash"] + row["realizedPnl"]) - row["cash"]) < 0.01, quiet=True)
+    # per-rule realized curves (curves.json): one point per closed trade, ending at the board number
+    curves_path = os.path.join(base, "curves.json")
+    if os.path.exists(curves_path):
+        with open(curves_path) as fh:
+            curves = json.load(fh)
+        points_total = 0
+        for row in board:
+            points = (curves.get("strategies") or {}).get(row["strategyId"], {}).get("points") or []
+            points_total += len(points)
+            check(f"archive.{row['strategyId']}.curve_ends_at_realized",
+                  (not points and row["trades"] == 0) or
+                  (bool(points) and abs(points[-1][1] - row["realizedPnl"]) < 0.01), quiet=True)
+        check("archive.curve_points_equal_trades", points_total == len(trades),
+              f"({points_total} curve points, {len(trades)} trades)")
+    # walk-forward windows (walkforward.json): every trade in exactly one fold
+    wf_path = os.path.join(base, "walkforward.json")
+    if os.path.exists(wf_path):
+        with open(wf_path) as fh:
+            walk = json.load(fh)
+        per_strategy = {}
+        for wf_row in walk.get("rows", []):
+            per_strategy[wf_row["strategyId"]] = per_strategy.get(wf_row["strategyId"], 0) + wf_row["trades"]
+        for row in board:
+            check(f"archive.{row['strategyId']}.walkforward_trade_total",
+                  per_strategy.get(row["strategyId"], 0) == row["trades"], quiet=True)
+        check("archive.walkforward_windows_sorted",
+              all(w1["endTs"] <= w2["startTs"] for w1, w2 in zip(walk.get("windows", []), walk.get("windows", [])[1:])),
+              quiet=True)
     print(f"INFO  archive backtest: {len(competition['markets'])} markets, {competition['verifiedBars']} bars, "
-          f"{len(trades)} trades, {len(board)} strategies")
+          f"{len(trades)} trades, {len(board)} strategies"
+          + (", walk-forward windows: " + str(len((walk or {}).get('windows', []))) if os.path.exists(wf_path) else ""))
+
+
+def verify_season_audit(season_dir):
+    """The season health audit written by scripts/audit_season.py on the runner (offline-safe here)."""
+    path = os.path.join(season_dir, "forward", "audit", "latest.json")
+    if not os.path.exists(path):
+        print("SKIP  season audit (no forward/audit/latest.json yet - scripts/audit_season.py writes it)")
+        return
+    with open(path) as fh:
+        audit = json.load(fh)
+    check("audit.status_recorded", audit.get("status") in ("PASS", "FAIL"), f"(status {audit.get('status')})")
+    check("audit.schedule_recorded", isinstance(audit.get("schedule"), dict))
+    ledger = audit.get("ledger") or {}
+    check("audit.no_orphan_fills", ledger.get("fillsWithoutExitOrPosition") == 0,
+          f"({ledger.get('fillsWithoutExitOrPosition')} fills without exit/position at audit time)")
+    check("audit.equity_csv_matches_state", not ledger.get("equityCsvVsStateMismatches"),
+          f"({len(ledger.get('equityCsvVsStateMismatches', []))} mismatches)")
+    live = audit.get("live") or {}
+    if live.get("available") and live.get("attempts"):
+        check("audit.live_settlements_match_official_api", not live.get("mismatches"),
+              f"({live.get('matches')}/{live.get('attempts')} settled markets re-read from "
+              f"GET /markets/{{ticker}}; {len(live.get('mismatches', []))} mismatch(es))")
+    sched = audit.get("schedule") or {}
+    line = (f"INFO  season audit {audit.get('generatedAt')}: {sched.get('executed', 0)}/"
+            f"{sched.get('expectedSlots', 0)} cron slots executed (missed {sched.get('missed', 0)}, "
+            f"extra manual {sched.get('extraManual', 0)}); storage "
+            f"{(audit.get('storage') or {}).get('compactedFiles', 0)} files compacted")
+    if live.get("available"):
+        line += f"; live re-read {live.get('matches', 0)}/{live.get('attempts', 0)} match"
+    else:
+        line += "; live re-read pending (runner)"
+    print(line)
 
 
 def verify_execution_realism(fwd):
@@ -181,6 +242,7 @@ def verify_forward_ledger():
     # archive backtest (scripts/backtest_archive.py) and execution-realism report, when present
     verify_archive_backtest(os.path.join(fwd, ".."))
     verify_execution_realism(fwd)
+    verify_season_audit(os.path.join(fwd, ".."))
     forward_passes = sum(1 for p in PASSES if p.startswith("PASS forward."))
     forward_fails = sum(1 for f in FAILURES if f.startswith("FAIL forward."))
     print(f"INFO  forward ledger: {len(state['accounts'])} accounts, {len(events)} events, {forward_passes} checks passed, {forward_fails} failed")

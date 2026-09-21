@@ -65,14 +65,41 @@ if (fs.existsSync(path.join(ROOT, 'data/season-2026/forward/summary/today.json')
   check('daily summary empty-state', text('#daily-summary').length > 0);
 }
 if (fs.existsSync(path.join(ROOT, 'data/season-2026/backtest-archive/competition.json'))) {
-  check('archive backtest board', count('#archive-backtest tbody tr') === 7, String(count('#archive-backtest tbody tr')));
+  const archive = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/backtest-archive/competition.json'), 'utf8'));
+  const boardTable = document.querySelector('#archive-backtest .table-shell table tbody');
+  const boardRows = boardTable ? boardTable.querySelectorAll('tr').length : 0;
+  const archiveBoard = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/backtest-archive/leaderboard.json'), 'utf8'));
+  const archiveRules = Array.isArray(archiveBoard) ? archiveBoard : (archiveBoard.rows ?? archiveBoard.ranked ?? []);
+  check('archive backtest board', boardRows === archiveRules.length, `${boardRows} rows vs ${archive.marketCount} markets / ${archiveRules.length} rule sets`);
+  const walk = fs.existsSync(path.join(ROOT, 'data/season-2026/backtest-archive/walkforward.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/backtest-archive/walkforward.json'), 'utf8')) : null;
+  check('archive walk-forward fold rows', !walk || count('#archive-backtest tbody tr') - boardRows === (walk.rows ?? []).length, String(count('#archive-backtest tbody tr') - boardRows));
   const archiveCards = [...document.querySelectorAll('#archive-backtest .metric-card')].map((c) => `${c.querySelector('span').textContent}=${c.querySelector('strong').textContent}`);
-  check('archive backtest facts', archiveCards.some((c) => c.startsWith('Archived markets=')) && archiveCards.some((c) => c.startsWith('Verified bars=825')), archiveCards.slice(0, 3).join(' '));
+  check('archive backtest facts', archiveCards.some((c) => c.startsWith(`Archived markets=${archive.marketCount}`)) && archiveCards.some((c) => c.startsWith(`Verified bars=${archive.verifiedBars}`)), archiveCards.slice(0, 3).join(' '));
   check('archive backtest explanations column', text('#archive-backtest tbody tr td:last-child').length > 40, text('#archive-backtest tbody tr td:last-child').slice(0, 60));
+  check('archive equity curves drawn', count('#archive-backtest .curve-legend-item') === Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/backtest-archive/curves.json'), 'utf8')).strategies ?? {}).length, String(count('#archive-backtest .curve-legend-item')));
 } else {
   check('archive backtest empty-state', text('#archive-backtest').length > 0);
 }
 check('execution realism section renders', text('#execution-realism').length > 0, text('#execution-realism').slice(0, 60));
+check('execution realism shows the committed comparison', text('#execution-realism').includes('fills compared') && !text('#execution-realism').includes('Not compared yet'), text('#execution-state').slice(0, 40));
+check('season health panel renders', /audit (PASS|FAIL)/.test(text('#health-state')) && text('#season-health-panel').includes('Cron slots executed'), `${text('#health-state').slice(0, 30)} | ${text('#season-health-panel').slice(0, 40)}`);
+{
+  const totalBoardRows = count('#forward-leaderboard tbody tr.board-row');
+  const bf = document.querySelector('#board-filter');
+  bf.value = 'longshot'; bf.dispatchEvent(new window.Event('input'));
+  const shown = [...document.querySelectorAll('#forward-leaderboard tbody tr.board-row')].filter((tr) => !tr.hidden).length;
+  check('board filter narrows rows', shown >= 1 && shown < totalBoardRows && document.querySelector('#board-filter-count').textContent.includes('shown'), `${shown}/${totalBoardRows}`);
+  bf.value = ''; bf.dispatchEvent(new window.Event('input'));
+  check('board filter reset', [...document.querySelectorAll('#forward-leaderboard tbody tr.board-row')].every((tr) => !tr.hidden));
+  document.querySelector('[data-forward-tab=\"positions\"]').click();
+  await new Promise((r) => setTimeout(r, 30));
+  const lf = document.querySelector('#ledger-filter');
+  lf.value = 'zzz-no-such-ticker'; lf.dispatchEvent(new window.Event('input'));
+  const ledShown = [...document.querySelectorAll('#forward-ledger-table tbody tr')].filter((tr) => !tr.hidden).length;
+  check('ledger filter hides non-matching rows', ledShown === 0, String(ledShown));
+  lf.value = ''; lf.dispatchEvent(new window.Event('input'));
+  check('ledger filter reset', [...document.querySelectorAll('#forward-ledger-table tbody tr')].every((tr) => !tr.hidden));
+}
 check('season index rendered', count('#season-list .season-chip') >= 1 || text('#season-list').length > 0, text('#season-list').slice(0, 60));
 check('no runtime errors', errors.length === 0, errors.join(' | ').slice(0, 400));
 // --- per-strategy page: renders one committed strategy file end to end ---
