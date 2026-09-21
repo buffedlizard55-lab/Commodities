@@ -454,10 +454,17 @@ ESPN_LEAGUES = {  # Kalshi game series -> ESPN site-API sport/league (verified l
     "KXNBAGAME": ("basketball", "nba"),
     "KXMLBGAME": ("baseball", "mlb"),
     "KXNCAAFGAME": ("football", "college-football"),
+    # Added 2026-09-21 from the README next-work list ("Adding a league is a SERIES_* entry plus a
+    # scoreboard URL").  Same scoreboard endpoint family as the four leagues above; the response
+    # shape is asserted by tests/test_signals.py fixtures, but the live endpoints themselves get
+    # their first confirmation on the runner's next cycle (IRR-35).  If the shape or the team-name
+    # matching does not hold, the adapter abstains and the strategies simply skip these series.
+    "KXNHLGAME": ("hockey", "nhl"),
+    "KXWNBAGAME": ("basketball", "wnba"),
 }
 
 GAME_RULES = re.compile(
-    r"If\s+(?P<team>.+?)\s+wins the\s+(?P<away>.+?)\s+vs\s+(?P<home>.+?)\s+.*?game originally scheduled for\s+"
+    r"If\s+(?P<team>.+?)\s+wins the\s+(?P<matchup>.+?)\s+game originally scheduled for\s+"
     r"(?P<month>[A-Z][a-z]+)\s+(?P<day>\d{1,2}),\s+(?P<year>\d{4})", re.IGNORECASE)
 ESPN_MONTHS = {name: index + 1 for index, name in enumerate(
     ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
@@ -467,32 +474,63 @@ ESPN_MONTHS = {name: index + 1 for index, name in enumerate(
 ESPN_MONTHS.update({name[:3]: value for name, value in ESPN_MONTHS.items()})
 
 
+# Trailing league-descriptor words seen in verified rules_primary ("DET Lions vs BUF Bills Pro
+# Football game ...", "Carolina vs Atlanta Pro Football game ...").  They are trimmed from the
+# home side after the " vs " split; an unknown future descriptor is left in place (token-overlap
+# matching still works) rather than guessed away.
+LEAGUE_DESCRIPTOR_WORDS = {"pro", "professional", "football", "baseball", "basketball", "hockey",
+                           "college", "game", "mens", "men's", "womens", "women's"}
+
+
+def _trim_league_descriptor(name: str) -> str:
+    tokens = name.split()
+    while len(tokens) > 1 and tokens[-1].lower() in LEAGUE_DESCRIPTOR_WORDS:
+        tokens.pop()
+    return " ".join(tokens)
+
+
 def game_from_market(market: dict) -> dict | None:
     """Away/home team names + scheduled date straight from the market's official rules_primary.
 
-    Verified example (KXNFLGAME-26SEP28PHICHI-PHI, 2026-09-20):
-      "If Philadelphia wins the Philadelphia vs Chicago Pro Football game originally scheduled for
-       Sep 28, 2026, then the market resolves to Yes."  -> away=Philadelphia, home=Chicago, 2026-09-28
+    Two formats are verified in committed official responses (data/season-2026/raw/):
+      KXNFLGAME-26SEP17DETBUF-DET (refetched 2026-09-20):
+        "If Detroit wins the DET Lions vs BUF Bills Pro Football game originally scheduled for
+         Sep 17, 2026, then the market resolves to Yes."   -> away="DET Lions", home="BUF Bills"
+      KXNFLGAME-26SEP28PHICHI-PHI (recorded 2026-09-20 by an earlier pass):
+        "If Philadelphia wins the Philadelphia vs Chicago Pro Football game ..."
+    The matchup text is captured up to " game originally scheduled for" and split on " vs ", so
+    multi-word names ("DET Lions", "Ole Miss", "New York") survive intact (IRR-36: the previous
+    lazy regex truncated the home side to its first word and no market ever matched).
     """
     text = market.get("rules_primary") or ""
     match = GAME_RULES.search(text)
     if not match or match.group("month") not in ESPN_MONTHS:
         return None
+    matchup = match.group("matchup").strip()
+    parts = re.split(r"\s+vs\.?\s+", matchup, flags=re.IGNORECASE)
+    if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+        return None
+    away, home = parts[0].strip(), parts[1].strip()
+    home = _trim_league_descriptor(home)
+    if not home:
+        return None
     try:
         scheduled = datetime(int(match.group("year")), ESPN_MONTHS[match.group("month")], int(match.group("day"))).date()
     except ValueError:
         return None
-    return {"team": match.group("team").strip(), "away": match.group("away").strip(),
-            "home": match.group("home").strip(), "scheduled": scheduled.isoformat(),
+    return {"team": match.group("team").strip(), "away": away.strip(), "home": home.strip(),
+            "scheduled": scheduled.isoformat(),
             "marketTeam": (market.get("yes_sub_title") or market.get("title") or "").strip()}
 
 
 class EspnScoreboard:
     """Public ESPN scoreboard snapshots mapped to Kalshi game markets by team names + date.
 
-    ESPN is a listed settlement source for KXNCAAFGAME / KXMLBGAME / KXNBAGAME and the scoreboard is
-    public JSON; the mapping is only accepted when exactly one event matches, otherwise the adapter
-    returns None and the strategy abstains (recorded as an irregularity, not guessed).
+    ESPN is a listed settlement source for KXNCAAFGAME / KXMLBGAME / KXNBAGAME / KXNHLGAME /
+    KXWNBAGAME (settlement_sources field of each series record, committed in
+    data/universe/series-catalog.json) and the scoreboard is public JSON; the mapping is only
+    accepted when exactly one event matches, otherwise the adapter returns None and the strategy
+    abstains (recorded as an irregularity, not guessed).
     """
 
     def __init__(self, fetcher=http_fetch, leagues: dict | None = None):
@@ -550,6 +588,18 @@ class EspnScoreboard:
             value = competitor.get(field)
             if value and normalize_name(value) == normalize_name(name):
                 return True
+        # Token-overlap match for Kalshi's nickname format ("DET Lions" shares 'lions' with
+        # displayName "Detroit Lions"; verified rules_primary example in game_from_market).
+        # Team nicknames are unique within one league scoreboard, and the caller still requires
+        # exactly one event to match the full away+home pair, so this widens matches without
+        # inventing ambiguous ones.  Tokens shorter than 3 chars are noise ("NY", "LA") - those
+        # only match via the exact abbreviation comparison above.
+        want = {t for t in re.split(r"[^a-z0-9]+", (name or "").lower()) if len(t) >= 3}
+        if want:
+            for field in ("displayName", "shortDisplayName", "location"):
+                value = competitor.get(field)
+                if value and want & {t for t in re.split(r"[^a-z0-9]+", value.lower()) if len(t) >= 3}:
+                    return True
         return False
 
     def match(self, game: dict, league_key: str, date_keys: list[str]) -> dict | None:

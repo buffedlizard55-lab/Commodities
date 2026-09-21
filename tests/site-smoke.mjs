@@ -83,6 +83,7 @@ if (fs.existsSync(path.join(ROOT, 'data/season-2026/backtest-archive/competition
 check('execution realism section renders', text('#execution-realism').length > 0, text('#execution-realism').slice(0, 60));
 check('execution realism shows the committed comparison', text('#execution-realism').includes('fills compared') && !text('#execution-realism').includes('Not compared yet'), text('#execution-state').slice(0, 40));
 check('season health panel renders', /audit (PASS|FAIL)/.test(text('#health-state')) && text('#season-health-panel').includes('Cron slots executed'), `${text('#health-state').slice(0, 30)} | ${text('#season-health-panel').slice(0, 40)}`);
+check('settlement backfill card renders', text('#season-health-panel').includes('Settlement backfill (full)'), text('#season-health-panel').includes('not run yet') ? 'not run yet (expected before first runner backfill)' : 'live report present');
 if (fs.existsSync(path.join(ROOT, 'data/season-2026/forward/audit/history.json'))) {
   const history = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/season-2026/forward/audit/history.json'), 'utf8'));
   check('audit history trend section', text('#season-health-panel').includes('Scheduled-slot execution trend') && text('#season-health-panel').includes(`${history.length} audit point`) && count('#season-health-panel .audit-rate-sparkline') === 1, String(history.length));

@@ -22,7 +22,7 @@ SERIES_ECON = ["KXFED", "KXCPI", "KXCPIYOY", "KXFEDDECISION"]
 SERIES_CRYPTO = ["KXBTC", "KXBTC15M", "KXETH15M"]
 SERIES_GOLD = ["KXGOLD15M", "KXGOLDH"]
 SERIES_WEATHER = ["KXHIGHNY"]
-SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME"]
+SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME", "KXNHLGAME", "KXWNBAGAME"]
 SELECTOR_CEO = "tag:CEOs&contains:CEO"   # Companies-category series tagged CEOs whose ticker names a CEO market
 SELECTOR_FDA = "prefix:KXFDA&tag:Medicine"  # FDA drug-decision series (excludes FDA-politics series)
 # Every Kalshi daily-high temperature series (verified in data/universe/series-catalog.json:
@@ -32,9 +32,13 @@ SELECTOR_WEATHER = "tag:Daily temperature&prefix:KXHIGH"
 TRACKED_SERIES = SERIES_ECON + SERIES_CRYPTO + SERIES_GOLD + SERIES_WEATHER + SERIES_SPORTS
 TRACKED_SELECTORS = [SELECTOR_CEO, SELECTOR_FDA, SELECTOR_WEATHER]
 
-# Minimum live lead (points/runs) before ScorePulse buys the leading side, per sport.  These are
-# rule parameters, not risk limits: the desk always sizes 50% of free cash.
-LIVE_SCORE_THRESHOLDS = {"KXNFLGAME": 8.0, "KXNCAAFGAME": 8.0, "KXNBAGAME": 10.0, "KXMLBGAME": 3.0}
+# Minimum live lead before ScorePulse buys the leading side, per sport.  These are rule
+# parameters, not risk limits: the desk always sizes 50% of free cash.  Units are the sport's own
+# scoring unit (points for football/basketball, runs for baseball, goals for hockey).
+# KXNHLGAME/KXWNBAGAME added 2026-09-21 with the ESPN adapter expansion (IRR-35): a 2-goal NHL
+# lead with time remaining is a strong favourite state; WNBA uses the same 10-point lead as the NBA.
+LIVE_SCORE_THRESHOLDS = {"KXNFLGAME": 8.0, "KXNCAAFGAME": 8.0, "KXNBAGAME": 10.0, "KXMLBGAME": 3.0,
+                         "KXNHLGAME": 2.0, "KXWNBAGAME": 10.0}
 
 
 def _cheaper_side(m, maximum, minimum=0.0):
@@ -438,9 +442,10 @@ def entry_live_score(m, ctx):
     """Buy the side of the team ESPN's official scoreboard shows leading, late in the game.
 
     Signal source: the public ESPN scoreboard JSON (ESPN is a listed settlement source for
-    KXNCAAFGAME / KXMLBGAME / KXNBAGAME per GET /series).  The mapping is accepted only when exactly
-    one event matches the team names + scheduled date in the Kalshi market's own rules_primary;
-    otherwise ctx["espn"] has no entry and the rule abstains.  The price is always Kalshi's.
+    KXNCAAFGAME / KXMLBGAME / KXNBAGAME / KXNHLGAME / KXWNBAGAME per the settlement_sources field
+    in data/universe/series-catalog.json).  The mapping is accepted only when exactly one event
+    matches the team names + scheduled date in the Kalshi market's own rules_primary; otherwise
+    ctx["espn"] has no entry and the rule abstains.  The price is always Kalshi's.
     """
     signal = (ctx.get("espn") or {}).get(m.get("ticker"))
     if not signal or signal.get("state") != "in":
