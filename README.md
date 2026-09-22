@@ -18,8 +18,9 @@ An evidence-first paper-trading lab for Kalshi event contracts:
   resting orders as *quote plans* (1¢ inside the touch on captured ladders, spread ≥ 2¢) and later
   matches every posted price against the official trade tape: a print strictly **through** the
   posted price proves the resting order would have filled (price priority), touch-only prints stay
-  queue-uncertain, and projected settlement PnL is stated **before maker fees** (IRR-41). Every
-  figure is labelled MODELLED and none enters the ranked board;
+  queue-uncertain, and projected settlement PnL is stated **gross and net of the modelled maker
+  fee** (IRR-41 closed; the fee comes from the official July-2026 schedule with each series' own
+  fee type). Every figure is labelled MODELLED and none enters the ranked board;
 * a **trades review** (`scripts/trades_review.py` -> `forward/trades-review.md`) that puts every
   placed trade (entry/exit/settlement dates, verified prices, sizes, fees, slippage, PnL, evidence
   SHA-256, ledger line anchors) and every upcoming trade (queued intents, blocked intents and
@@ -63,7 +64,8 @@ scripts/
   execution_realism.py              compare each simulated fill with the official trade tape (GET /markets/trades)
   maker_model.py                    SpreadSmith quote plans vs the official tape: a print strictly through the posted
                                     price proves a resting fill (MODELLED), touch prints stay queue-uncertain;
-                                    projected PnL is before maker fees (IRR-41) -> forward/execution/maker-model.json
+                                    projected PnL is stated gross and net of the modelled maker fee (IRR-41)
+                                    -> forward/execution/maker-model.json
   trades_review.py                  render forward/trades-review.md + .json: every placed trade and every upcoming
                                     trade (queued/blocked intents + maker quote plans) in one readable file
   verify_settlements.py             monthly FULL settlement backfill: re-read every settled market from
@@ -81,10 +83,11 @@ scripts/
   build_competition.py              deterministic backtest + committed competition memory
   candles_from_raw.py, regen_candles.py   raw-response -> CSV regeneration and diff guards
 .github/workflows/forward-desk.yml  cron 7,37 * * * * (desk cycle) + Monday 06:17 UTC (universe)
-                                    + 1st of month 06:47 UTC (full settlement backfill) + manual dispatch
+                                    + 1st of month 06:47 UTC (full settlement backfill) + manual dispatch or a
+                                    [desk:cycle]/[desk:universe]/[desk:settlements]/[desk:both] push tag
 data/
   strategies.json                   persona roster (browser live-book, backtest, forward-desk, gated)
-  source-registry.json              82 official/primary sources + irregularities IRR-01..IRR-44
+  source-registry.json              82 official/primary sources + irregularities IRR-01..IRR-45
   seasons.json                      season index the site reads (active season, cycles, fills, frozen flag)
   universe/                         series-catalog.json (compact, all categories), series-index.json (fees, shards, tags)
   season-2026/                      COMMITTED SEASON MEMORY (durable store)
@@ -423,7 +426,9 @@ that shows up as a below-100% "inside range" percentage, not as a corrected fill
   `settlement_ts` are compared with the ledger's settlement event, each response recorded with its
   URL and SHA-256. It writes `forward/audit/settlement-backfill.json` plus an append-only
   `settlement-backfill-history.jsonl`, runs on the 1st of each month (06:47 UTC cron) and on demand
-  (`workflow_dispatch` mode `settlements`). It never adjusts the ledger: a mismatch is a committed
+  (`workflow_dispatch` mode `settlements`, or a push whose commit message carries
+  `[desk:settlements]`). The first live run re-read 93 settled markets on 2026-09-22T23:29:48Z:
+  93 matches, 0 mismatches, 0 unreachable. It never adjusts the ledger: a mismatch is a committed
   finding with a non-zero exit code and a banner on the site's season-health panel; `verify_data.py`
   surfaces it as a warning (a monthly artifact deliberately does not block the twice-hourly commit).
   Unreachable markets are counted as such — never as a match or a mismatch. Offline runs print the
@@ -491,7 +496,8 @@ social sweep). Line by line:
   posted price against `GET /markets/trades`: a print **strictly through** the posted price proves
   the resting order would have filled (price priority — queue position is irrelevant in that case);
   touch-only prints are `queue_uncertain` and never counted; projected settlement PnL is stated
-  **before maker fees** (the maker side of the fee schedule is unverified here — IRR-41). 27 new
+  **gross and net of the modelled maker fee** (the official July-2026 schedule, per-series fee type;
+  IRR-41 closed). 27 new
   offline tests (12 maker model + 6 trades review + 5 quote-plan cycle + 4 HalftimeHype);
   `verify_data.py` now fails if a quote plan ever looks like a fill. SpreadSmith stays unranked: its
   numbers are MODELLED evidence, not fills.
@@ -555,9 +561,16 @@ social sweep). Line by line:
   leaves the ledger byte-identical.
 * **Three new official, free, key-less sources wired and archived** (each read verbatim with its
   SHA-256 committed): the **ESPN league injuries JSON** (dated designations), the **Cleveland Fed
-  Inflation Nowcasting** page (MoM/YoY/quarterly tables parsed by their own captions) and the
-  **FRED CSV** graph endpoint (S&P 500 and Nasdaq-100 closes; blank holiday rows recorded as absent,
-  never carried forward).
+  Inflation Nowcasting** page (MoM/YoY/quarterly tables parsed by their own content and nearest
+  caption, `[desk:cycle]` and the runner's own reads, so the layout was settled from bytes rather
+  than assumptions) and the **FRED CSV** graph endpoint (S&P 500 and Nasdaq-100 closes; blank
+  holiday rows recorded as absent, never carried forward).
+* **First live runner reads of all three adapters, and the settlement backfill, are done.** The
+  2026-09-22 23:16-23:27Z runner cycles recorded ESPN injuries (NFL 800 rows / 32 club blocks, NBA
+  75 / 27), the Cleveland Fed nowcast `{month-over-month: 2, year-over-year: 2, quarterly: 1}`, and
+  FRED `SP500` / `NASDAQ100` — 45 sources, 0 failed reads in `forward/sources/status.json` — and a
+  `[desk:settlements]` push re-read every settled market against the official API: **93 matches,
+  0 mismatches, 0 unreachable**.
 * **Four personas activated/added** — InjuryFade, TipoffTriage, NowcastNudge, LeapMapper — each
   trading only on data with a committed URL + hash and settling on Kalshi's own official result.
   Every fill now carries a `signalSources` block (kind, URL, SHA-256, the exact value that fired) so
@@ -566,22 +579,22 @@ social sweep). Line by line:
   `read` / `not_needed` / `failed` and the response hash where one exists — the machine-readable
   version of "flag irregularities". `verify_data.py` now fails if an archived signal row lacks its
   official URL or hash, or if the ledger hides a failed read.
-* **Registry + docs refreshed**: 82 sources and IRR-01..IRR-43, including IRR-42 (injury feeds are
-  third-party evidence, never settlement) and IRR-43 (index ranges are a signal mapping, not a
-  forecast).
+* **Registry + docs refreshed**: 82 sources and IRR-01..IRR-45, including IRR-42 (the social
+  sweep is discovery-only), IRR-43 (injury feeds are third-party evidence, never settlement),
+  IRR-44 (index ranges are a signal mapping, not a forecast) and IRR-45 (the nowcast page moves its
+  captions; the parser decides by content and keeps the verbatim page when a parse cannot be filed).
 
 ### Open items for the next session
 
 * **First settlements of HeatConfirm (2026-09-23) and MetalMomentum's gold position** — judge at
   settlement, never mid-flight; no threshold retuning either way.
-* **First live settlement backfill.** `verify_settlements.py --live` has still never run against
-  every settled ticker (`settlement-backfill.json` absent; the monthly cron is the 1st at 06:47
-  UTC). The merge dispatches `mode=settlements` manually — review
-  `forward/audit/settlement-backfill.json` afterwards (mismatches are findings only).
-* **First live reads of the three new adapters.** They are verified offline and were read directly
-  from this sandbox on 2026-09-22; the first runner cycle that trades from them is the proof that
-  the runner's egress sees the same endpoints — check `forward/signals/*.jsonl` and the sources
-  ledger after the first tick with an in-game market.
+* **Nowcast page stability.** The parser is verified against the 2026-09-22 render; a future
+  render that cannot file all three tables is recorded as a PARTIAL read (the persona abstains) and
+  the verbatim HTML is kept under `data/season-2026/raw/` (at most two dumps, rotated) — correct the
+  parser from those bytes, never from a fresh scrape (IRR-45).
+* **First fills from the new personas.** The adapters now read on the runner; InjuryFade,
+  TipoffTriage, NowcastNudge and LeapMapper have their first live reads but no fill yet — judge them
+  at settlement, never mid-flight, and keep the abstain-on-partial rule intact.
 * **FDA target dates remain unverifiable** (Drugs@FDA publishes no PDUFA date, IRR-27) — date-driven
   FDA personas stay out. The sibling `DrugAnalysis` project is the next place to look for a
   documented date source before any rule is stated.
@@ -605,7 +618,8 @@ social sweep). Line by line:
 3. **Maker fills cannot be proven from REST snapshots** — queue position and latency are not
    observable; the maker model bounds them (through-price proof / touch uncertainty) instead of
    inventing fills.
-4. **Maker fees are unverified** (IRR-41) — SpreadSmith PnL is pre-fee and stays labelled.
+4. **Maker fills cannot be proven, only bounded** — the fee itself is now modelled from the
+   official schedule (IRR-41 closed), but a quote plan is still MODELLED evidence, never a fill.
 5. **Some requested signals have no official machine-readable feed** — NBA injuries (project
    finding), SEC EDGAR from shared runner IPs (sibling IR-76/77), FDA decision dates (IRR-27).
    Those personas stay gated rather than fed by unofficial scrapes.

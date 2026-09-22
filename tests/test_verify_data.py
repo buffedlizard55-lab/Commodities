@@ -129,7 +129,7 @@ class SourceRegistryTests(unittest.TestCase):
             self.assertTrue(source.get("name"))
             self.assertTrue(source.get("kind"))
 
-    def test_irregularities_are_numbered_uniquely_through_irr_44(self):
+    def test_irregularities_are_numbered_uniquely_through_irr_45(self):
         registry = self._load()
         codes = [str(item).split(" ")[0].rstrip("·") for item in registry["irregularities"]]
         self.assertEqual(len(set(codes)), len(codes))
@@ -137,6 +137,7 @@ class SourceRegistryTests(unittest.TestCase):
         self.assertIn("IRR-42", codes)     # social sweep round 1 (discovery only)
         self.assertIn("IRR-43", codes)     # injuries are third-party evidence, never settlement
         self.assertIn("IRR-44", codes)     # index ranges are a signal mapping, not a forecast
+        self.assertIn("IRR-45", codes)     # the nowcast page moves its captions; parse from content
 
 
 class RosterMetadataTests(unittest.TestCase):
