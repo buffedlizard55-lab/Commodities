@@ -86,6 +86,12 @@ jobs:
         if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'
         run: python3 scripts/execution_realism.py --live || echo "execution realism comparison incomplete"
 
+      # SpreadSmith maker model: match every posted quote plan (intents status=quote_plan) against
+      # the official trade tape after its post time.  MODELLED evidence about hypothetical resting
+      # orders only (forward/execution/maker-model.json); never a ledger fill.  Never fatal.
+      - name: Match maker quote plans against the official trade tape
+        run: python3 scripts/maker_model.py --live || echo "maker model comparison incomplete"
+
       # Archive the full official candle history for the KXFED market (bounded chunks, one hash each).
       - name: Archive KXFED full candle history
         if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'

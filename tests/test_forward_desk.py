@@ -563,5 +563,144 @@ class ZeroFillRuleTests(unittest.TestCase):
         self.assertIsNone(FS.entry_weather_fade(market, {"nws": {}}))
 
 
+class MakerQuotePlanTests(unittest.TestCase):
+    """SpreadSmith quote plans: upcoming maker trades, never fills (measured later against the tape)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="maker-plans-test-")
+        FD.set_paths(forward_dir=self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_cycle(self, fixtures, now_ts):
+        client = FixtureClient(fixtures)
+        index = FD.load_series_index()
+        errors = []
+        FD.ensure_series(client, index, FS.TRACKED_SERIES + ["KXFDAAPPROVE"], errors)
+        state = FD.read_json(os.path.join(self.tmp, "state.json")) or FD.new_state(now_ts)
+        cycle = FD.Cycle(client, now_ts, index, state, nws_fetcher=signal_fetcher)
+        cycle.errors.extend(errors)
+        summary = cycle.run()
+        FD.save_series_index(index)
+        cycle.persist(summary)
+        return cycle, summary
+
+    def test_quote_plans_are_emitted_from_captured_books_and_never_fill(self):
+        cycle, summary = self.run_cycle(build_fixtures(), T0)
+        plans = [i for i in cycle.intents if i.get("status") == "quote_plan"]
+        self.assertTrue(plans)
+        self.assertLessEqual(len(plans), FS.MAKER_MAX_PLANS_PER_CYCLE)
+        self.assertEqual(summary["makerQuotePlans"], len(plans))
+        for plan in plans:
+            self.assertEqual(plan["strategyId"], "spread-smith")
+            self.assertEqual(plan["username"], "SpreadSmith")
+            self.assertIsNone(plan["positionId"])
+            self.assertGreaterEqual(plan["spreadAtPost"], FS.MAKER_MIN_SPREAD)
+            self.assertGreater(plan["postedContracts"], 0)
+            self.assertGreater(plan["postedPrice"], 0)
+            self.assertIn("a plan, not a fill", plan["reason"])
+            # the posted price is 1c inside the touch on the quoted side
+            side = plan["side"]
+            quotes = plan["bookQuotes"]
+            self.assertAlmostEqual(plan["postedPrice"], quotes[f"{side}_bid"] + FS.MAKER_IMPROVEMENT, places=4)
+        # a quote plan is not a fill and never touches cash: no account exists for the plan-only persona
+        self.assertNotIn("spread-smith", cycle.state["accounts"])
+        fills = [e for e in cycle.events if e["kind"] == "fill"]
+        self.assertFalse([e for e in fills if e.get("strategyId") == "spread-smith"])
+
+    def test_quote_plans_persist_with_ledger_anchors_and_dedupe(self):
+        cycle, _ = self.run_cycle(build_fixtures(), T0)
+        path = os.path.join(self.tmp, "intents", "2026-09.jsonl")
+        rows = [json.loads(l) for l in open(path) if l.strip()]
+        plans = [r for r in rows if r.get("status") == "quote_plan"]
+        self.assertTrue(plans)
+        for index, row in enumerate(rows, 1):
+            self.assertEqual(row["ledgerFile"], os.path.join("intents", "2026-09.jsonl"))
+            self.assertEqual(row["ledgerLine"], index)
+        # a second identical cycle must not duplicate an unchanged plan (fingerprint dedupe)
+        self.run_cycle(build_fixtures(), T0 + 1800)
+        rows2 = [json.loads(l) for l in open(path) if l.strip()]
+        plans2 = [r for r in rows2 if r.get("status") == "quote_plan"]
+        keys = [(r["ticker"], r["side"]) for r in plans2]
+        self.assertEqual(len(keys), len(set(keys)), "an unchanged quote plan must be persisted once")
+
+    def test_narrow_spread_market_produces_no_plan(self):
+        # The KXFED fixture book is 0.02/0.03 on YES (1c spread): below MAKER_MIN_SPREAD.
+        signal = FS.maker_quote_plan({"series_ticker": "KXFED", "ticker": "KXFED-26OCT-T4.50",
+                                      "yes_bid": 0.02, "yes_ask": 0.03, "no_bid": 0.97, "no_ask": 0.98},
+                                     {"book": parse_book(book([(0.02, 1000)], [(0.97, 20000)]))})
+        self.assertIsNone(signal)
+
+    def test_tight_posted_price_that_would_cross_is_skipped(self):
+        # 1c spread: bid+1c would equal the ask -> no resting improvement exists.
+        signal = FS.maker_quote_plan({"series_ticker": "X", "ticker": "X-1",
+                                      "yes_bid": 0.50, "yes_ask": 0.51, "no_bid": 0.49, "no_ask": 0.50},
+                                     {"book": parse_book(book([(0.50, 10)], [(0.49, 10)]))})
+        self.assertIsNone(signal)
+
+    def test_posted_price_stays_below_the_ask_at_the_minimum_spread(self):
+        signal = FS.maker_quote_plan({"series_ticker": "X", "ticker": "X-1B",
+                                      "yes_bid": 0.50, "yes_ask": 0.52, "no_bid": 0.48, "no_ask": 0.50},
+                                     {"book": parse_book(book([(0.50, 10)], [(0.48, 10)]))})
+        self.assertIsNotNone(signal)
+        self.assertLess(signal["meta"]["postedPrice"], 0.52)
+        self.assertEqual(signal["meta"]["postedPrice"], 0.51)
+
+    def test_plan_size_joins_the_displayed_best_bid_queue(self):
+        signal = FS.maker_quote_plan({"series_ticker": "X", "ticker": "X-2",
+                                      "yes_bid": 0.55, "yes_ask": 0.60, "no_bid": 0.40, "no_ask": 0.45},
+                                     {"book": parse_book(book([(0.50, 20), (0.55, 77)], [(0.35, 5), (0.40, 9)]))})
+        self.assertIsNotNone(signal)
+        self.assertEqual(signal["meta"]["postedContracts"], 77)  # size resting at the 0.55 best bid
+        self.assertEqual(signal["meta"]["postedPrice"], 0.56)
+        self.assertEqual(signal["meta"]["spreadAtPost"], 0.05)
+
+
+class HalftimeHypeTests(unittest.TestCase):
+    """The r/Kalshi 'buy 20-30%, sell near 50%' tip, recreated mechanically (HalftimeHype)."""
+
+    def market(self, **extra):
+        row = {"series_ticker": "KXNFLGAME", "ticker": "KXNFLGAME-26SEP20AAABBB-AAA",
+               "event_ticker": "KXNFLGAME-26SEP20AAABBB", "title": "Alpha wins",
+               "volume": 250000, "yes_bid": 0.72, "yes_ask": 0.75, "no_bid": 0.25, "no_ask": 0.28}
+        row.update(extra)
+        return row
+
+    def espn(self, state="in", score_diff=-3):
+        return {"KXNFLGAME-26SEP20AAABBB-AAA": {"state": state, "scoreDiff": score_diff, "detail": "2nd Quarter"}}
+
+    def test_fires_on_the_25c_underdog_while_the_game_is_live(self):
+        signal = FS.entry_halftime_hype(self.market(), {"espn": self.espn()})
+        self.assertIsNotNone(signal)
+        self.assertEqual(signal["side"], "no")
+        self.assertEqual(signal["limit"], 0.30)
+        self.assertIn("target a 0.50 bid", signal["reason"])
+        self.assertEqual(signal["meta"]["source"],
+                         "r/Kalshi 2026-01-15 tip, recreated mechanically (discovery-only source)")
+
+    def test_abstains_before_the_game_and_without_a_mapping(self):
+        self.assertIsNone(FS.entry_halftime_hype(self.market(), {"espn": self.espn(state="pre")}))
+        self.assertIsNone(FS.entry_halftime_hype(self.market(), {"espn": {}}))
+        self.assertIsNone(FS.entry_halftime_hype(self.market(), {}))
+
+    def test_price_band_and_spread_and_volume_gates(self):
+        # 35c ask is outside the 20-30c band
+        self.assertIsNone(FS.entry_halftime_hype(
+            self.market(no_bid=0.30, no_ask=0.35, yes_bid=0.65, yes_ask=0.70), {"espn": self.espn()}))
+        # 8c displayed spread is too wide (IRR-25 rule)
+        self.assertIsNone(FS.entry_halftime_hype(
+            self.market(no_bid=0.20, no_ask=0.28, yes_bid=0.72, yes_ask=0.80), {"espn": self.espn()}))
+        # thin market
+        self.assertIsNone(FS.entry_halftime_hype(self.market(volume=9999), {"espn": self.espn()}))
+
+    def test_exit_is_the_first_verified_bid_at_50c(self):
+        strategy = next(s for s in FS.STRATEGIES if s["id"] == "halftime-hype")
+        position = {"side": "no", "entryPrice": 0.25}
+        self.assertIsNone(strategy["exit"](position, {"no_bid": 0.49}, {}))
+        reason = strategy["exit"](position, {"no_bid": 0.50}, {})
+        self.assertIsNotNone(reason)
+
+
 if __name__ == "__main__":
     unittest.main()

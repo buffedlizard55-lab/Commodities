@@ -659,6 +659,66 @@
    "use": "Evaluated 2026-09-22 as a live-timing signal for Kalshi F1 series (e.g. KXF1RACE).",
    "status": "researched 2026-09-22 (not adopted)",
    "note": "GET /v1/sessions?year=2026&session_type=Race answered {\"Detail\": \"No results found.\"} on 2026-09-22, and KXF1RACE settles on the FIA, not on any timing feed - so even a working feed would be context only. A race-leader rule would also need sub-cycle timing data the twice-hourly desk does not collect. F1 stays out (IRR-38)."
+  },
+  {
+   "id": "community-kalshpapersim",
+   "url": "https://buffedlizard55-lab.github.io/KalshiPaperSim/",
+   "project": "KalshiPaperSim",
+   "name": "KalshiPaperSim paper-trading competition (mechanics)",
+   "kind": "community research",
+   "status": "discovery-only",
+   "use": "Reverse-engineered paper-trading contest mechanics (usernames per strategy, competition/leaderboard/trades schema) reused by this repo's Live Desk and trades review",
+   "note": "Community project page. Mechanics reference only - never a price source."
+  },
+  {
+   "id": "community-reddit-winners",
+   "url": "https://www.reddit.com/r/Kalshi/comments/1qd4ubf/people_who_actually_win_money_on_kalshi_whats/",
+   "project": "r/Kalshi thread",
+   "name": "r/Kalshi - people who actually win money (HalftimeHype)",
+   "kind": "community research",
+   "status": "discovery-only",
+   "use": "The marketed tip (buy 20-30c, sell near 50c) is recreated as the falsifiable HalftimeHype rule",
+   "note": "Reddit thread. Discovery only - never a price source (IRR-42)."
+  },
+  {
+   "id": "community-reddit-1000-bots",
+   "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1srphtq/backtested_1000_strategies_on_kalshi_15min_btc/",
+   "project": "r/PredictionsMarkets thread",
+   "name": "r/PredictionsMarkets - 1,000 strategies backtested on KXBTC15M",
+   "kind": "community research",
+   "status": "discovery-only",
+   "use": "Corroborates the PanicFader volatility-reversion archetype (own archive replay is the evidence)",
+   "note": "Reddit thread. Discovery only - never a price source (IRR-42)."
+  },
+  {
+   "id": "community-reddit-5000-bots",
+   "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1szxy8h/backtested_5000_strategies_on_kalshi_15min_btc/",
+   "project": "r/PredictionsMarkets thread",
+   "name": "r/PredictionsMarkets - 5,000 strategies backtested on KXBTC15M",
+   "kind": "community research",
+   "status": "discovery-only",
+   "use": "Multiple-testing / reporting-bias caveat for small-sample strategy claims (IRR-30)",
+   "note": "Reddit thread. Discovery only - never a price source (IRR-42)."
+  },
+  {
+   "id": "community-reddit-shock-timing",
+   "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1u3rn8s/i_built_a_39_kalshi_trading_bot_to_exploit_world/",
+   "project": "r/PredictionsMarkets thread",
+   "name": "r/PredictionsMarkets - $39 World Cup Shock-Timing bot (+refutation)",
+   "kind": "community research",
+   "status": "discovery-only",
+   "use": "Logged with its in-thread refutation; rule underspecified so it is not recreated",
+   "note": "Reddit thread. Discovery only - never a price source (IRR-42)."
+  },
+  {
+   "id": "community-reddit-econ-bots",
+   "url": "https://www.reddit.com/r/passive_income/comments/1saogus/automating_a_side_hustle_how_i_make_money_trading/",
+   "project": "r/passive_income thread",
+   "name": "r/passive_income - econ/weather automation post",
+   "kind": "community research",
+   "status": "discovery-only",
+   "use": "Skeleton only: the Cleveland-Fed-Nowcast to CPI-bracket mapping is underspecified and was not guessed",
+   "note": "Reddit thread. Discovery only - never a price source (IRR-42)."
   }
  ],
  "irregularities": [
@@ -701,6 +761,8 @@
   "IRR-37 · (2026-09-22) Signal-coverage expansion added KXEPLGAME (soccer/eng.1, 2-goal ScorePulse threshold) and KXNCAAMBGAME (basketball/mens-college-basketball, 10-point threshold) to scripts/signals.py ESPN_LEAGUES, to the sports universe (GridironPulse / SportsPredLab / ScorePulse) and to LIVE_SCORE_THRESHOLDS. Both endpoints were read directly: eng.1 served a real in-season event (Liverpool at AFC Bournemouth, 2026-09-20) and mens-college-basketball served real in-season events on a mid-season date (2026-02-15; September is the off-season), each with the same events[].competitions[].competitors[].{homeAway,score,team.*} + status.type.state shape the adapter requires. Committed catalog facts (data/universe/series-catalog.json, updated 2026-09-20): KXEPLGAME settles on ESPN + Fox Sports (fee quadratic_with_maker_fees x1, shard 0, series volume 814,865,429); KXNCAAMBGAME settles on Kalshi-via-NCAA + ESPN (same fee type x1, shard 3, volume 5,936,932,933). Full series records are fetched on the next runner cycle via ensure_series; Kalshi's rules_primary phrasing for these two series is still unverified (no committed open-market sample), so the team-name mapping gets its first confirmation on the runner and the adapter abstains on any mismatch. NCAAM games do not exist until November, so ScorePulse abstains there until tip-off; EPL is in season now.",
   "IRR-38 · (2026-09-22) Tennis and F1 were researched line by line and deliberately left out. Tennis: the ESPN ATP scoreboard answers with a valid league block, but its events are tournaments (groupings[].competitions[], athlete competitors, set linescores - observed Winston-Salem Open, 2026-08-28), which the team home/away score adapter cannot read, and KXATPMATCH settles on the ATP rather than ESPN. F1: OpenF1 GET /v1/sessions?year=2026&session_type=Race answered 'No results found.' on 2026-09-22, KXF1RACE settles on the FIA, and a race-leader rule would need sub-cycle timing data the twice-hourly desk does not collect. Neither series gets an adapter, a universe entry or a trade until those gaps close; the evaluation itself is recorded so a future session does not redo it blind.",
   "IRR-39 · (2026-09-22) Settlement re-read compared timestamps with strict string equality, but the desk stores exitAt truncated to whole seconds (iso(parse_ts(...))) while the Kalshi API returns fractional seconds (e.g. committed evidence shows raw 2026-09-20T03:33:45.191125Z vs ledger 2026-09-20T03:33:45Z). Every reachable sample therefore mismatched, the season audit reported FAIL, scripts/verify_data.py failed the runner at its Verify-season-memory step, and no cycle committed for ~22h (six consecutive Forward-desk-cycle failures observed 2026-09-22 via gh run list; the tripwire had landed in PR #8 (commit a24abc2, merged 2026-09-21T04:30Z) and the 00:26Z cycle was the last pre-tripwire success, so the ledger froze at the 2026-09-21T00:26Z cycle). Fixed the same day: paper_engine.settlement_ts_equal compares both sides at second precision with a fail-closed strict fallback when either side is missing/unparseable, wired into audit_season.py and verify_settlements.py (which shared the bug), covered by four regression tests with fractional-second fixtures - the old fixtures used second-precision timestamps on both sides, which is why the suite masked the bug.",
-  "IRR-40 · (2026-09-22) A line-by-line review of the committed cycle log found the 2026-09-20T19:40Z / 22:20Z / 2026-09-21T00:26Z cycles each recorded 0 NWS city forecasts and 26 signal errors on the pre-fix adapter code (unparseable series titles such as 'Atlanta Max Temperature', no Census coordinates, openFDA 404 logged as an error) - all 78 signal errors in the season audit are historical from those three cycles; the fix landed before the 2026-09-22T04:31Z cycle, which captured 84 city forecasts with 0 signal errors (the current parser handles all six titles the old code rejected, checked directly). The same review found two defects: (1) the desk's signal adapters constructed their caches with default paths, so an offline fixture cycle (tests/test_forward_desk.py carries an open KXFDA market) wrote a TESTDRUG record into the committed data/universe/fda-records.json - exactly the trap the gitignore comment warns about; scripts/forward_desk.py now passes explicit cache paths under a universe dir that set_paths redirects for test output, a regression test asserts a fixture cycle never creates or modifies the committed fda-records.json / place-centroids.json / nws-gridpoints.json, and the stale data/season-*/forward/signals/gridpoints.json ignore line was replaced with a note that data/universe/nws-gridpoints.json is committed by design (each entry carries its resolution proof: Census place, points URL + SHA-256, grid id); (2) audit_signals computed nwsCentralPark as total('nwsCaptured') and len(cycles), which reports the TOTAL number of cycles whenever at least one Central Park capture succeeded; it now counts the cycles that actually captured (per-cycle boolean), with a regression test."
+  "IRR-40 · (2026-09-22) A line-by-line review of the committed cycle log found the 2026-09-20T19:40Z / 22:20Z / 2026-09-21T00:26Z cycles each recorded 0 NWS city forecasts and 26 signal errors on the pre-fix adapter code (unparseable series titles such as 'Atlanta Max Temperature', no Census coordinates, openFDA 404 logged as an error) - all 78 signal errors in the season audit are historical from those three cycles; the fix landed before the 2026-09-22T04:31Z cycle, which captured 84 city forecasts with 0 signal errors (the current parser handles all six titles the old code rejected, checked directly). The same review found two defects: (1) the desk's signal adapters constructed their caches with default paths, so an offline fixture cycle (tests/test_forward_desk.py carries an open KXFDA market) wrote a TESTDRUG record into the committed data/universe/fda-records.json - exactly the trap the gitignore comment warns about; scripts/forward_desk.py now passes explicit cache paths under a universe dir that set_paths redirects for test output, a regression test asserts a fixture cycle never creates or modifies the committed fda-records.json / place-centroids.json / nws-gridpoints.json, and the stale data/season-*/forward/signals/gridpoints.json ignore line was replaced with a note that data/universe/nws-gridpoints.json is committed by design (each entry carries its resolution proof: Census place, points URL + SHA-256, grid id); (2) audit_signals computed nwsCentralPark as total('nwsCaptured') and len(cycles), which reports the TOTAL number of cycles whenever at least one Central Park capture succeeded; it now counts the cycles that actually captured (per-cycle boolean), with a regression test.",
+  "IRR-41 · (2026-09-22) Maker-side fees: the fee-schedule primary source in the repo (docs mirror fee_rounding.md / the registry entry \"Trading Fees\") documents the taker side of the quadratic fee formula. The maker-side terms of quadratic_with_maker_fees series cannot be verified from the read-only docs surface, so maker-model settlement projections are labelled \"before maker fees\" and SpreadSmith stays unranked.",
+  "IRR-42 · (2026-09-22) Community social sweep: five Reddit threads carry falsifiable rules (r/Kalshi winners thread -> HalftimeHype (marketed tip: buy 20-30c, sell near 50c); 1,000-strategy KXBTC15M run -> corroborates PanicFader archetype, panic_fade profitable on all 150 reported variants; 5,000-strategy run -> reporting bias caveat retained; Shock-Timing World Cup bot -> logged WITH its refutation comment; r/passive_income econ/weather bots -> Cleveland-Fed-Nowcast -> CPI-bracket mapping underspecified, kept skeleton-only). All are discovery-only and never price evidence. Targeted searches for X, Facebook and YouTube posts surfaced only secondary blogs/Reddit reposts - no recreatable rule with stated parameters was located on those three platforms (honest negative)."
  ]
 }

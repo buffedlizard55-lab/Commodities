@@ -20,7 +20,7 @@
         <a href="#backtest">Backtest</a>
         <a href="#archive-backtest-section">Archive backtest</a>
         <a href="#execution">Execution realism</a>
-        <a href="#live-desk">Live desk</a>
+        <a href="#live-desk">Trade simulator</a>
         <a href="#strategies">Strategy pages</a>
         <a href="#seasons">Seasons</a>
         <a href="#sources">Sources</a>
@@ -34,7 +34,7 @@
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot" id="api-dot"></span> AUTOMATED FORWARD TEST · PAPER ONLY</p>
         <h1 id="page-title">A trading lab that shows its work.</h1>
-        <p class="hero-lede">Twenty-three rule-based strategies trade open Kalshi contracts on paper, twice an hour, from a scheduled collector that reads only the official public API. Every fill consumes a captured order book, every settlement comes from the official result, and every record is committed to this repository with its evidence. No made-up quotes, no silent fallbacks.</p>
+        <p class="hero-lede">Twenty-four rule-based strategies (each a competition username) trade open Kalshi contracts on paper, twice an hour, from a scheduled collector that reads only the official public API — one goal: the highest return. Every fill consumes a captured order book, every settlement comes from the official result, and every record is committed to this repository with its evidence: verified prices, dates, entries, exits, PnL, fees, slippage and liquidity. No made-up quotes, no silent fallbacks.</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#competition">See the season board <span aria-hidden="true">↓</span></a>
           <a class="button button-ghost" href="#forward-ledger">Read the trade ledger</a>
@@ -90,10 +90,10 @@
     <section id="forward-ledger" class="section" aria-labelledby="forward-ledger-title">
       <div class="section-heading">
         <div><p class="eyebrow">02 · placed &amp; upcoming trades</p><h2 id="forward-ledger-title">Every placed simulation and every intended trade</h2></div>
-        <div class="section-actions"><a class="text-link" href="https://github.com/buffedlizard55-lab/Commodities/tree/main/data/season-2026/forward" target="_blank" rel="noreferrer">Ledger folder on GitHub ↗</a><a class="text-link" href="https://github.com/buffedlizard55-lab/Commodities/actions/workflows/forward-desk.yml" target="_blank" rel="noreferrer">Collector runs ↗</a></div>
+        <div class="section-actions"><a class="text-link" href="data/season-2026/forward/trades-review.md">Trades review — all placed + all upcoming ↗</a><a class="text-link" href="https://github.com/buffedlizard55-lab/Commodities/tree/main/data/season-2026/forward" target="_blank" rel="noreferrer">Ledger folder on GitHub ↗</a><a class="text-link" href="https://github.com/buffedlizard55-lab/Commodities/actions/workflows/forward-desk.yml" target="_blank" rel="noreferrer">Collector runs ↗</a></div>
       </div>
       <div class="desk-intro">
-        <div class="desk-callout"><span class="callout-kicker">Explicit answer</span><strong>Can a strategy place an upcoming trade and simulate the real trading experience?</strong><p><b>Yes, on paper and automatically:</b> each cycle every rule scans the open contracts, writes its <em>intent</em> (contract, side, price, reason), fetches the fresh official order book, and fills as an immediate-or-cancel limit order against the displayed depth — VWAP, levels consumed, slippage versus the touch, exact fee and the unfilled remainder are recorded. Exits sell into the bid ladder; settlements use the official <code>result</code> and <code>settlement_ts</code>. <b>No, it is not a live order:</b> queue position, latency and market impact are not simulated as facts, so a real fill could differ.</p></div>
+        <div class="desk-callout"><span class="callout-kicker">Explicit answer</span><strong>Can a strategy place an upcoming trade and simulate the real trading experience?</strong><p><b>Yes, on paper and automatically:</b> each cycle every rule scans the open contracts, writes its <em>intent</em> (contract, side, price, reason), fetches the fresh official order book, and fills as an immediate-or-cancel limit order against the displayed depth — VWAP, levels consumed, slippage versus the touch, exact fee and the unfilled remainder are recorded. Exits sell into the bid ladder; settlements use the official <code>result</code> and <code>settlement_ts</code>. <b>No, it is not a live order:</b> queue position, latency and market impact are not simulated as facts, so a real fill could differ. Upcoming trades include queued intents and SpreadSmith maker quote plans (a posted resting order, measured later against the official trade tape — never a fill).</p></div>
         <div class="desk-facts"><div><span>Price source</span><b>Kalshi public REST</b></div><div><span>Liquidity source</span><b>Captured order books (depth 20)</b></div><div><span>Signal sources</span><b>Kalshi fields · NWS forecast · official candles</b></div><div><span>Write access</span><b>None (read-only client)</b></div></div>
       </div>
       <div class="ledger-tabs" role="tablist"><button class="ledger-tab active" data-forward-tab="positions" type="button">Open positions <span id="fwd-positions-count">0</span></button><button class="ledger-tab" data-forward-tab="events" type="button">Placed fills · exits · settlements <span id="fwd-events-count">0</span></button><button class="ledger-tab" data-forward-tab="intents" type="button">Upcoming intents <span id="fwd-intents-count">0</span></button><button class="ledger-tab" data-forward-tab="cycles" type="button">Collector cycles <span id="fwd-cycles-count">0</span></button><button class="ledger-tab" data-forward-tab="signals" type="button">Signals captured</button><label class="search-box ledger-tabs-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a6 6 0 1 0 4.47 7.47l4.28 4.28 1.42-1.42-4.28-4.28A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z" /></svg><input id="ledger-filter" type="search" placeholder="filter this tab" aria-label="filter ledger rows" autocomplete="off" /></label><span id="ledger-filter-count" class="micro-note"></span></div>
@@ -154,6 +154,9 @@
       </div>
       <p class="section-lede">Every fill this desk claims is re-read against Kalshi's published trade tape (<code>GET /markets/trades?ticker=…</code>) for the same ticker inside a window around the fill. That is the honest test of whether a simulated fill could actually have been executed — and where it is optimistic, this section says so.</p>
       <div id="execution-realism"><p class="muted-inline">Loading the comparison…</p></div>
+      <div class="subsection-title">Market-making quote plans — posted quotes measured against the tape (MODELLED)</div>
+      <p class="section-lede">SpreadSmith posts simulated resting orders one cent inside the touch on captured ladders (spread ≥ 2¢) and logs them as <em>quote plans</em>, not fills. Afterwards every posted price is matched against the same official trade tape: a print <em>strictly through</em> the posted price proves the resting order would have filled (price priority — queue position is irrelevant in that case), touch-only prints stay queue-uncertain, and projected settlement PnL is stated before maker fees (the maker fee schedule is not verified here — IRR-41). Every figure is modelled evidence about hypothetical resting orders; nothing enters the ranked board.</p>
+      <div id="maker-model-panel"><p class="muted-inline">Loading the maker model…</p></div>
     </section>
 
     <section id="season-health" class="section" aria-labelledby="season-health-title">
@@ -167,12 +170,12 @@
 
     <section id="live-desk" class="section desk-section" aria-labelledby="desk-title">
       <div class="section-heading">
-        <div><p class="eyebrow">08 · manual live desk</p><h2 id="desk-title">Open-contract simulation desk (browser)</h2></div>
+        <div><p class="eyebrow">08 · trade simulator</p><h2 id="desk-title">Simulate placing real trades on open Kalshi contracts</h2></div>
         <div class="section-actions"><span class="live-pill" id="connection-label">Waiting for API</span><span id="last-updated" class="muted-inline">No observation yet</span><button class="button button-small button-ghost" id="load-open-button" type="button">Load open contracts</button><a class="text-link" href="https://external-api.kalshi.com/trade-api/v2/markets?status=open" target="_blank" rel="noreferrer">Official JSON ↗</a></div>
       </div>
       <div class="desk-intro">
-        <div class="desk-callout"><span class="callout-kicker">Hands-on version</span><strong>Inspect any open contract and simulate a fill yourself.</strong><p>The same engine as the automated desk, run in your browser: load the open contracts, pick one, read its live order book, and simulate a taker fill for any live-book strategy. Records stay in this browser’s local storage and are separate from the committed season ledger.</p></div>
-        <div class="desk-facts"><div><span>Price source</span><b>Kalshi REST</b></div><div><span>Liquidity source</span><b>Order book depth</b></div><div><span>Clock</span><b>UTC timestamps</b></div><div><span>Write access</span><b>Disabled</b></div></div>
+        <div class="desk-callout"><span class="callout-kicker">Explicit trade simulator</span><strong>Place simulated trades on real open event contracts — real verified pricing, dates and liquidity.</strong><p>The same engine as the automated desk, run in your browser: load the open contracts (live official quotes and close dates), pick one, read its live order book (displayed depth = the liquidity a fill may consume), and simulate a taker fill for any live-book strategy. VWAP, levels consumed, slippage versus the touch, the exact fee and the unfilled remainder are shown before you commit; records stay in this browser’s local storage and are separate from the committed season ledger.</p></div>
+        <div class="desk-facts"><div><span>Price source</span><b>Kalshi REST (verified)</b></div><div><span>Liquidity source</span><b>Order book depth (depth-bound fills)</b></div><div><span>Dates</span><b>Official close + settlement times</b></div><div><span>Slippage</span><b>Measured vs the touch</b></div><div><span>Write access</span><b>Disabled (paper only)</b></div></div>
       </div>
       <div class="desk-layout">
         <div class="panel market-panel">

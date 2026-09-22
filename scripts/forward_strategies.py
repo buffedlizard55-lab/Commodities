@@ -45,6 +45,55 @@ LIVE_SCORE_THRESHOLDS = {"KXNFLGAME": 8.0, "KXNCAAFGAME": 8.0, "KXNBAGAME": 10.0
                          "KXNHLGAME": 2.0, "KXWNBAGAME": 10.0, "KXEPLGAME": 2.0, "KXNCAAMBGAME": 10.0}
 
 
+# --------------------------------------------------------------------------- maker quote plans
+# SpreadSmith's quote-plan rule (plans only - never a fill).  A plan posts a simulated resting
+# order one cent inside the touch on a captured ladder while the displayed spread is at least
+# 2c; scripts/maker_model.py later matches each posted price against the official trade tape.
+MAKER_MIN_SPREAD = 0.02
+MAKER_IMPROVEMENT = 0.01
+MAKER_MAX_PLANS_PER_CYCLE = 3
+
+
+def maker_quote_plan(m, ctx):
+    """A one-sided resting quote plan from a captured order book (best spread opportunity).
+
+    Returns a signal dict whose `price` is the MAKER POST price (a bid on `side`), not a taker
+    ask: the desk records it with status `quote_plan` and opens no position.  Sizing is the
+    quantity already resting at the best bid level of that side - the model joins the displayed
+    queue rather than inventing depth.
+    """
+    book = ctx.get("book") or {}
+    best = None
+    for side in ("yes", "no"):
+        bid, ask = m.get(f"{side}_bid"), m.get(f"{side}_ask")
+        if bid is None or ask is None or not 0 < bid < 1 or not 0 < ask < 1:
+            continue
+        spread = round(ask - bid, 4)
+        if spread < MAKER_MIN_SPREAD:
+            continue
+        posted = round(bid + MAKER_IMPROVEMENT, 4)
+        if posted >= ask - 1e-9:
+            continue
+        ladder = book.get(side) or []
+        size = ladder[-1][1] if ladder else (m.get(f"{side}_bid_size") or 0)
+        if not size or size <= 0:
+            continue
+        candidate = {"side": side, "price": posted, "limit": posted, "spread": spread,
+                     "size": size, "bid": bid, "ask": ask}
+        if best is None or candidate["spread"] > best["spread"]:
+            best = candidate
+    if best is None:
+        return None
+    return {"side": best["side"], "price": best["price"], "limit": best["limit"],
+            "reason": (f"maker quote plan: post a resting {best['side'].upper()} bid at {best['price']:.4f} "
+                       f"({MAKER_IMPROVEMENT:.2f} inside the {best['bid']:.4f}/{best['ask']:.4f} touch, "
+                       f"spread {best['spread']:.2f}) for {best['size']:,.0f} contracts - "
+                       f"a plan, not a fill; fill evidence is measured later against the official tape"),
+            "meta": {"postedPrice": best["price"], "postedContracts": best["size"],
+                     "spreadAtPost": best["spread"], "improvementCents": round(MAKER_IMPROVEMENT * 100),
+                     "bestBidAtPost": best["bid"], "bestAskAtPost": best["ask"]}}
+
+
 def _cheaper_side(m, maximum, minimum=0.0):
     """Cheapest executable side whose ask is within [minimum, maximum]."""
     candidates = []
@@ -236,6 +285,38 @@ def entry_underdog_sweep(m, ctx):
         return None
     side, ask = pick
     return {"side": side, "price": ask, "limit": 0.20, "reason": f"underdog {side.upper()} ask {ask:.2f} <= 0.20, expected resolution in {hours:.1f}h, volume {m['volume']:,.0f}"}
+
+
+def entry_halftime_hype(m, ctx):
+    """Buy the in-game underdog at 20-30c and sell toward 50c (r/Kalshi tip, recreated).
+
+    The community tip (r/Kalshi "People who actually WIN MONEY on Kalshi", 2026-01-15) is "Buy
+    low at 20-30 percent and sell at halftime when the number is closer to 50 percent. Easy
+    double."  Recreated mechanically: the entry must see the ESPN scoreboard report the mapped
+    game IN PROGRESS (the live-game half of the claim), buy the 20-30c underdog side with a
+    displayed spread <= 5c on volume >= 10,000, and the exit is the first verified bid >= 0.50
+    (the post's "closer to 50 percent"), else hold to settlement.  The halftime timing itself is
+    folded into the 50c target because a twice-hourly snapshot cannot verify a halftime instant
+    from the adapter fields - stated simplification, not silent guessing.
+    """
+    signal = (ctx.get("espn") or {}).get(m.get("ticker"))
+    if not signal or signal.get("state") != "in":
+        return None
+    if (m.get("volume") or 0) < 10_000:
+        return None
+    pick = _cheaper_side(m, 0.30, 0.20)
+    if not pick:
+        return None
+    side, ask = pick
+    spread = _spread(m, side)
+    if spread is None or spread > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    return {"side": side, "price": ask, "limit": 0.30,
+            "reason": (f"in-game underdog {side.upper()} ask {ask:.2f} in [0.20, 0.30] with spread "
+                       f"{spread:.2f} <= 0.05, volume {m['volume']:,.0f}, ESPN reports the game in "
+                       f"progress ({signal.get('scoreDiff')}); target a 0.50 bid (community 'sell near 50c' tip)"),
+            "meta": {"scoreDiff": signal.get("scoreDiff"), "espnDetail": signal.get("detail"),
+                     "source": "r/Kalshi 2026-01-15 tip, recreated mechanically (discovery-only source)"}}
 
 
 def entry_gold_leader(m, ctx):
@@ -646,6 +727,12 @@ STRATEGIES = [
      "universe": SERIES_SPORTS, "entry": entry_underdog_sweep, "exit": exit_take_profit(multiple=2.0), "fraction": 0.5,
      "rule": "Within 12h of expected resolution, buy a 2-20c underdog side on a game market with volume >= 10,000; sell at a bid >= 2x entry, else hold to settlement.",
      "why": "Convexity on upsets. The favourite-longshot literature predicts this bleeds; it is here to measure exactly how much."},
+    {"id": "halftime-hype", "username": "HalftimeHype", "name": "Halftime Underdog Hype", "group": "sports",
+     "source": {"kind": "community post", "label": "r/Kalshi 'People who actually WIN MONEY on Kalshi' tip: buy 20-30%, sell near 50% (recreated mechanically; halftime timing folded into the 50c target)", "url": "https://www.reddit.com/r/Kalshi/comments/1qd4ubf/people_who_actually_win_money_on_kalshi_whats/"},
+     "universe": SERIES_SPORTS, "entry": entry_halftime_hype, "exit": exit_take_profit(target=0.50), "fraction": 0.5,
+     "needs_espn": True,
+     "rule": "While the ESPN scoreboard shows a mapped game in progress, buy the underdog side quoted 20-30c (displayed spread <= 5c) on volume >= 10,000; sell at the first verified bid >= 50c, else hold to settlement.",
+     "why": "The community claim is that underdogs drift toward a coin flip by halftime ('easy double'). The forward test measures it on official prices; a miss settles against the entrant at the official result."},
     {"id": "score-pulse", "username": "ScorePulse", "name": "Live Scoreboard Leader", "group": "sports",
      "source": {"kind": "official feed + exchange series", "label": "ESPN scoreboard API (public JSON) -> Kalshi KX*GAME series; ESPN is a listed settlement source for KXNCAAFGAME/KXMLBGAME/KXNBAGAME/KXNHLGAME/KXWNBAGAME/KXEPLGAME/KXNCAAMBGAME", "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"},
      "universe": SERIES_SPORTS, "entry": entry_live_score, "exit": exit_hold, "fraction": 0.5, "needs_espn": True,
@@ -692,7 +779,7 @@ GATED = [
      "blocker": "The Leap universe is futures (AMP); the Kalshi analogues are index/commodity range series that the universe job must first enumerate and verify (fee type, tick grid) before a rule can be stated."},
     {"id": "spread-smith", "username": "SpreadSmith", "name": "Market-Making Quote Plan", "group": "maker",
      "source": {"kind": "academic", "label": "Optimal market making in prediction markets (stochastic control)", "url": "https://pith.science/paper/2607.17991"},
-     "blocker": "A REST snapshot cannot prove queue position or a resting-order fill; maker fills would be invented. Only taker fills against displayed depth are simulated."},
+     "blocker": "Still no fake fills: a REST snapshot cannot prove FIFO queue position, so a touch print is only 'queue-uncertain'. The new tape-validated maker model (scripts/maker_model.py -> forward/execution/maker-model.json) posts each plan one cent inside the touch and later matches it against GET /markets/trades - a print strictly through the posted price proves the resting order would have filled (price priority), and only that state counts. Quote plans appear as upcoming trades; projected PnL is before unverified maker fees (IRR-41)."},
     {"id": "nba-injury-gate", "username": "TipoffTriage", "name": "NBA Official Report Gate", "group": "nba",
      "source": {"kind": "MasterSite project", "label": "NBA Injury Watch - 30-Team Injury Monitor", "url": "https://buffedlizard55-lab.github.io/NBAInjuryReport/"},
      "blocker": "No machine-readable official NBA injury feed exists (the project's own finding); ESPN rows are not official confirmation. GridironPulse trades the KXNBAGAME price instead."},
