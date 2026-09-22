@@ -446,8 +446,102 @@ class HeatConfirmTests(unittest.TestCase):
 
     def test_desk_copies_signal_meta_into_the_position(self):
         # open_position() is the one place the forward desk builds a position; the meta must survive
-        src = open(os.path.join(ROOT, "scripts", "forward_desk.py")).read()
+        with open(os.path.join(ROOT, "scripts", "forward_desk.py")) as fh:
+            src = fh.read()
         self.assertIn('"signalMeta": dict(signal.get("meta") or {})', src)
+
+
+class SportsExpansionTests(unittest.TestCase):
+    """KXEPLGAME / KXNCAAMBGAME joined the sports universe on 2026-09-22 (IRR-37)."""
+
+    def test_new_series_are_tracked_with_thresholds(self):
+        for series in ("KXEPLGAME", "KXNCAAMBGAME"):
+            self.assertIn(series, FS.SERIES_SPORTS)
+            self.assertIn(series, FS.LIVE_SCORE_THRESHOLDS)
+        self.assertEqual(FS.LIVE_SCORE_THRESHOLDS["KXEPLGAME"], 2.0)      # goals, like hockey
+        self.assertEqual(FS.LIVE_SCORE_THRESHOLDS["KXNCAAMBGAME"], 10.0)  # points, like NBA/WNBA
+        self.assertEqual(len(FS.SERIES_SPORTS), 8)
+
+    def market(self, series, ticker, yes_ask=0.80, yes_bid=0.78):
+        return {"series_ticker": series, "ticker": ticker, "yes_ask": yes_ask, "yes_bid": yes_bid}
+
+    def ctx(self, ticker, diff):
+        return {"espn": {ticker: {"state": "in", "scoreDiff": diff, "detail": "2nd Half",
+                                  "espnEventId": "1", "away": "A", "home": "H",
+                                  "awayScore": 3.0, "homeScore": 1.0, "marketSide": "away"}}}
+
+    def test_epl_two_goal_lead_fires_one_goal_and_draws_abstain(self):
+        ticker = "KXEPLGAME-26SEP20LIVBOU-LIV"
+        sig = FS.entry_live_score(self.market("KXEPLGAME", ticker), self.ctx(ticker, 2.0))
+        self.assertIsNotNone(sig)
+        self.assertEqual((sig["side"], sig["limit"]), ("yes", 0.85))
+        self.assertIn(">= 2.0", sig["reason"])
+        # a 1-goal lead and a tied game are below the soccer threshold
+        self.assertIsNone(FS.entry_live_score(self.market("KXEPLGAME", ticker), self.ctx(ticker, 1.0)))
+        self.assertIsNone(FS.entry_live_score(self.market("KXEPLGAME", ticker), self.ctx(ticker, 0.0)))
+
+    def test_ncaam_ten_point_lead_fires_nine_abstains(self):
+        ticker = "KXNCAAMBGAME-26FEB15INDILL-ILL"
+        sig = FS.entry_live_score(self.market("KXNCAAMBGAME", ticker), self.ctx(ticker, 10.0))
+        self.assertIsNotNone(sig)
+        self.assertEqual((sig["side"], sig["limit"]), ("yes", 0.85))
+        self.assertIsNone(FS.entry_live_score(self.market("KXNCAAMBGAME", ticker), self.ctx(ticker, 9.0)))
+
+    def test_price_and_spread_caps_still_apply_to_new_leagues(self):
+        ticker = "KXEPLGAME-26SEP20LIVBOU-LIV"
+        # above the 85c cap -> no trade even with a big lead
+        self.assertIsNone(FS.entry_live_score(self.market("KXEPLGAME", ticker, yes_ask=0.90, yes_bid=0.89),
+                                              self.ctx(ticker, 3.0)))
+        # spread 10c > 5c -> no trade
+        self.assertIsNone(FS.entry_live_score(self.market("KXEPLGAME", ticker, yes_ask=0.80, yes_bid=0.70),
+                                              self.ctx(ticker, 3.0)))
+        # a final (not live) scoreboard never fires
+        ctx = self.ctx(ticker, 3.0)
+        ctx["espn"][ticker]["state"] = "post"
+        self.assertIsNone(FS.entry_live_score(self.market("KXEPLGAME", ticker), ctx))
+
+
+class ZeroFillRuleTests(unittest.TestCase):
+    """Can-fire proofs for the personas with zero committed intents (prior-session follow-up).
+
+    FdaRecordCheck, WeatherFader (and HeatConfirm, covered above) have no ledger intents because
+    their rules never triggered on the tracked universe - not because the rules cannot fire.
+    These tests prove each rule fires on the adapter shape it requires and abstains otherwise."""
+
+    def test_fda_record_fires_only_on_an_approved_record(self):
+        ticker = "KXFDAAPPROVE-26OCT01-CYTI"
+        market = {"series_ticker": "KXFDAAPPROVE", "ticker": ticker, "yes_ask": 0.90, "yes_bid": 0.88}
+        approved = {"fda": {ticker: {"drug": "cytisinicline", "code": None, "approvedRecord": True, "hits": 1,
+                                     "applications": [{"application_number": "NDA207871",
+                                                       "first_orig_approved": "20260301"}]}}}
+        sig = FS.entry_fda_record(market, approved)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig["side"], "yes")
+        self.assertIn("NDA207871", sig["reason"])
+        # a verified absence is never traded
+        denied = {"fda": {ticker: {"drug": "retatrutide", "approvedRecord": False, "hits": 0, "applications": []}}}
+        self.assertIsNone(FS.entry_fda_record(market, denied))
+        # no adapter entry (no drug named / lookup failed) -> abstain
+        self.assertIsNone(FS.entry_fda_record(market, {"fda": {}}))
+        # above the 97c cap -> no trade even with a record
+        rich = dict(market, yes_ask=0.98, yes_bid=0.97)
+        self.assertIsNone(FS.entry_fda_record(rich, approved))
+
+    def test_weather_fade_fires_only_far_from_the_forecast(self):
+        event = "KXHIGHCHI-26SEP21"
+        market = {"series_ticker": "KXHIGHCHI", "ticker": f"{event}-B80", "event_ticker": event,
+                  "strike_type": "between", "floor_strike": 80.0, "cap_strike": 81.0,
+                  "no_ask": 0.90, "no_bid": 0.88}
+        cold = {"nws": {event: {"high_f": 70.0, "date": "2026-09-21", "updated": "t"}}}
+        sig = FS.entry_weather_fade(market, cold)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig["side"], "no")
+        self.assertIn("10F away", sig["reason"])
+        # the forecast sits inside the bracket -> nothing to fade
+        hot = {"nws": {event: {"high_f": 80.5, "date": "2026-09-21", "updated": "t"}}}
+        self.assertIsNone(FS.entry_weather_fade(market, hot))
+        # no forecast -> abstain, never fade on price alone
+        self.assertIsNone(FS.entry_weather_fade(market, {"nws": {}}))
 
 
 if __name__ == "__main__":

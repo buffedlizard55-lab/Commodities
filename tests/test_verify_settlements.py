@@ -101,6 +101,26 @@ class BackfillTests(unittest.TestCase):
         self.assertFalse(report["records"][0]["settlementMatches"])
         self.assertTrue(report["records"][0]["resultMatches"])
 
+    def test_fractional_api_seconds_still_match(self):
+        # IRR-39: the API returns fractional seconds (e.g. 2026-09-20T03:33:45.191125Z) while
+        # the ledger stores exitAt truncated to whole seconds; the same second must match -
+        # for both yes/no and value-scalar settlements.
+        self.write_ledger([
+            settlement("KXNFLGAME-26SEP20A-A", "yes", "2026-09-21T03:00:00Z", "s", "p1"),
+            settlement("KXCPI-26AUG-T0.8", "value:0.4", "2026-09-11T13:28:53Z", "s", "p2", series="KXCPI"),
+        ])
+        client = StubClient({
+            "KXNFLGAME-26SEP20A-A": self.api("KXNFLGAME-26SEP20A-A", "yes",
+                                             "2026-09-21T03:00:00.123456Z"),
+            "KXCPI-26AUG-T0.8": {"market": {"ticker": "KXCPI-26AUG-T0.8", "result": None,
+                                            "settlement_ts": "2026-09-11T13:28:53.999999Z",
+                                            "settlement_value_dollars": "0.40", "status": "settled"}},
+        })
+        report = VS.backfill_season(client, "2026", self.season_dir)
+        self.assertEqual(report["matches"], 2)
+        self.assertEqual(report["mismatches"], [])
+        self.assertTrue(all(r["settlementMatches"] for r in report["records"]))
+
     def test_unreachable_is_never_match_nor_mismatch(self):
         self.write_ledger([settlement("KXNFLGAME-26SEP20A-A", "yes", "2026-09-21T03:00:00Z", "s", "p1")])
         client = StubClient({})  # every fetch raises

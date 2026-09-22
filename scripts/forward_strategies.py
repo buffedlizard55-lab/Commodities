@@ -22,7 +22,8 @@ SERIES_ECON = ["KXFED", "KXCPI", "KXCPIYOY", "KXFEDDECISION"]
 SERIES_CRYPTO = ["KXBTC", "KXBTC15M", "KXETH15M"]
 SERIES_GOLD = ["KXGOLD15M", "KXGOLDH"]
 SERIES_WEATHER = ["KXHIGHNY"]
-SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME", "KXNHLGAME", "KXWNBAGAME"]
+SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME", "KXNHLGAME", "KXWNBAGAME",
+                 "KXEPLGAME", "KXNCAAMBGAME"]
 SELECTOR_CEO = "tag:CEOs&contains:CEO"   # Companies-category series tagged CEOs whose ticker names a CEO market
 SELECTOR_FDA = "prefix:KXFDA&tag:Medicine"  # FDA drug-decision series (excludes FDA-politics series)
 # Every Kalshi daily-high temperature series (verified in data/universe/series-catalog.json:
@@ -34,11 +35,14 @@ TRACKED_SELECTORS = [SELECTOR_CEO, SELECTOR_FDA, SELECTOR_WEATHER]
 
 # Minimum live lead before ScorePulse buys the leading side, per sport.  These are rule
 # parameters, not risk limits: the desk always sizes 50% of free cash.  Units are the sport's own
-# scoring unit (points for football/basketball, runs for baseball, goals for hockey).
+# scoring unit (points for football/basketball, runs for baseball, goals for hockey/soccer).
 # KXNHLGAME/KXWNBAGAME added 2026-09-21 with the ESPN adapter expansion (IRR-35): a 2-goal NHL
 # lead with time remaining is a strong favourite state; WNBA uses the same 10-point lead as the NBA.
+# KXEPLGAME/KXNCAAMBGAME added 2026-09-22 (IRR-37): soccer uses the same 2-goal lead as hockey
+# (both are low-scoring; a tied game has diff 0 and never fires), and men's college basketball
+# uses the same 10-point lead as the NBA/WNBA.
 LIVE_SCORE_THRESHOLDS = {"KXNFLGAME": 8.0, "KXNCAAFGAME": 8.0, "KXNBAGAME": 10.0, "KXMLBGAME": 3.0,
-                         "KXNHLGAME": 2.0, "KXWNBAGAME": 10.0}
+                         "KXNHLGAME": 2.0, "KXWNBAGAME": 10.0, "KXEPLGAME": 2.0, "KXNCAAMBGAME": 10.0}
 
 
 def _cheaper_side(m, maximum, minimum=0.0):
@@ -442,9 +446,10 @@ def entry_live_score(m, ctx):
     """Buy the side of the team ESPN's official scoreboard shows leading, late in the game.
 
     Signal source: the public ESPN scoreboard JSON (ESPN is a listed settlement source for
-    KXNCAAFGAME / KXMLBGAME / KXNBAGAME / KXNHLGAME / KXWNBAGAME per the settlement_sources field
-    in data/universe/series-catalog.json).  The mapping is accepted only when exactly one event
-    matches the team names + scheduled date in the Kalshi market's own rules_primary; otherwise
+    KXNCAAFGAME / KXMLBGAME / KXNBAGAME / KXNHLGAME / KXWNBAGAME / KXEPLGAME / KXNCAAMBGAME
+    per the settlement_sources field in data/universe/series-catalog.json).  The mapping is
+    accepted only when exactly one event matches the team names + scheduled date in the Kalshi
+    market's own rules_primary; otherwise
     ctx["espn"] has no entry and the rule abstains.  The price is always Kalshi's.
     """
     signal = (ctx.get("espn") or {}).get(m.get("ticker"))
@@ -642,9 +647,9 @@ STRATEGIES = [
      "rule": "Within 12h of expected resolution, buy a 2-20c underdog side on a game market with volume >= 10,000; sell at a bid >= 2x entry, else hold to settlement.",
      "why": "Convexity on upsets. The favourite-longshot literature predicts this bleeds; it is here to measure exactly how much."},
     {"id": "score-pulse", "username": "ScorePulse", "name": "Live Scoreboard Leader", "group": "sports",
-     "source": {"kind": "official feed + exchange series", "label": "ESPN scoreboard API (public JSON) -> Kalshi KX*GAME series; ESPN is a listed settlement source for KXNCAAFGAME/KXMLBGAME/KXNBAGAME", "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"},
+     "source": {"kind": "official feed + exchange series", "label": "ESPN scoreboard API (public JSON) -> Kalshi KX*GAME series; ESPN is a listed settlement source for KXNCAAFGAME/KXMLBGAME/KXNBAGAME/KXNHLGAME/KXWNBAGAME/KXEPLGAME/KXNCAAMBGAME", "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"},
      "universe": SERIES_SPORTS, "entry": entry_live_score, "exit": exit_hold, "fraction": 0.5, "needs_espn": True,
-     "rule": "While a game market is live, buy the side of the team the ESPN scoreboard shows leading by at least 8 points (football), 10 (basketball) or 3 runs (baseball) when YES is quoted at or below 85c with a displayed spread <= 5c; hold to settlement.",
+     "rule": "While a game market is live, buy the side of the team the ESPN scoreboard shows leading by at least 8 points (football), 10 (basketball), 3 runs (baseball) or 2 goals (hockey, soccer) when YES is quoted at or below 85c with a displayed spread <= 5c; hold to settlement.",
      "why": "In-game score is public information the market may price slowly; the exchange price is the only execution evidence. The ESPN event is matched to the market by the team names and scheduled date in the market's own rules_primary, and a non-unique match makes the rule abstain rather than guess."},
     {"id": "fda-record", "username": "FdaRecordCheck", "name": "Drugs@FDA Record Check", "group": "biotech",
      "source": {"kind": "official feed + exchange series", "label": "openFDA Drugs@FDA (public, no key) -> Kalshi KXFDA* drug-decision series", "url": "https://api.fda.gov/drug/drugsfda.json"},

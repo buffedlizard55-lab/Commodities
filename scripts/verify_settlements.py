@@ -15,7 +15,10 @@ Design rules (identical to the rest of the repository):
     code flags it (1) so a workflow step can surface it.  Nothing is re-simulated or rewritten.
   * A market that cannot be fetched is "unreachable" - never counted as a match or a mismatch.
   * value-scalar settlements (ledger result "value:...") compare settlement_ts only, the same
-    convention audit_season.py uses for its sampled re-read.
+    convention audit_season.py uses for its sampled re-read.  Timestamps compare at second
+    precision on both sides (paper_engine.settlement_ts_equal, IRR-39): the ledger's exitAt
+    truncates the API's fractional seconds, so strict string equality would flag every real
+    settlement as a mismatch.
   * Mismatches do NOT fail scripts/verify_data.py permanently: the verifier reports them as a
     warning while the finding is fresh.  Rationale: a monthly artifact that blocked the
     twice-hourly ledger commit would stall the whole experiment until a human arrived; the
@@ -143,7 +146,8 @@ def backfill_season(client, season: str, season_dir: str, limit: int = 0) -> dic
             market = payload.get("market") or payload
             record.update({"url": url, "responseSha256": sha256_bytes(raw),
                            "apiResult": market.get("result"), "apiSettlementTs": market.get("settlement_ts"),
-                           "apiStatus": market.get("status")})
+                           "apiStatus": market.get("status"),
+                           "apiSettlementValue": market.get("settlement_value_dollars")})
         except Exception as error:  # network or API error: record, never assume
             record.update({"status": "unreachable", "error": str(error)[:200]})
             report["unreachable"].append(record)
@@ -151,9 +155,12 @@ def backfill_season(client, season: str, season_dir: str, limit: int = 0) -> dic
             report["records"].append(record)
             continue
         # value-scalar settlements (result "value:...") have no yes/no result to compare; ts only.
+        # Timestamps compare at second precision: the ledger stores exitAt truncated to whole
+        # seconds while the API returns fractional seconds (IRR-39).
+        from paper_engine import settlement_ts_equal
         result_ok = (record["apiResult"] == record["ledgerResult"]) or \
             str(record["ledgerResult"]).startswith("value:")
-        ts_ok = record["apiSettlementTs"] == record["ledgerSettlementTs"]
+        ts_ok = settlement_ts_equal(record["apiSettlementTs"], record["ledgerSettlementTs"])
         record["resultMatches"] = bool(result_ok)
         record["settlementMatches"] = bool(ts_ok)
         report["attempted"] += 1

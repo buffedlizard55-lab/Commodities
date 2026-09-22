@@ -67,7 +67,7 @@ scripts/
                                     + 1st of month 06:47 UTC (full settlement backfill) + manual dispatch
 data/
   strategies.json                   persona roster (browser live-book, backtest, forward-desk, gated)
-  source-registry.json              70 official/primary sources + irregularities IRR-01..IRR-36
+  source-registry.json              73 official/primary sources + irregularities IRR-01..IRR-38
   seasons.json                      season index the site reads (active season, cycles, fills, frozen flag)
   universe/                         series-catalog.json (compact, all categories), series-index.json (fees, shards, tags)
   season-2026/                      COMMITTED SEASON MEMORY (durable store)
@@ -94,23 +94,27 @@ data/
     candles-*.csv, raw/, ...        verified backtest inputs (see MANIFEST.md)
     competition.json, trades.json, leaderboard.json, intents.json, explanations.json   backtest outputs
 tests/
-  test_forward_desk.py              12 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
+  test_forward_desk.py              18 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
                                     evidence hashes, HeatConfirm gating (entry needs forecast in bracket, cheap
-                                    ask, tight spread; exit only when a fresh forecast leaves the bracket)
-  test_signals.py                   23 tests: Census gazetteer -> NWS gridpoint (alias/suffix matching),
+                                    ask, tight spread; exit only when a fresh forecast leaves the bracket),
+                                    EPL/NCAAM universe + ScorePulse thresholds, can-fire proofs for the
+                                    zero-intent FdaRecordCheck / WeatherFader rules
+  test_signals.py                   26 tests: Census gazetteer -> NWS gridpoint (alias/suffix matching),
                                     ESPN scoreboard (incl. the verified nickname rules_primary form, IRR-36,
-                                    and the added NHL/WNBA leagues), openFDA records incl. 404 = verified absence
-  test_verify_settlements.py        11 tests: full settlement backfill - match / mismatch / unreachable /
+                                    the added NHL/WNBA leagues and the EPL/NCAAM expansion, IRR-37),
+                                    openFDA records incl. 404 = verified absence
+  test_verify_settlements.py        12 tests: full settlement backfill - match / mismatch / unreachable /
                                     value-scalar / multi-position dedup / shard routing / limit determinism /
-                                    multi-season scan / report + append-only history
+                                    multi-season scan / report + append-only history / fractional-second ts (IRR-39)
   test_compaction.py                9 tests: gzip round-trip, hash check, tamper detection, season rollover,
                                     all-season compaction after a UTC-year rollover
   test_backtest_archive.py          14 tests: fee multipliers, no look-ahead, PnL arithmetic, per-strategy
                                     cash identity, --series filter, curve points, walk-forward fold sums
   test_execution_realism.py         6 tests: tape comparison, no-tape window, optimism verdict (fixtures only)
   test_archive_history.py           4 tests: chunk tiling, per-request hashes, diff detection, failed chunks
-  test_audit_season.py              8 tests: slot on-time/late/missed counts, orphan-fill detection, equity
-                                    drift, signal totals, tape summary, live re-read unavailable offline, audit history
+  test_audit_season.py              11 tests: slot on-time/late/missed counts, orphan-fill detection, equity
+                                    drift, signal totals, tape summary, live re-read unavailable offline, audit history,
+                                    second-precision ts comparison + fail-closed branches (IRR-39)
   site-smoke.mjs                    jsdom checks: index.html + one mapped and one unmatched strategy artifact against the committed data
                                     (board, filters, ledger tabs, health panel, archive board + walk-forward,
                                     execution realism)
@@ -130,16 +134,17 @@ Each cycle (`scripts/forward_desk.py --live`, ~100–150 official reads, ~30 s):
 
 1. **Universe.** Open markets of the tracked series — econ `KXFED KXCPI KXCPIYOY KXFEDDECISION`,
    crypto `KXBTC KXBTC15M KXETH15M`, gold `KXGOLD15M KXGOLDH`, weather `KXHIGHNY`, games
-   `KXNFLGAME KXNBAGAME KXNCAAFGAME KXMLBGAME KXNHLGAME KXWNBAGAME`, plus every Companies series
-   tagged `CEOs` whose ticker names a CEO market and every `KXFDA*` series tagged `Medicine` (from
-   the weekly series catalog). Fee type / multiplier / exchange shard come from each series record
-   (e.g. `KXMLBGAME` multiplier 0.5, shard 3). `KXNHLGAME` / `KXWNBAGAME` were added 2026-09-21
-   (signal-coverage next-work item); their first series records are fetched on the next runner
-   cycle via `ensure_series`, and until then the desk simply has no open market to trade.
+   `KXNFLGAME KXNBAGAME KXNCAAFGAME KXMLBGAME KXNHLGAME KXWNBAGAME KXEPLGAME KXNCAAMBGAME`,
+   plus every Companies series tagged `CEOs` whose ticker names a CEO market and every `KXFDA*`
+   series tagged `Medicine` (from the weekly series catalog). Fee type / multiplier / exchange
+   shard come from each series record (e.g. `KXMLBGAME` multiplier 0.5, shard 3). `KXNHLGAME` /
+   `KXWNBAGAME` were added 2026-09-21 and `KXEPLGAME` / `KXNCAAMBGAME` 2026-09-22 (signal-coverage
+   next-work items); their first series records are fetched on the next runner cycle via
+   `ensure_series`, and until then the desk simply has no open market to trade.
 2. **Signals.** Kalshi market fields (asks/bids, last, *last trade a day ago*, volume, close time,
    strike bounds); **NWS point forecasts** — the Census Gazetteer interior point of each city named
    by a `KXHIGH*` series resolves `api.weather.gov/points/{lat},{lon}` to the right gridpoint (up to
-   12 cities a cycle); **ESPN scoreboards** for NFL/college football/NBA/MLB/NHL/WNBA (matched to a
+   12 cities a cycle); **ESPN scoreboards** for NFL/college football/NBA/MLB/NHL/WNBA/EPL/NCAAM (matched to a
    market by the team names in `rules_primary` — Kalshi's nickname form like "DET Lions vs BUF
    Bills" is handled (IRR-36) — plus the scheduled date, unique match or abstain);
    **openFDA Drugs@FDA** records for `KXFDA*` markets whose title names a drug; official **daily
@@ -177,7 +182,7 @@ cycle ids make before/after results distinguishable. Nothing is ever re-simulate
 | WeatherCatalyst, WeatherFader | YES on the NWS-forecast bracket ≤70¢ · NO on brackets ≥4°F away ≤92¢ | MasterSite **SFWeather** → NWS API → `KXHIGH*` (city resolved per series) |
 | FDAReaction | favourite 85–97¢ on FDA drug-decision series | MasterSite **DrugAnalysis** → `KXFDA*` (Medicine) |
 | GridironPulse, SportsPredLab | 80–95¢ game favourite within 12h · 2–20¢ underdog sweep | MasterSite **NFL/NBA injury, NCAA/NFL/MLB scoreboards, SportsPred** → `KX*GAME` |
-| ScorePulse | live: buy the side the **ESPN scoreboard** shows ahead by ≥8 pts (football) / 10 pts (NBA/WNBA) / 3 runs (MLB) / 2 goals (NHL) at ≤85¢ | ESPN scoreboard API → `KX*GAME` (ESPN is a listed settlement source for NCAAF/MLB/NBA/NHL/WNBA per the committed series catalog) |
+| ScorePulse | live: buy the side the **ESPN scoreboard** shows ahead by ≥8 pts (football) / 10 pts (NBA/WNBA/NCAAM) / 3 runs (MLB) / 2 goals (NHL/EPL) at ≤85¢ | ESPN scoreboard API → `KX*GAME` (ESPN is a listed settlement source for NCAAF/MLB/NBA/NHL/WNBA/EPL/NCAAM per the committed series catalog) |
 | FdaRecordCheck | YES ≤97¢ when **openFDA Drugs@FDA** already lists an approved ORIG application for the named drug | openFDA `drugsfda` → `KXFDA*` (Medicine) |
 | MetalMomentum | 60–80¢ leader with 5–12 min left on gold 15-minute markets | MasterSite **GOLD** is a ring-buyer directory → Kalshi `KXGOLD15M` (Pyth-settled) |
 | TailSprint15, HighProbScalp, PanicFader | ≤10¢ 15-minute tails · 75–80¢ in / 95¢ out · 1-minute-candle panic fade | r/KalshiBTCUporDown15, r/PredictionsMarkets (discovery only) |
@@ -197,6 +202,12 @@ responses showed Kalshi writes game matchups in nickname form ("DET Lions vs BUF
 old parser truncated — no market ever matched (IRR-36, fixed 2026-09-21 with regression tests).
 Both appear unranked with zero fills rather than with a synthetic start; ScorePulse's first possible
 fill now depends only on an in-progress game crossing its lead threshold at an executable price.
+The EPL (`KXEPLGAME`, 2-goal threshold) and men's college basketball (`KXNCAAMBGAME`, 10-point
+threshold) mappings were added 2026-09-22 after direct endpoint reads confirmed the same scoreboard
+shape (IRR-37); Kalshi's `rules_primary` phrasing for those two series gets its first confirmation
+on the runner, and NCAAM tip-off is in November, so ScorePulse abstains there until games exist.
+FdaRecordCheck's and WeatherFader's rules now have offline can-fire proofs (`ZeroFillRuleTests`):
+their zero-intent ledgers mean the rules never triggered, not that the rules cannot fire.
 
 ### Reading the ledger
 
@@ -221,7 +232,7 @@ fill now depends only on an in-progress game crossing its lead threshold at an e
 ```bash
 python3 scripts/forward_desk.py --live                 # one real cycle (needs network egress)
 python3 scripts/forward_desk.py --fixtures DIR --now 2026-09-20T15:00:00Z --out /tmp/out   # offline replay
-python3 -m unittest discover -s tests -p 'test_*.py'    # 87 offline tests
+python3 -m unittest discover -s tests -p 'test_*.py'    # 100 offline tests
 python3 scripts/verify_settlements.py                   # offline plan: what the monthly backfill would re-read
 python3 scripts/verify_settlements.py --live            # full settlement backfill (runner; official re-read)
 python3 scripts/discover_universe.py                    # refresh data/universe/
@@ -349,10 +360,14 @@ that shows up as a below-100% "inside range" percentage, not as a corrected fill
   lines); what the compactor squeezed and whether its hashes verify; the execution-realism summary;
   and — with `--live`, on the runner — a re-read of sampled settled markets against
   `GET /markets/{ticker}`, storing each response's SHA-256 and flagging any ledger-vs-API mismatch.
-  The audit never adjusts the ledger: a mismatch is a finding, and `verify_data.py` fails the run on
-  it. The site renders this as the "season health & storage" section, including the trend only from
-  stored audit rows (one point is shown as insufficient for a line). Eight tests in
-  `tests/test_audit_season.py` pin the slot accounting, orphan detection and the rule that an
+  Timestamps compare at second precision (`paper_engine.settlement_ts_equal`, IRR-39): the ledger
+  stores exitAt truncated to whole seconds while the API returns fractional seconds, so a strict
+  string comparison flagged every real settlement and froze the ledger for ~22 h before it was
+  fixed. The audit never adjusts the ledger: a mismatch is a finding, and `verify_data.py` fails
+  the run on it. The site renders this as the "season health & storage" section, including the
+  trend only from stored audit rows (one point is shown as insufficient for a line). Eleven tests
+  in `tests/test_audit_season.py` pin the slot accounting, orphan detection, the second-precision
+  timestamp comparison (including its fail-closed missing-timestamp branch), and the rule that an
   offline run records "live re-read unavailable" instead of faking one.
 * **Full settlement backfill (monthly).** The audit above only *samples* the most recent settled
   positions (`--samples`, default 8). `scripts/verify_settlements.py --live` is the exhaustive
@@ -411,8 +426,30 @@ this browser's local storage (separate from the committed season). Fail-closed o
 
 ## Known limitations and next work (for the next session)
 
-**Done this session** (previously on the open list): the **full settlement backfill**
-(`scripts/verify_settlements.py` + monthly cron + site panel + 11 tests), closing the "sampled
+**Done this session (2026-09-22)** — the prior session's open list, worked first: the
+**signal-coverage expansion** continued with `KXEPLGAME` (EPL soccer, 2-goal ScorePulse threshold)
+and `KXNCAAMBGAME` (men's college basketball, 10-point threshold) added to the tracked universe and
+the ESPN adapter (IRR-37), after direct reads confirmed both endpoints serve the same scoreboard
+shape the adapter requires; **tennis and F1 were researched line by line and ruled out with
+evidence** instead of guessed in (ESPN tennis serves tournaments, not team scores; OpenF1 returned
+no 2026 Race sessions; both Kalshi series settle elsewhere — IRR-38). The **zero-fill review**
+closed the loop on the untested-not-refuted personas: HeatConfirm's source post was re-verified
+line by line (URL, 77°F / 42¢ / 8¢ gate, −41.61% median — all match the constants in
+`scripts/forward_strategies.py`), and new can-fire tests prove the FdaRecordCheck and WeatherFader
+rules trigger on the adapter shapes they require, so their empty ledgers mean "never triggered",
+not "dead code". A second community backtest (1,000 strategies on `KXBTC15M`) was found and logged
+as corroboration of the panic-fade archetype — discovery-only, no new rule. A line-by-line
+review of the runner's state then found the scheduled desk firing but failing verification on six
+consecutive cycles (~22 h, observed 2026-09-22 via `gh run list`): the settlement re-read compared
+the ledger's second-precision exitAt against the API's fractional-second `settlement_ts` with strict
+string equality, so every reachable sample mismatched, the audit reported FAIL, and the ledger froze
+at the 2026-09-21T00:26Z cycle (IRR-39). Fixed the same day with second-precision comparison plus a
+fail-closed fallback, wired into both the sampled audit and the full backfill with four regression
+tests. Merging this branch restores the twice-hourly cron — which GitHub only runs on the default
+branch — and ships that fix, so the next scheduled cycle should commit again.
+
+**Done 2026-09-21** (previously on the open list): the **full settlement backfill**
+(`scripts/verify_settlements.py` + monthly cron + site panel + 12 tests), closing the "sampled
 live settlement re-read" limitation; and the **signal-coverage expansion** — `KXNHLGAME` and
 `KXWNBAGAME` added to the tracked universe and to the ESPN adapter with ScorePulse thresholds.
 While wiring that expansion, a line-by-line review of the committed official responses found that
@@ -432,11 +469,13 @@ board/ledger text filters, archive equity curves and season-health panel.
   sample is still thin, say so; do not promote, demote or retune the bracket thresholds mid-season.
 * **Read the season audit, not just the board.** `forward/audit/latest.json` now quantifies what the
   runner actually achieved (last audit: 10 cycles over 42 expected slots, 1 on-time / 6 late / 35
-  missed, longest gap 5.56 h). Cadence, not correctness, is the binding constraint on how fast this
-  experiment accumulates evidence. Options if that matters: an external free ping to
-  `workflow_dispatch` is allowed (it is not a data source); simply accept ~5–10 cycles/day.
+  missed, longest gap 5.56 h) — and `gh run list` showed the six cycles after that firing but failing
+  verification for ~22 h (IRR-39 timestamp bug, fixed 2026-09-22). Cadence and verification health
+  together are the binding constraint on how fast this experiment accumulates evidence. Options if
+  that matters: an external free ping to `workflow_dispatch` is allowed (it is not a data source);
+  simply accept ~5–10 cycles/day.
 * **Full settlement backfill: built, first live run pending.** `scripts/verify_settlements.py`
-  now exists (monthly cron + `workflow_dispatch` mode `settlements` + site panel + 11 tests). The
+  now exists (monthly cron + `workflow_dispatch` mode `settlements` + site panel + 12 tests). The
   first *live* full re-read happens on the next runner pass; until then the offline plan is the
   committed state (63 unique settled tickers in Season 2026). Review
   `forward/audit/settlement-backfill.json` after the first run; mismatches are findings only.
@@ -449,8 +488,11 @@ board/ledger text filters, archive equity curves and season-health panel.
   but matched nothing, because Kalshi's `rules_primary` uses nickname matchups ("DET Lions vs BUF
   Bills") that the old parser truncated (IRR-36, fixed + regression-tested 2026-09-21). The next
   in-progress game that crosses ScorePulse's lead threshold at an executable price is the first real
-  test. **FdaRecordCheck** remains untested-not-refuted: its openFDA lookups only fire when a
-  `KXFDA*` market naming a drug is open. Do not loosen the 85¢/97¢ caps to manufacture trades.
+  test — EPL games are in season now, NCAAM starts in November (IRR-37: Kalshi's `rules_primary`
+  phrasing for both series gets its first confirmation on the runner). **FdaRecordCheck** remains
+  untested-not-refuted: its openFDA lookups only fire when a `KXFDA*` market naming a drug is open
+  (can-fire tests added 2026-09-22 prove the rule triggers on an approved record). Do not loosen
+  the 85¢/97¢ caps to manufacture trades.
 * **FDA target dates remain unverifiable.** Drugs@FDA publishes no PDUFA action date (IRR-27), so
   date-driven FDA personas stay out. `KXFDAAPPROVE` volume is small (76k) — check whether the series
   is even worth trading before adding rules.
@@ -458,13 +500,18 @@ board/ledger text filters, archive equity curves and season-health panel.
   trade tape is wired up and the desk's taker fills now have a measured error (1.00¢ median), so the
   missing piece is matching *posted* quotes against it — still not a verified fill, and it should
   stay labelled as a model.
-* **Signal coverage.** The ESPN adapter now covers six leagues (NFL, college football, NBA, MLB,
-  plus **NHL and WNBA added this session**, IRR-35). Kalshi also lists soccer, tennis and F1 series
-  in `data/universe/series-catalog.json`; they stay out until a verified scoreboard fixture exists
-  for each (this sandbox has no egress, and a mapping is never guessed into existence — the same
-  rule that gated the NHL/WNBA addition until the runner confirms it). LeapMapper still needs
-  index/commodity range series. Adding a league is a `SERIES_*` entry plus a scoreboard URL plus a
-  fixture, not new machinery.
+* **Signal coverage.** The ESPN adapter now covers eight leagues (NFL, college football, NBA,
+  MLB, NHL, WNBA, plus **EPL soccer and men's college basketball added 2026-09-22**, IRR-37).
+  Tennis and F1 were researched and ruled out with evidence rather than guessed in: ESPN's tennis
+  scoreboard serves tournaments (`groupings[].competitions[]`, athlete competitors, set linescores),
+  not the team home/away scores the adapter reads, and `KXATPMATCH` settles on the ATP; OpenF1
+  returned no 2026 Race sessions and `KXF1RACE` settles on the FIA (IRR-38). Kalshi lists further
+  soccer leagues (UCL, La Liga, Serie A, Bundesliga, Ligue 1, World Cup) in
+  `data/universe/series-catalog.json`; they stay out until a verified scoreboard fixture exists for
+  each — a mapping is never guessed into existence, the same rule that gates the EPL/NCAAM
+  team-name mapping until the runner confirms it. LeapMapper still needs index/commodity range
+  series. Adding a league is a `SERIES_*` entry plus a scoreboard URL plus a fixture, not new
+  machinery.
 * **Remaining review work is empirical, not synthetic.** Let HeatConfirm, ScorePulse and
   FdaRecordCheck accumulate runner cycles; review the sampled live-settlement mismatches and the
   latest execution-tape comparison; and extend the archive only when new official candle captures
@@ -485,6 +532,7 @@ board/ledger text filters, archive equity curves and season-health panel.
 * Trade tape (execution realism): <https://docs.kalshi.com/api-reference/trade/get-trades>
 * ESPN public scoreboards (signal only): <https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard>
 * ESPN NHL / WNBA scoreboards (added 2026-09-21, IRR-35): <https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard> · <https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard>
+* ESPN EPL / men's college basketball scoreboards (added 2026-09-22, IRR-37): <https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard> · <https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard>
 * openFDA Drugs@FDA (signal only): <https://api.fda.gov/drug/drugsfda.json>
 * Census Gazetteer city centroids: <https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html>
 * MasterSite directory reviewed for strategy sources: <https://buffedlizard55-lab.github.io/MasterSite/>

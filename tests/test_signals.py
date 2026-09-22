@@ -336,6 +336,97 @@ class EspnNewLeagueTests(unittest.TestCase):
         self.assertIsNone(espn.signal_for(self.wnba_market(rules_primary=""), SIG.date_keys_around(1789938000)))
 
 
+# EPL + men's college basketball fixtures (added 2026-09-22, IRR-37).  Both mirror the live
+# official response SHAPE read directly on 2026-09-22: soccer/eng.1 served an in-season event
+# (Liverpool at AFC Bournemouth, 2026-09-20) and basketball/mens-college-basketball served
+# in-season events on a mid-season date (2026-02-15; September is the off-season), each with the
+# same events[].competitions[].competitors[].{homeAway,score,team.*} + status.type.state fields
+# the adapter requires.  The Kalshi rules_primary sentences below are the assumed GAME-format
+# phrasing (no committed open-market sample exists for these two series yet); the runner's first
+# cycle is the first confirmation of the team-name mapping, and on mismatch the adapter abstains.
+ESPN_EPL = {"events": [{
+    "id": "401879276", "date": "2026-09-20T13:00Z", "name": "Liverpool at AFC Bournemouth",
+    "shortName": "LIV @ BOU",
+    "competitions": [{"competitors": [
+        {"homeAway": "home", "score": "1", "winner": False,
+         "team": {"abbreviation": "BOU", "displayName": "AFC Bournemouth", "shortDisplayName": "Bournemouth",
+                  "location": "AFC Bournemouth"}},
+        {"homeAway": "away", "score": "3", "winner": False,
+         "team": {"abbreviation": "LIV", "displayName": "Liverpool", "shortDisplayName": "Liverpool",
+                  "location": "Liverpool"}}],
+        "status": {"type": {"state": "in", "shortDetail": "2nd Half - 75'", "completed": False,
+                            "displayClock": "75'"}}}]}]}
+
+ESPN_NCAAM = {"events": [{
+    "id": "401825518", "date": "2026-02-15T18:00Z", "name": "Indiana Hoosiers at Illinois Fighting Illini",
+    "shortName": "IU @ ILL",
+    "competitions": [{"competitors": [
+        {"homeAway": "home", "score": "71", "winner": False,
+         "team": {"abbreviation": "ILL", "displayName": "Illinois Fighting Illini", "shortDisplayName": "Illinois",
+                  "location": "Illinois"}},
+        {"homeAway": "away", "score": "60", "winner": False,
+         "team": {"abbreviation": "IU", "displayName": "Indiana Hoosiers", "shortDisplayName": "Indiana",
+                  "location": "Indiana"}}],
+        "status": {"type": {"state": "in", "shortDetail": "2nd 8:00", "completed": False,
+                            "displayClock": "8:00"}}}]}]}
+
+
+class EspnSecondExpansionTests(unittest.TestCase):
+    """KXEPLGAME / KXNCAAMBGAME were added to the adapter on 2026-09-22 (IRR-37, same
+    expansion pattern as the 2026-09-21 NHL/WNBA addition).  These tests prove the mapping
+    works on the documented scoreboard shape."""
+
+    def epl_market(self, **extra):
+        row = {"series_ticker": "KXEPLGAME", "ticker": "KXEPLGAME-26SEP20LIVBOU-LIV",
+               "event_ticker": "KXEPLGAME-26SEP20LIVBOU", "title": "Liverpool wins",
+               "yes_sub_title": "Liverpool",
+               "rules_primary": "If Liverpool wins the Liverpool vs Bournemouth English Premier League game "
+                                "originally scheduled for Sep 20, 2026, then the market resolves to Yes."}
+        row.update(extra)
+        return row
+
+    def ncaam_market(self, **extra):
+        row = {"series_ticker": "KXNCAAMBGAME", "ticker": "KXNCAAMBGAME-26FEB15INDILL-ILL",
+               "event_ticker": "KXNCAAMBGAME-26FEB15INDILL", "title": "Illinois wins",
+               "yes_sub_title": "Illinois",
+               "rules_primary": "If Illinois wins the Indiana vs Illinois College Basketball game originally "
+                                "scheduled for Feb 15, 2026, then the market resolves to Yes."}
+        row.update(extra)
+        return row
+
+    def test_epl_league_is_registered_and_maps_by_rules_primary(self):
+        self.assertIn("KXEPLGAME", SIG.ESPN_LEAGUES)
+        self.assertEqual(SIG.ESPN_LEAGUES["KXEPLGAME"], ("soccer", "eng.1"))
+        espn = SIG.EspnScoreboard(fetcher=lambda url: (ESPN_EPL, json.dumps(ESPN_EPL).encode()))
+        espn.fetch("KXEPLGAME", "20260920")
+        signal = espn.signal_for(self.epl_market(), SIG.date_keys_around(1789905600))  # 2026-09-20 12:00Z
+        self.assertIsNotNone(signal, espn.errors)
+        self.assertEqual(signal["espnEventId"], "401879276")
+        self.assertEqual(signal["marketSide"], "away")
+        self.assertEqual(signal["awayScore"], 3.0)
+        self.assertEqual(signal["homeScore"], 1.0)
+        self.assertEqual(signal["scoreDiff"], 2.0)  # goals: Liverpool lead by 2
+        self.assertEqual(signal["state"], "in")
+
+    def test_ncaam_league_is_registered_and_maps_by_rules_primary(self):
+        self.assertIn("KXNCAAMBGAME", SIG.ESPN_LEAGUES)
+        self.assertEqual(SIG.ESPN_LEAGUES["KXNCAAMBGAME"], ("basketball", "mens-college-basketball"))
+        espn = SIG.EspnScoreboard(fetcher=lambda url: (ESPN_NCAAM, json.dumps(ESPN_NCAAM).encode()))
+        espn.fetch("KXNCAAMBGAME", "20260215")
+        signal = espn.signal_for(self.ncaam_market(), SIG.date_keys_around(1771178400))  # 2026-02-15 18:00Z
+        self.assertIsNotNone(signal, espn.errors)
+        self.assertEqual(signal["espnEventId"], "401825518")
+        self.assertEqual(signal["marketSide"], "home")
+        self.assertEqual(signal["scoreDiff"], 11.0)  # points: Illinois lead by 11
+
+    def test_new_leagues_abstain_when_no_unique_match(self):
+        espn = SIG.EspnScoreboard(fetcher=lambda url: ({"events": []}, b'{"events": []}'))
+        espn.fetch("KXEPLGAME", "20260920")
+        espn.fetch("KXNCAAMBGAME", "20260215")
+        self.assertIsNone(espn.signal_for(self.epl_market(), SIG.date_keys_around(1789905600)))
+        self.assertIsNone(espn.signal_for(self.ncaam_market(rules_primary=""), SIG.date_keys_around(1771178400)))
+
+
 # IRR-36 regression: Kalshi's verified NFL rules_primary uses the nickname form
 # "DET Lions vs BUF Bills".  The ESPN competitor fields use the full city + nickname
 # ("Detroit Lions"), so matching must survive via token overlap, not exact strings only.

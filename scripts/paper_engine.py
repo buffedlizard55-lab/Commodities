@@ -58,6 +58,22 @@ def iso(ts: int | float | None) -> str | None:
     return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def settlement_ts_equal(api_ts, ledger_ts) -> bool:
+    """Second-precision settlement-timestamp comparison (IRR-39).
+
+    The desk stores a settlement's exitAt truncated to whole seconds (iso(parse_ts(...))),
+    while Kalshi's API returns fractional seconds (e.g. '2026-09-20T03:33:45.191125Z' in the
+    committed evidence projections).  A strict string comparison therefore reports a mismatch
+    on every real settlement - which froze the ledger by failing verification on the runner.
+    Both sides are parsed to epoch seconds instead; values that do not parse fall back to
+    strict string equality, so a missing timestamp stays a finding, never a match.
+    """
+    parsed_api, parsed_ledger = parse_ts(api_ts), parse_ts(ledger_ts)
+    if parsed_api is not None and parsed_ledger is not None:
+        return parsed_api == parsed_ledger
+    return api_ts == ledger_ts and api_ts is not None
+
+
 def taker_fee(price: float, contracts: float, multiplier: float = 1.0) -> float:
     if contracts <= 0 or price <= 0 or price >= 1:
         return 0.0
