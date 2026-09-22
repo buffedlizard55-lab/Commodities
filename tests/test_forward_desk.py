@@ -464,6 +464,11 @@ class NewSignalWiringTests(unittest.TestCase):
         fred_rows = [json.loads(line) for line in open(os.path.join(self.tmp, "signals/fred-index.jsonl"))]
         self.assertEqual(fred_rows[0]["seriesId"], "SP500")
         status = FD.read_json(os.path.join(self.tmp, "sources/status.json"))
+        # every ledger row must carry a real official URL (this is what the site renders for review)
+        for row in status["sources"]:
+            self.assertTrue(str(row.get("url", "")).startswith("http"),
+                            f"ledger row has no URL: {row}")
+            self.assertIn(row.get("status"), {"read", "not_needed", "failed"})
         names = {row["source"] for row in status["sources"]}
         for wanted in ("ESPN league injuries (public JSON)", "Cleveland Fed Inflation Nowcasting",
                        "FRED (Federal Reserve Bank of St. Louis)", "ESPN scoreboard (public JSON)",

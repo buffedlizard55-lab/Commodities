@@ -1267,8 +1267,12 @@ class Cycle:
         def rows_for(records, source, url_key="sourceUrl"):
             out = []
             for record in records or []:
-                out.append({"source": source, "status": "read", "url": record.get(url_key),
-                            "at": record.get("at"), "sha256": record.get("sha256"),
+                # adapters name their response URL differently ("sourceUrl" in this module,
+                # "url"/"source" in signals.py); a ledger row must always carry the real URL.
+                url = record.get(url_key) or record.get("url") or record.get("source")
+                out.append({"source": source, "status": "read", "url": url,
+                            "at": record.get("at") or record.get("retrievedAt"),
+                            "sha256": record.get("sha256"),
                             "bytes": record.get("bytes"), "detail": record.get("seriesId")
                             or record.get("league") or record.get("sections")})
             return out
