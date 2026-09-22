@@ -17,6 +17,9 @@ name: Forward desk cycle
 #    Ticks cover in-game play (live score, live book, momentum); the 7/37 cycles still do the
 #    archiving, maker model, backtest, compaction and audit work.
 #  * `workflow_dispatch` lets a maintainer run a cycle (or the universe discovery) on any branch.
+#    A push to an arena branch whose commit message carries [desk:cycle] / [desk:universe] /
+#    [desk:settlements] / [desk:both] runs that mode, which is how the settlement backfill is
+#    exercised without dispatch rights.
 
 on:
   push:
@@ -58,6 +61,7 @@ jobs:
           if [ -z "$MODE" ] && [ "${{ github.event_name }}" = "push" ]; then
             case "${{ github.event.head_commit.message }}" in
               *"[desk:universe]"*) MODE=universe ;;
+              *"[desk:settlements]"*) MODE=settlements ;;
               *"[desk:both]"*) MODE=both ;;
               *) MODE=cycle ;;
             esac
