@@ -160,6 +160,29 @@ class EspnInjuryTests(unittest.TestCase):
         self.assertIsNone(SA.team_side("", "DET Lions", "BUF Bills"))
 
 
+# The live page prints each caption AFTER its table (verified 2026-09-22 through the fetch tool and
+# again through the runner's own 195,844-byte read).  This fixture reproduces that layout, including
+# the note rows and the trailing captions, because the original parser only looked backwards and
+# filed the quarterly table under "year-over-year" (IRR-45).
+NOWCAST_HTML_CAPTIONS_BELOW = """
+<html><body>
+<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th><th>Updated</th></tr>
+<tr><td>September 2026</td><td>0.43</td><td>0.20</td><td>0.40</td><td>0.28</td><td>09/22</td></tr>
+<tr><td>August 2026</td><td></td><td></td><td>0.34</td><td>0.27</td><td>09/22</td></tr>
+<tr><td>Note: If the cell is blank, it implies that the actual data corresponding to the month for
+that inflation measure have already been released.</td></tr></table>
+<p>Inflation, month-over-month percent change</p>
+<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th><th>Updated</th></tr>
+<tr><td>September 2026</td><td>3.50</td><td>2.39</td><td>3.93</td><td>3.49</td><td>09/22</td></tr>
+<tr><td>August 2026</td><td></td><td></td><td>3.78</td><td>3.40</td><td>09/22</td></tr></table>
+<p>Inflation, year-over-year percent change</p>
+<table><tr><th>Quarter</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th><th>Updated</th></tr>
+<tr><td>2026:Q3</td><td>1.44</td><td>2.16</td><td>2.50</td><td>3.00</td><td>09/22</td></tr></table>
+<p>Quarterly annualized percent change</p>
+</body></html>
+"""
+
+
 class NowcastTests(unittest.TestCase):
     def test_parse_keeps_blank_cells_blank(self):
         tables = SA.parse_nowcast_html(NOWCAST_HTML)["tables"]
@@ -182,6 +205,23 @@ class NowcastTests(unittest.TestCase):
         self.assertEqual(q["value"], 3.00)
         self.assertIsNone(adapter.monthly("August 2026", "month-over-month", "cpi"))  # blank -> abstain
         self.assertIsNone(adapter.monthly("September 2026", "month-over-month", "cpi", band=(0.6, 0.7)))
+
+    def test_captions_printed_below_their_tables_are_read_correctly(self):
+        """Regression for the 2026-09-22 runner read: the live page captions each table BELOW it."""
+        tables = SA.parse_nowcast_html(NOWCAST_HTML_CAPTIONS_BELOW)["tables"]
+        self.assertEqual(sorted(tables), ["month-over-month", "quarterly", "year-over-year"])
+        self.assertEqual([row[0] for row in tables["month-over-month"]], ["September 2026", "August 2026"])
+        self.assertEqual(tables["month-over-month"][0][1], "0.43")
+        self.assertEqual([row[0] for row in tables["year-over-year"]], ["September 2026", "August 2026"])
+        self.assertEqual(tables["year-over-year"][0][1], "3.50")
+        self.assertEqual([row[0] for row in tables["quarterly"]], ["2026:Q3"])
+        adapter = SA.ClevelandFedNowcast(fetcher=lambda url: (NOWCAST_HTML_CAPTIONS_BELOW, b"<html/>"))
+        adapter.fetch()
+        self.assertEqual(adapter.monthly("September 2026", "month-over-month", "cpi")["value"], 0.43)
+        self.assertEqual(adapter.monthly("September 2026", "year-over-year", "cpi")["value"], 3.50)
+        self.assertEqual(adapter.monthly("2026:Q3", "quarterly", "cpi")["value"], 1.44)
+        # the note row is never mistaken for a month
+        self.assertIsNone(adapter.monthly("Note: If the cell is blank", "month-over-month", "cpi"))
 
     def test_fetch_failure_records_an_error_and_abstains(self):
         def broken(url):

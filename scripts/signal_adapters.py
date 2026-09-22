@@ -241,16 +241,12 @@ MONTH_ROW = re.compile(r"^(" + "|".join(MONTH_NAMES) + r")\s+(\d{4})$")
 QUARTER_ROW = re.compile(r"^(\d{4}):Q([1-4])$")
 
 
-def _section_for(preceding_text: str) -> str | None:
-    """The caption a table belongs to: the LAST marker seen in the text just before it.
-
-    The page prints three captioned tables in order (month-over-month, year-over-year,
-    quarterly annualized), so the nearest preceding caption is the table's own.
-    """
+def _nearest_marker(text: str, last: bool) -> str | None:
+    """The section a caption text names: the LAST marker in ``text`` (or the first, if asked)."""
     best = None
     for label, marker in NOWCAST_SECTION_MARKERS:
-        index = preceding_text.rfind(marker)
-        if index >= 0 and (best is None or index > best[0]):
+        index = text.rfind(marker) if last else text.find(marker)
+        if index >= 0 and (best is None or (index > best[0] if last else index < best[0])):
             best = (index, label)
     return best[1] if best else None
 
@@ -262,14 +258,34 @@ def parse_nowcast_html(html: str) -> dict:
     "quarterly": [...]}}`` where each row is the table's own cell list (``["September 2026",
     "0.43", "0.20", "0.40", "0.28", "09/22"]``).  Blank cells stay blank: the page prints
     nothing when the official actual has already been released, so a missing number can never be
-    read as a value.  A table whose caption cannot be identified is skipped, not guessed.
+    read as a value.
+
+    How a table is classified (verified against the live page on 2026-09-22):
+      * a table whose rows are quarter labels ("2026:Q3") is the quarterly table;
+      * a table of month labels is monthly, and the caption decides which monthly table it is -
+        the live page prints the caption *after* the table ("Inflation, month-over-month percent
+        change"), so the text following the table is checked first and the text before it second;
+      * when no caption is within reach the table's position is used: the page prints the
+        month-over-month table first and the year-over-year table second (IRR-45).
+    A table that still cannot be classified is skipped, never guessed; the first table to claim a
+    section wins, so a duplicate caption cannot overwrite real rows with other rows.
     """
     tables: dict[str, list[list[str]]] = {}
-    for match in re.finditer(r"<table[^>]*>(.*?)</table>", html, flags=re.S | re.I):
-        preceding = _strip_tags(html[max(0, match.start() - 4000):match.start()]).lower()
-        label = _section_for(preceding)
-        if not label:
-            continue
+    monthly_seen = 0
+    matches = list(re.finditer(r"<table[^>]*>(.*?)</table>", html, flags=re.S | re.I))
+    # Which side of its table does this page print captions on?  Judged once, from the first table
+    # (the live page captions below; the older markup captioned above), then applied consistently -
+    # mixing the two would let a neighbouring table's caption claim this table.
+    convention = None
+    if matches:
+        first = matches[0]
+        before = _strip_tags(html[max(0, first.start() - 400):first.start()]).lower()
+        after = _strip_tags(html[first.end():first.end() + 400]).lower()
+        if _nearest_marker(before, last=True):
+            convention = "above"
+        elif _nearest_marker(after, last=False):
+            convention = "below"
+    for match in matches:
         rows: list[list[str]] = []
         for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", match.group(1), flags=re.S | re.I):
             cells = [_strip_tags(c) for c in
@@ -279,8 +295,25 @@ def parse_nowcast_html(html: str) -> dict:
             head = (cells[0] or "").strip()
             if MONTH_ROW.match(head) or QUARTER_ROW.match(head):
                 rows.append(cells)
-        if rows:
-            tables[label] = rows
+        if not rows:
+            continue
+        if any(QUARTER_ROW.match((row[0] or "").strip()) for row in rows):
+            tables.setdefault("quarterly", rows)
+            continue
+        following = _strip_tags(html[match.end():match.end() + 400]).lower()
+        preceding = _strip_tags(html[max(0, match.start() - 400):match.start()]).lower()
+        if convention == "above":
+            label = _nearest_marker(preceding, last=True) or _nearest_marker(following, last=False)
+        else:
+            label = _nearest_marker(following, last=False) or _nearest_marker(preceding, last=True)
+        if not label:
+            monthly_seen += 1
+            label = "month-over-month" if monthly_seen == 1 else "year-over-year" if monthly_seen == 2 else None
+        if not label:
+            continue
+        if label == "month-over-month":
+            monthly_seen += 1
+        tables.setdefault(label, rows)
     return {"tables": tables}
 
 
