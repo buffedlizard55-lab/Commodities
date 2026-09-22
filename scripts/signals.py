@@ -461,6 +461,17 @@ ESPN_LEAGUES = {  # Kalshi game series -> ESPN site-API sport/league (verified l
     # matching does not hold, the adapter abstains and the strategies simply skip these series.
     "KXNHLGAME": ("hockey", "nhl"),
     "KXWNBAGAME": ("basketball", "wnba"),
+    # Added 2026-09-22 (IRR-37, same expansion pattern).  Both endpoints were read directly and
+    # return the same events[].competitions[].competitors[].{homeAway,score,team.*} shape the
+    # adapter requires: soccer/eng.1 served a real in-season event (Liverpool at AFC Bournemouth,
+    # 2026-09-20), and basketball/mens-college-basketball served real in-season events on a
+    # mid-season date (2026-02-15; September is the off-season).  Both series list ESPN as a
+    # settlement source in data/universe/series-catalog.json (KXEPLGAME: ESPN + Fox Sports;
+    # KXNCAAMBGAME: Kalshi-via-NCAA + ESPN).  Kalshi's rules_primary phrasing for these two series
+    # is still unverified (no committed open-market sample), so the runner's first cycle is the
+    # first confirmation of the team-name mapping; on mismatch the adapter abstains.
+    "KXEPLGAME": ("soccer", "eng.1"),
+    "KXNCAAMBGAME": ("basketball", "mens-college-basketball"),
 }
 
 GAME_RULES = re.compile(
@@ -527,10 +538,10 @@ class EspnScoreboard:
     """Public ESPN scoreboard snapshots mapped to Kalshi game markets by team names + date.
 
     ESPN is a listed settlement source for KXNCAAFGAME / KXMLBGAME / KXNBAGAME / KXNHLGAME /
-    KXWNBAGAME (settlement_sources field of each series record, committed in
-    data/universe/series-catalog.json) and the scoreboard is public JSON; the mapping is only
-    accepted when exactly one event matches, otherwise the adapter returns None and the strategy
-    abstains (recorded as an irregularity, not guessed).
+    KXWNBAGAME / KXEPLGAME / KXNCAAMBGAME (settlement_sources field of each series record,
+    committed in data/universe/series-catalog.json) and the scoreboard is public JSON; the mapping
+    is only accepted when exactly one event matches, otherwise the adapter returns None and the
+    strategy abstains (recorded as an irregularity, not guessed).
     """
 
     def __init__(self, fetcher=http_fetch, leagues: dict | None = None):

@@ -1,6 +1,6 @@
 {
  "schemaVersion": 2,
- "registryDate": "2026-09-21",
+ "registryDate": "2026-09-22",
  "verificationRule": "A live fill is accepted only from a Kalshi market-data response captured by this application. Project pages and external sources below are research references or gates; they never become exchange-price evidence by themselves.",
  "sources": [
   {
@@ -572,10 +572,10 @@
   },
   {
    "id": "espn-scoreboard",
-   "name": "ESPN public scoreboard API (NFL / college football / NBA / MLB / NHL / WNBA)",
+   "name": "ESPN public scoreboard API (NFL / college football / NBA / MLB / NHL / WNBA / EPL soccer / men's college basketball)",
    "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
    "kind": "public sports API (signal only)",
-   "use": "Live score, clock and game state for the scoreboard personas (GridironPulse, ScorePulse). Each response is stored with its URL and SHA-256 before any rule reads it. NHL and WNBA scoreboards were added 2026-09-21 (IRR-35); their live shape is confirmed on the first runner cycle, until which the adapter abstains on mismatch.",
+   "use": "Live score, clock and game state for the scoreboard personas (GridironPulse, ScorePulse). Each response is stored with its URL and SHA-256 before any rule reads it. NHL and WNBA scoreboards were added 2026-09-21 (IRR-35); their live shape is confirmed on the first runner cycle, until which the adapter abstains on mismatch. EPL (soccer/eng.1) and men's college basketball (basketball/mens-college-basketball) were added 2026-09-22 (IRR-37) after direct endpoint reads confirmed the same scoreboard shape; Kalshi's rules_primary phrasing for the two new series gets its first confirmation on the runner, until which the adapter abstains on mismatch.",
    "status": "verified 2026-09-20",
    "note": "Kalshi's own settlement_sources field lists ESPN alongside the governing league for the game series (committed series catalog); rules_primary still names the league as the deciding record, so settlement always comes from the market's official result. Team identity comes from rules_primary - written in nickname form like 'DET Lions vs BUF Bills' (IRR-36) - matched against ESPN team fields by exact value or shared nickname token. Dates are queried as YYYYMMDD and the same event can come back on three neighbouring dates, so scripts/signals.py deduplicates by event id and abstains unless exactly one match is found."
   },
@@ -632,6 +632,33 @@
    "use": "Origin of the HeatConfirm persona (posted 2026-05-22): of 500 weather bots only 70 were profitable, median ROI -41.61%; the winner bought YES on daily-high markets when the forecast high cleared the bracket AND the ask was cheap (<=42c, spread <=8c). Positive findings were forecast-driven entries; losers fought price on one variable",
    "status": "discovery only 2026-09-21",
    "note": "No prices, fills or returns from the post are used. The persona's own entries, exits and PnL come only from captured Kalshi books and official settlements; testing the claim forward on the desk IS the experiment."
+  },
+  {
+   "id": "reddit-1000-btc-backtest",
+   "name": "r/PredictionsMarkets — 1,000 strategies backtested on Kalshi 15-min BTC markets",
+   "url": "https://www.reddit.com/r/PredictionsMarkets/comments/1srphtq/backtested_1000_strategies_on_kalshi_15min_btc/",
+   "kind": "community research (discovery-only)",
+   "use": "Independent corroboration (posted 2026-04-21) of the panic-fade archetype behind PanicFader: 150/150 fade-the-extreme-move variants profitable at a claimed mean ROI +9.95%, and complex gated rules tied simple price thresholds. Same series (KXBTC15M), same conclusion as the 5,000-strategy post; no new rule to test.",
+   "status": "discovery only 2026-09-22",
+   "note": "The post's own methodology is weaker than this repository's forward test: fills simulated at candle mid with no fees or slippage modeled (the author's stated caveat). No numbers from the post are used; PanicFader's official-price ledger remains the only evidence."
+  },
+  {
+   "id": "espn-tennis-atp",
+   "name": "ESPN ATP tennis scoreboard (evaluated, not adopted)",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/scoreboard",
+   "kind": "public sports API (researched, not used)",
+   "use": "Evaluated 2026-09-22 as a live-score signal for Kalshi tennis series (e.g. KXATPMATCH).",
+   "status": "researched 2026-09-22 (not adopted)",
+   "note": "The endpoint answers with a valid league block, but its events are TOURNAMENTS (observed: Winston-Salem Open, 2026-08-28) whose matches live in groupings[].competitions[] with athlete competitors and set linescores - incompatible with the team home/away score adapter. KXATPMATCH settles on the ATP, not ESPN. Tennis stays out until a dedicated adapter plus a verified Kalshi tennis rules_primary format exist (IRR-38)."
+  },
+  {
+   "id": "openf1-sessions",
+   "name": "OpenF1 live-timing API (evaluated, not adopted)",
+   "url": "https://api.openf1.org/v1/sessions",
+   "kind": "public sports API (researched, not used)",
+   "use": "Evaluated 2026-09-22 as a live-timing signal for Kalshi F1 series (e.g. KXF1RACE).",
+   "status": "researched 2026-09-22 (not adopted)",
+   "note": "GET /v1/sessions?year=2026&session_type=Race answered {\"Detail\": \"No results found.\"} on 2026-09-22, and KXF1RACE settles on the FIA, not on any timing feed - so even a working feed would be context only. A race-leader rule would also need sub-cycle timing data the twice-hourly desk does not collect. F1 stays out (IRR-38)."
   }
  ],
  "irregularities": [
@@ -670,6 +697,9 @@
   "IRR-33 · (2026-09-21) openFDA semantics documented: api.fda.gov/drug/drugsfda.json returns HTTP 404 when a search matches zero records — this is the API's 'no results' response, not a failure. For retratrutide (no Drugs@FDA application exists; it is an investigational compound, see IRR-27) that 404 is itself the fact. scripts/signals.py records it as a verified absence with URL and date in forward/signals/openfda.jsonl, FdaRecordCheck holds its peace, and the absence never becomes an entry signal.",
   "IRR-34 · (2026-09-21) Cron delivery is quantified, not smoothed: scripts/audit_season.py counts every scheduled slot (:07/:37 UTC) since the season started counting against committed cycles — 10 cycles over 42 expected slots (1 on-time, 6 late by a median 45.9 min, 35 missed, 3 extra manual runs, longest gap 5.56 h). GitHub's schedule trigger is best-effort and slow under load; the site's season-health panel shows this per audit so nobody reads 'hourly desk' as guaranteed. If cadence matters more than cost, move to a workflow_dispatch ping from a cheap scheduler — deliberately not done here (no paid or trial services).",
   "IRR-35 · (2026-09-21) Signal-coverage expansion added KXNHLGAME (hockey/nhl) and KXWNBAGAME (basketball/wnba) to scripts/signals.py ESPN_LEAGUES and to the sports universe. ESPN is a listed settlement source for both series per the settlement_sources field committed in data/universe/series-catalog.json (official GET /series, fetched 2026-09-21). The live NHL/WNBA scoreboard endpoints themselves have not been read from this sandbox (no egress); their response shape is pinned by offline tests and gets its first live confirmation on the next runner cycle. Until then the adapters simply abstain on any shape or name mismatch - no fill can be created from an unconfirmed mapping.",
-  "IRR-36 · (2026-09-21) Verified line-by-line against the committed official response for KXNFLGAME-26SEP17DETBUF (data/season-2026/raw/refetch-20260920-markets-KXNFLGAME-settled-limit2.json): Kalshi's rules_primary writes team matchups in nickname form - \"the DET Lions vs BUF Bills Pro Football game\". The previous parser truncated the home side to its first word (\"BUF\") and could not token-match \"DET Lions\" against ESPN's \"Detroit Lions\", which is why ScorePulse recorded zero intents across every runner cycle despite the ESPN adapter capturing snapshots (IRR-31's 'no egress' explanation was incomplete). Fixed in scripts/signals.py: the matchup is now captured up to \" game originally scheduled for\", split on \" vs \", trailing league-descriptor words trimmed, and team matching accepts a shared nickname token (nicknames are unique within one league scoreboard, and the adapter still requires exactly one matching event). Historical impact is zero: no fill ever depended on the broken path. Regression tests added in tests/test_signals.py."
+  "IRR-36 · (2026-09-21) Verified line-by-line against the committed official response for KXNFLGAME-26SEP17DETBUF (data/season-2026/raw/refetch-20260920-markets-KXNFLGAME-settled-limit2.json): Kalshi's rules_primary writes team matchups in nickname form - \"the DET Lions vs BUF Bills Pro Football game\". The previous parser truncated the home side to its first word (\"BUF\") and could not token-match \"DET Lions\" against ESPN's \"Detroit Lions\", which is why ScorePulse recorded zero intents across every runner cycle despite the ESPN adapter capturing snapshots (IRR-31's 'no egress' explanation was incomplete). Fixed in scripts/signals.py: the matchup is now captured up to \" game originally scheduled for\", split on \" vs \", trailing league-descriptor words trimmed, and team matching accepts a shared nickname token (nicknames are unique within one league scoreboard, and the adapter still requires exactly one matching event). Historical impact is zero: no fill ever depended on the broken path. Regression tests added in tests/test_signals.py.",
+  "IRR-37 · (2026-09-22) Signal-coverage expansion added KXEPLGAME (soccer/eng.1, 2-goal ScorePulse threshold) and KXNCAAMBGAME (basketball/mens-college-basketball, 10-point threshold) to scripts/signals.py ESPN_LEAGUES, to the sports universe (GridironPulse / SportsPredLab / ScorePulse) and to LIVE_SCORE_THRESHOLDS. Both endpoints were read directly: eng.1 served a real in-season event (Liverpool at AFC Bournemouth, 2026-09-20) and mens-college-basketball served real in-season events on a mid-season date (2026-02-15; September is the off-season), each with the same events[].competitions[].competitors[].{homeAway,score,team.*} + status.type.state shape the adapter requires. Committed catalog facts (data/universe/series-catalog.json, updated 2026-09-20): KXEPLGAME settles on ESPN + Fox Sports (fee quadratic_with_maker_fees x1, shard 0, series volume 814,865,429); KXNCAAMBGAME settles on Kalshi-via-NCAA + ESPN (same fee type x1, shard 3, volume 5,936,932,933). Full series records are fetched on the next runner cycle via ensure_series; Kalshi's rules_primary phrasing for these two series is still unverified (no committed open-market sample), so the team-name mapping gets its first confirmation on the runner and the adapter abstains on any mismatch. NCAAM games do not exist until November, so ScorePulse abstains there until tip-off; EPL is in season now.",
+  "IRR-38 · (2026-09-22) Tennis and F1 were researched line by line and deliberately left out. Tennis: the ESPN ATP scoreboard answers with a valid league block, but its events are tournaments (groupings[].competitions[], athlete competitors, set linescores - observed Winston-Salem Open, 2026-08-28), which the team home/away score adapter cannot read, and KXATPMATCH settles on the ATP rather than ESPN. F1: OpenF1 GET /v1/sessions?year=2026&session_type=Race answered 'No results found.' on 2026-09-22, KXF1RACE settles on the FIA, and a race-leader rule would need sub-cycle timing data the twice-hourly desk does not collect. Neither series gets an adapter, a universe entry or a trade until those gaps close; the evaluation itself is recorded so a future session does not redo it blind.",
+  "IRR-39 · (2026-09-22) Settlement re-read compared timestamps with strict string equality, but the desk stores exitAt truncated to whole seconds (iso(parse_ts(...))) while the Kalshi API returns fractional seconds (e.g. committed evidence shows raw 2026-09-20T03:33:45.191125Z vs ledger 2026-09-20T03:33:45Z). Every reachable sample therefore mismatched, the season audit reported FAIL, scripts/verify_data.py failed the runner at its Verify-season-memory step, and no cycle committed for ~22h (six consecutive Forward-desk-cycle failures observed 2026-09-22 via gh run list; ledger frozen at the 2026-09-21T00:26Z cycle). Fixed the same day: paper_engine.settlement_ts_equal compares both sides at second precision with a fail-closed strict fallback when either side is missing/unparseable, wired into audit_season.py and verify_settlements.py (which shared the bug), covered by four regression tests with fractional-second fixtures - the old fixtures used second-precision timestamps on both sides, which is why the suite masked the bug."
  ]
 }

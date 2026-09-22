@@ -136,6 +136,19 @@ class SignalsAndTapeTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class StubClient:
+    """Canned market records per ticker; same .market(ticker, exchange_index=...) contract."""
+
+    def __init__(self, records: dict[str, dict]):
+        self.records = records
+
+    def market(self, ticker: str, exchange_index: int | None = None):
+        if ticker not in self.records:
+            raise RuntimeError(f"404 not found: {ticker}")
+        raw = json.dumps(self.records[ticker]).encode()
+        return self.records[ticker], raw, f"https://external-api.kalshi.com/trade-api/v2/markets/{ticker}"
+
+
 class LiveSettlementTests(unittest.TestCase):
     def test_empty_ledger_never_invents_a_sample(self):
         tmp = tempfile.mkdtemp(prefix="audit-live-")
@@ -144,6 +157,58 @@ class LiveSettlementTests(unittest.TestCase):
             self.assertFalse(out["available"])
             self.assertEqual(out["attempts"], 0)
             self.assertIn("note", out)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def write_trades(self, forward_dir, events):
+        with open(os.path.join(forward_dir, "trades.jsonl"), "w") as fh:
+            for event in events:
+                fh.write(json.dumps(event) + "\n")
+
+    def test_fractional_api_seconds_match_second_precision_ledger(self):
+        # IRR-39 regression: ledger exitAt is truncated to whole seconds while the API
+        # returns fractional seconds; the same second must count as a match.
+        tmp = tempfile.mkdtemp(prefix="audit-live-")
+        try:
+            self.write_trades(tmp, [{"kind": "settlement", "ticker": "T1", "series": "KXNFLGAME",
+                                     "result": "yes", "exitAt": "2026-09-20T03:33:45Z",
+                                     "strategyId": "s", "positionId": "p1"}])
+            client = StubClient({"T1": {"market": {"ticker": "T1", "result": "yes",
+                                                   "settlement_ts": "2026-09-20T03:33:45.191125Z",
+                                                   "status": "settled"}}})
+            out = AUD.audit_live_settlements(tmp, samples=8, client=client)
+            self.assertTrue(out["available"])
+            self.assertEqual(out["matches"], 1)
+            self.assertEqual(out["mismatches"], [])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_genuinely_different_second_still_mismatches(self):
+        tmp = tempfile.mkdtemp(prefix="audit-live-")
+        try:
+            self.write_trades(tmp, [{"kind": "settlement", "ticker": "T1", "series": "KXNFLGAME",
+                                     "result": "yes", "exitAt": "2026-09-20T03:33:45Z",
+                                     "strategyId": "s", "positionId": "p1"}])
+            client = StubClient({"T1": {"market": {"ticker": "T1", "result": "yes",
+                                                   "settlement_ts": "2026-09-20T03:33:46.000000Z",
+                                                   "status": "settled"}}})
+            out = AUD.audit_live_settlements(tmp, samples=8, client=client)
+            self.assertEqual(out["matches"], 0)
+            self.assertEqual(len(out["mismatches"]), 1)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_missing_api_ts_is_a_finding_never_a_match(self):
+        tmp = tempfile.mkdtemp(prefix="audit-live-")
+        try:
+            self.write_trades(tmp, [{"kind": "settlement", "ticker": "T1", "series": "KXNFLGAME",
+                                     "result": "yes", "exitAt": "2026-09-20T03:33:45Z",
+                                     "strategyId": "s", "positionId": "p1"}])
+            client = StubClient({"T1": {"market": {"ticker": "T1", "result": "yes",
+                                                   "settlement_ts": None, "status": "settled"}}})
+            out = AUD.audit_live_settlements(tmp, samples=8, client=client)
+            self.assertEqual(out["matches"], 0)
+            self.assertEqual(len(out["mismatches"]), 1)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

@@ -15,8 +15,10 @@ number every strategy score rests on.  The audit makes all three observable:
              cycle's recorded signal-error count.
   tape       forward/execution/summary.json headline numbers (filled by the runner).
   live       --live re-reads GET /markets/{ticker} for the most recent settled positions and
-             requires result AND settlement_ts to match the ledger; mismatches are reported as
-             FAIL and flip the exit code - they are the irregularity, never re-simulated away.
+             requires result AND settlement_ts to match the ledger (timestamps at second
+             precision - the ledger truncates the API's fractional seconds, IRR-39);
+             mismatches are reported as FAIL and flip the exit code - they are the
+             irregularity, never re-simulated away.
              A network failure records `unreachable` and never fakes a pass.
 
 Writes data/season-<year>/forward/audit/<YYYY-MM-DD>.json, forward/audit/latest.json, and the
@@ -305,8 +307,15 @@ def append_audit_history(audit_dir: str, report: dict, payload: str | None = Non
 
 
 # ----------------------------------------------------------------------------------- live read
-def audit_live_settlements(forward_dir: str, samples: int) -> dict:
-    """Re-read the settled markets from the official API and require the ledger's result+ts to match."""
+def audit_live_settlements(forward_dir: str, samples: int, client=None) -> dict:
+    """Re-read the settled markets from the official API and require the ledger's result+ts to match.
+
+    `client` is injectable for offline tests (same .market(ticker, exchange_index=...) contract
+    as KalshiClient); when omitted the official client is constructed.  Timestamps compare at
+    second precision via paper_engine.settlement_ts_equal: the ledger stores exitAt truncated to
+    whole seconds while the API returns fractional seconds (IRR-39).
+    """
+    from paper_engine import settlement_ts_equal
     out = {"available": False, "attempts": 0, "matches": 0, "mismatches": [], "unreachable": None,
            "samples": [], "method": "GET /markets/{ticker} (official, unauthenticated) vs forward/trades.jsonl "
                                     "settlement events; both sides are the exchange's own records"}
@@ -327,12 +336,13 @@ def audit_live_settlements(forward_dir: str, samples: int) -> dict:
             for ticker, info in (json.load(fh).get("series") or {}).items():
                 if info.get("exchange_index"):
                     shard_by_series[ticker] = int(info["exchange_index"])
-    try:
-        from kalshi_client import KalshiClient, KalshiError
-        client = KalshiClient(pause=0.15)
-    except Exception as error:  # pragma: no cover - import guard
-        out["unreachable"] = f"client import failed: {error}"
-        return out
+    if client is None:
+        try:
+            from kalshi_client import KalshiClient
+            client = KalshiClient(pause=0.15)
+        except Exception as error:  # pragma: no cover - import guard
+            out["unreachable"] = f"client import failed: {error}"
+            return out
     out["available"] = True
     for event in picks:
         ticker = event["ticker"]
@@ -342,8 +352,9 @@ def audit_live_settlements(forward_dir: str, samples: int) -> dict:
             payload, raw, url = client.market(ticker, exchange_index=shard_by_series.get(event.get("series") or ""))
             market = payload.get("market") or payload
             record.update({"url": url, "responseSha256": sha256_bytes(raw), "apiResult": market.get("result"),
-                           "apiSettlementTs": market.get("settlement_ts"), "apiStatus": market.get("status")})
-        except (KalshiError, Exception) as error:  # network or API error: record, never assume
+                           "apiSettlementTs": market.get("settlement_ts"), "apiStatus": market.get("status"),
+                           "apiSettlementValue": market.get("settlement_value_dollars")})
+        except Exception as error:  # network or API error: record, never assume
             record["status"] = "unreachable"
             record["error"] = str(error)[:200]
             out["samples"].append(record)
@@ -351,7 +362,7 @@ def audit_live_settlements(forward_dir: str, samples: int) -> dict:
             continue
         result_ok = (record["apiResult"] == record["ledgerResult"]) or \
             str(record["ledgerResult"]).startswith("value:")  # value-scalar settlement compares ts only
-        ts_ok = record["apiSettlementTs"] == record["ledgerSettlementTs"]
+        ts_ok = settlement_ts_equal(record["apiSettlementTs"], record["ledgerSettlementTs"])
         record["resultMatches"] = bool(result_ok)
         record["settlementMatches"] = bool(ts_ok)
         out["attempts"] += 1
