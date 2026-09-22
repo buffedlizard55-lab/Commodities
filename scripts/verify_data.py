@@ -224,6 +224,57 @@ def verify_execution_realism(fwd):
           f"{summary.get('medianAbsCentsDiff')}c, {summary.get('withinOneCentPct')}% of fills within 1c of a real print")
 
 
+def verify_maker_model(fwd):
+    """SpreadSmith quote plans matched against the official tape (scripts/maker_model.py)."""
+    summary_path = os.path.join(fwd, "execution", "maker-model.json")
+    if not os.path.exists(summary_path):
+        print("SKIP  maker model (no quote-plan comparison yet)")
+        return
+    with open(summary_path) as fh:
+        summary = json.load(fh)
+    rows = summary.get("rows", [])
+    check("maker.model_is_labelled", "MODELLED" in str(summary.get("modelLabel", "")), quiet=True)
+    check("maker.fees_flagged_unverified", summary.get("makerFeesUnverified") is True, quiet=True)
+    check("maker.proven_fills_have_tape_proof",
+          all(r.get("fillEvidence") == "tape_traded_through" for r in rows
+              if r.get("status") == "compared" and (r.get("filledContracts") or 0) > 0), quiet=True)
+    check("maker.comparisons_bind_tape_hash",
+          all(r.get("tapeSha256") for r in rows if r.get("status") == "compared"), quiet=True)
+    check("maker.tape_url_is_official",
+          all(str(r.get("tapeUrl", "")).startswith("https://external-api.kalshi.com/trade-api/v2/markets/trades")
+              for r in rows if r.get("status") == "compared"), quiet=True)
+    counts = (summary.get("tapeTradedThrough", 0) + summary.get("queueUncertain", 0)
+              + summary.get("noFillEvidence", 0))
+    check("maker.counts_match_rows", counts == summary.get("compared", 0),
+          f"through {summary.get('tapeTradedThrough')} + uncertain {summary.get('queueUncertain')} "
+          f"+ none {summary.get('noFillEvidence')} vs compared {summary.get('compared')}", quiet=True)
+    print(f"INFO  maker model: {summary.get('plans', 0)} quote plan(s), {summary.get('tapeTradedThrough', 0)} "
+          f"tape-proven (through-price), {summary.get('queueUncertain', 0)} queue-uncertain (MODELLED)")
+
+
+def verify_trades_review(fwd):
+    """The readable trades review must agree with the append-only ledger it renders."""
+    review_path = os.path.join(fwd, "trades-review.json")
+    if not os.path.exists(review_path):
+        print("SKIP  trades review (not rendered yet)")
+        return
+    with open(review_path) as fh:
+        review = json.load(fh)
+    fills = sum(1 for line in open(os.path.join(fwd, "trades.jsonl")) if line.strip()
+                and json.loads(line).get("kind") == "fill")
+    check("trades_review.placed_matches_ledger", len(review.get("placed", [])) == fills,
+          f"{len(review.get('placed', []))} rows vs {fills} fills", quiet=True)
+    check("trades_review.upcoming_statuses_known",
+          all(row.get("status") in ("queued", "proposed", "quote_plan", "not_confirmed_on_book",
+                                   "no_book", "no_liquidity_or_cash", "skipped_position_cap")
+              for row in review.get("upcoming", [])), quiet=True)
+    check("trades_review.quote_plans_flagged_modelled",
+          all(row.get("isQuotePlan") for row in review.get("upcoming", [])
+              if row.get("status") == "quote_plan"), quiet=True)
+    print(f"INFO  trades review: {len(review.get('placed', []))} placed + {len(review.get('upcoming', []))} "
+          f"upcoming rows rendered")
+
+
 def verify_forward_ledger(season_dir: str | None = None):
     """Invariants of the active season's forward ledger (skipped before its first cycle)."""
     season_dir = season_dir or ACTIVE_BASE
@@ -287,6 +338,13 @@ def verify_forward_ledger(season_dir: str | None = None):
                 check(f"forward.intent.{intent.get('id', intent.get('cycle', line_number))}.line_anchor",
                       intent.get("ledgerFile") == rel and intent.get("ledgerLine") == line_number,
                       f"{intent.get('ledgerFile')}#{intent.get('ledgerLine')}", quiet=True)
+                if intent.get("status") == "quote_plan":
+                    # A maker quote plan is a plan, never a fill: it must carry its posted terms
+                    # and can never point at a position.
+                    check(f"forward.intent.{intent.get('cycle', line_number)}.{intent.get('ticker')}.quote_plan_not_fill",
+                          intent.get("positionId") is None and intent.get("postedPrice") is not None
+                          and intent.get("postedContracts", 0) > 0 and intent.get("strategyId") == "spread-smith",
+                          f"posted {intent.get('postedPrice')}x{intent.get('postedContracts')}", quiet=True)
     # evidence binding: every event points at an evidence row whose sha256 exists
     hashes_by_file = {}
     for event in events:
@@ -328,6 +386,8 @@ def verify_forward_ledger(season_dir: str | None = None):
     # archive backtest (scripts/backtest_archive.py) and execution-realism report, when present
     verify_archive_backtest(os.path.join(fwd, ".."))
     verify_execution_realism(fwd)
+    verify_maker_model(fwd)
+    verify_trades_review(fwd)
     verify_season_audit(os.path.join(fwd, ".."))
     verify_settlement_backfill(os.path.join(fwd, ".."))
     forward_passes = sum(1 for p in PASSES if p.startswith("PASS forward."))

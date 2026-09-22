@@ -54,7 +54,7 @@ check('backtest intents rows', count('#backtest-intents tbody tr') === 3);
 check('backtest explanations', count('#backtest-explanations article') === 5);
 check('backtest facts', text('#bt-bars').startsWith('130'), text('#bt-bars'));
 check('strategy cards', count('#strategy-grid article') >= 20, String(count('#strategy-grid article')));
-check('mastersite map rows', count('#mastersite-map tbody tr') === 13);
+check('mastersite map rows', count('#mastersite-map tbody tr') === 16);
 check('sources rendered', count('#source-list a') >= 50 && count('#irregularity-list li') >= 20, `${count('#source-list a')} / ${count('#irregularity-list li')}`);
 for (const f of ['forward', 'live-book', 'backtest', 'blocked', 'all']) { document.querySelector(`[data-filter="${f}"]`).click(); await new Promise((r) => setTimeout(r, 20)); }
 check('filters keep cards', count('#strategy-grid article') >= 20);

@@ -77,12 +77,15 @@ def main(argv=None) -> int:
 
     pages = FD.write_strategy_pages(state, summary)
     day = FD.write_daily_summary(state, summary)
+    import trades_review
+    review = trades_review.write_review(FD.FORWARD_DIR)
     now = int(datetime.strptime(summary["at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()) \
         if summary.get("at") else int(datetime.now(timezone.utc).timestamp())
     write_seasons_index(FD.DATA_DIR, now)
     print(json.dumps({"season": season, "cycle": summary.get("cycle"), "at": summary.get("at"),
                       "strategyPages": len(pages), "dailySummary": day.get("date"),
                       "accounts": day.get("accounts"), "fills": (day.get("activity") or {}).get("fills"),
+                      "tradesReview": {"placed": len(review["placed"]), "upcoming": len(review["upcoming"])},
                       "top": [r["username"] for r in (day.get("leaders") or [])[:3]],
                       "seasonsIndex": os.path.relpath(os.path.join(FD.DATA_DIR, "seasons.json"), FD.ROOT)}, indent=1))
     return 0

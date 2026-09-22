@@ -863,6 +863,46 @@ class Cycle:
     def intents_for(self, strategy):
         return [i for i in self.intents if i["strategyId"] == strategy["id"]]
 
+    def emit_maker_plans(self):
+        """SpreadSmith quote plans from the captured ladders (status `quote_plan`, never fills).
+
+        Only markets whose book was already fetched this cycle are used, so a plan is priced from
+        the same verified ladder as a taker fill.  scripts/maker_model.py later matches every
+        posted price against the official trade tape; nothing here opens a position.
+        """
+        candidates = []
+        for ticker, book in self.books.items():
+            m = self.markets.get(ticker)
+            if not m or (m.get("close_ts") is not None and m["close_ts"] <= self.now_ts):
+                continue
+            if fee_multiplier_for(self.index, m["series_ticker"]) is None:
+                continue
+            fresh = dict(m)
+            fresh.update(book_quotes(book))
+            try:
+                signal = FS.maker_quote_plan(fresh, self.ctx(book))
+            except Exception as error:
+                self.errors.append(f"maker quote plan on {ticker}: {error}")
+                continue
+            if signal:
+                candidates.append((m, signal, book))
+        candidates.sort(key=lambda item: -(item[1]["meta"]["spreadAtPost"]))
+        for m, signal, book in candidates[:FS.MAKER_MAX_PLANS_PER_CYCLE]:
+            meta = signal["meta"]
+            self.intents.append({
+                "cycle": self.cycle_id, "at": iso(self.now_ts), "strategyId": "spread-smith",
+                "username": "SpreadSmith", "ticker": m["ticker"], "title": m["title"],
+                "subtitle": m.get("yes_sub_title"), "series": m["series_ticker"], "side": signal["side"],
+                "quotePrice": signal["price"], "limit": signal["limit"], "reason": signal["reason"],
+                "closeTime": iso(m["close_ts"]), "volume": m["volume"], "volume24h": m["volume_24h"],
+                "status": "quote_plan", "positionId": None,
+                "postedPrice": meta["postedPrice"], "postedContracts": meta["postedContracts"],
+                "spreadAtPost": meta["spreadAtPost"], "improvementCents": meta["improvementCents"],
+                "bookQuotes": book_quotes(book), "bookAt": self.book_meta[m["ticker"]]["at"],
+                "modelNote": "maker quote plan - not a fill; measured later against GET /markets/trades "
+                             "by scripts/maker_model.py (forward/execution/maker-model.json)",
+            })
+
     def dedupe_intents(self) -> list[dict]:
         """Persist an intent only when it is new or changed since the previous cycle (fills always)."""
         previous = self.state.get("intentFingerprints") or {}
@@ -1002,6 +1042,7 @@ class Cycle:
             account = account_for(self.state, strategy)
             if self.markets:
                 self.enter(strategy, account)
+        self.emit_maker_plans()
         for strategy in FS.STRATEGIES:
             self.mark_and_record(strategy, account_for(self.state, strategy))
         self.archive_settled_candles()
@@ -1012,6 +1053,7 @@ class Cycle:
             "seriesTracked": len(resolve_selector(self.index, "tracked")), "marketsSeen": len(self.markets),
             "booksFetched": len(self.books), "marketRecordsFetched": len(self.market_records),
             "intents": len(self.intents), "fills": sum(1 for e in self.events if e["kind"] == "fill"),
+            "makerQuotePlans": sum(1 for i in self.intents if i.get("status") == "quote_plan"),
             "exits": sum(1 for e in self.events if e["kind"] == "exit"),
             "settlements": sum(1 for e in self.events if e["kind"] == "settlement"),
             "nwsCaptured": self.nws_record is not None, "candleMarkets": len(self.candles), "candlesArchived": len(self.archived),
@@ -1031,7 +1073,9 @@ class Cycle:
                                "evidence": f"evidence/{self.day}.jsonl", "nws": "signals/nws-central-park.jsonl",
                                "nwsCities": "signals/nws-cities.jsonl", "espn": "signals/espn-scoreboard.jsonl",
                                "openfda": "signals/openfda.jsonl", "strategies": "strategies/", "summary": f"summary/{self.day}.json",
-                               "execution": "execution/", "candles": "candles/index.jsonl", "compressed": "COMPRESSED.json"}
+                               "execution": "execution/", "candles": "candles/index.jsonl", "compressed": "COMPRESSED.json",
+                               "tradesReview": "trades-review.md", "tradesReviewJson": "trades-review.json",
+                               "makerModel": "execution/maker-model.json"}
         return summary
 
     def persist(self, summary: dict):
@@ -1061,6 +1105,11 @@ class Cycle:
         write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state, self.state.get("season")))
         self.strategy_pages = write_strategy_pages(self.state, summary)
         self.daily_summary = write_daily_summary(self.state, summary)
+        try:
+            import trades_review
+            trades_review.write_review(FORWARD_DIR)
+        except Exception as error:  # the review is a view file; never fail a cycle over it
+            self.errors.append(f"trades review: {error}")
         if WRITE_SEASONS_INDEX:
             write_seasons_index(DATA_DIR, self.now_ts)
         self.write_recent(summary)
@@ -1549,6 +1598,8 @@ def main(argv=None):
 
 
 COUNTERS_VERSION = 2
+
+
 
 
 def backfill_counters(state: dict):

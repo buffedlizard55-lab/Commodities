@@ -69,18 +69,19 @@ export async function loadForwardDesk() {
   const label = $('#forward-state');
   if (!seasonMeta.loaded) await loadSeasonsIndex();
   try {
-    const [leaderboard, state, recent, curves, execution, today, audit, auditHistory, backfill] = await Promise.all([
+    const [leaderboard, state, recent, curves, execution, makerModel, today, audit, auditHistory, backfill] = await Promise.all([
       fetchJson(`${FORWARD_BASE()}leaderboard.json`),
       fetchJson(`${FORWARD_BASE()}state.json`),
       fetchJson(`${FORWARD_BASE()}recent.json`).catch(() => ({ events: [], intents: [], cycles: [] })),
       fetchJson(`${FORWARD_BASE()}curves.json`).catch(() => ({ recent: {}, daily: {} })),
       fetchJson(`${FORWARD_BASE()}execution/summary.json`).catch(() => null),
+      fetchJson(`${FORWARD_BASE()}execution/maker-model.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}summary/today.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}audit/latest.json`).catch(() => null),
       fetchJson(`${FORWARD_BASE()}audit/history.json`).catch(() => []),
       fetchJson(`${FORWARD_BASE()}audit/settlement-backfill.json`).catch(() => null),
     ]);
-    forward.execution = execution; forward.today = today; forward.audit = audit; forward.backfill = backfill;
+    forward.execution = execution; forward.makerModel = makerModel; forward.today = today; forward.audit = audit; forward.backfill = backfill;
     forward.auditHistory = Array.isArray(auditHistory) ? auditHistory : [];
     Object.assign(forward, { leaderboard, state, recent, curves, error: null });
     if (label) { label.textContent = `Committed desk state · Season ${esc(leaderboard.season ?? seasonMeta.activeSeason)} · ${leaderboard.cycles} cycle(s)`; label.classList.add('ok'); }
@@ -95,6 +96,7 @@ export async function loadForwardDesk() {
   renderForwardBoard();
   renderForwardLedger();
   renderExecutionRealism();
+  renderMakerModel();
   renderSeasonHealth();
   renderToday();
   renderMasterSiteMap();
@@ -275,7 +277,7 @@ function renderForwardLedger() {
     }).join('') : '<tr><td colspan="10" class="empty-cell">No fill, exit or settlement has been recorded yet.</td></tr>';
   } else if (forward.tab === 'intents') {
     head.innerHTML = '<tr><th>Cycle</th><th>Strategy</th><th>Contract</th><th>Side · quote</th><th>Rule reason</th><th>Book check</th><th>Status</th></tr>';
-    const label = { filled: ['filled', ''], queued: ['queued (next in line)', 'none'], not_confirmed_on_book: ['not confirmed on fresh book', 'blocked'], no_liquidity_or_cash: ['no executable depth / cash', 'blocked'], no_book: ['book unavailable', 'blocked'], skipped_position_cap: ['position cap reached', 'none'], proposed: ['proposed', 'none'] };
+    const label = { filled: ['filled', ''], queued: ['queued (next in line)', 'none'], not_confirmed_on_book: ['not confirmed on fresh book', 'blocked'], no_liquidity_or_cash: ['no executable depth / cash', 'blocked'], no_book: ['book unavailable', 'blocked'], skipped_position_cap: ['position cap reached', 'none'], proposed: ['proposed', 'none'], quote_plan: ['quote plan (maker model · not a fill)', 'none'] };
     body.innerHTML = intents.length ? intents.map((i) => {
       const [text, pill] = label[i.status] ?? [i.status, 'none'];
       const book = i.bookQuotes ? `YES ${px(i.bookQuotes.yes_bid)} / ${px(i.bookQuotes.yes_ask)} · NO ${px(i.bookQuotes.no_bid)} / ${px(i.bookQuotes.no_ask)}<br>${esc(formatDate(i.bookAt))}` : 'not fetched';
@@ -337,6 +339,32 @@ function renderExecutionRealism() {
     <p class="verdict">${esc(summary.verdict ?? '')}</p>
     <div class="table-shell"><table><thead><tr><th>Strategy</th><th>Fills compared</th><th>Median |desk − tape|</th></tr></thead><tbody>${byStrategy || '<tr><td colspan=\"3\" class=\"empty-cell\">No fill has been compared yet.</td></tr>'}</tbody></table></div>
     <p class="micro-note"><span>Evidence</span><a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/execution/summary.json" target="_blank" rel="noreferrer">execution/summary.json ↗</a> · <a class="text-link" href="https://docs.kalshi.com/api-reference/trade/get-trades" target="_blank" rel="noreferrer">official trade tape docs ↗</a> · window ±120s · compared at ${esc(formatDate(summary.generatedAt))} · ${esc(summary.method ?? '')}</p>`;
+}
+
+function renderMakerModel() {
+  const panel = $('#maker-model-panel');
+  if (!panel) return;
+  const summary = forward.makerModel;
+  if (!summary || !summary.plans) {
+    panel.innerHTML = '<div class="empty-state"><span class="empty-icon">◎</span><h3>No quote-plan comparison yet</h3><p><code>scripts/maker_model.py --live</code> writes <code>forward/execution/maker-model.json</code> on the runner. Quote plans themselves appear in the ledger’s “Upcoming intents” tab as soon as the desk posts them; this panel measures them against the official tape afterwards.</p></div>';
+    return;
+  }
+  const cards = [
+    ['Quote plans posted', String(summary.plans ?? 0), 'SpreadSmith resting orders (1¢ inside the touch, spread ≥ 2¢)'],
+    ['Tape traded through (fill proven)', String(summary.tapeTradedThrough ?? 0), 'a print strictly through the posted price — price-priority proof'],
+    ['Queue-uncertain (touch prints)', String(summary.queueUncertain ?? 0), 'never counted as fills — FIFO queue is not provable from REST'],
+    ['Projected PnL before maker fees', summary.projectedPnlBeforeMakerFees === null || summary.projectedPnlBeforeMakerFees === undefined ? '—' : `${summary.projectedPnlBeforeMakerFees >= 0 ? '+' : ''}$${Number(summary.projectedPnlBeforeMakerFees).toFixed(2)}`, 'proven fills on settled markets only; maker fees unverified (IRR-41)'],
+  ].map(([label, value, note]) => `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
+  const rows = (summary.rows ?? []).map((r) => `<tr><td><b>${esc(r.ticker)}</b><br><small>${esc(formatDate(r.postedAt))} · window ends ${esc(formatDate(r.windowEnd))}</small></td>
+    <td><b>${esc(String(r.side ?? '').toUpperCase())}</b> @ ${px(r.postedPrice)}<br><small>${formatContracts(r.postedContracts)} posted · spread ${px(r.spreadAtPost)}</small></td>
+    <td>${esc(r.fillEvidence ?? r.status)}</td>
+    <td>${esc(r.tapePrints ?? 0)} print(s)<br><small>through ${esc(r.throughPrints ?? 0)} · touch ${esc(r.touchPrints ?? 0)}</small></td>
+    <td><small>${esc(String(r.settlement?.result ?? 'unsettled').toUpperCase())}${r.settlement?.pnlBeforeMakerFees != null ? ` · ${money(r.settlement.pnlBeforeMakerFees)} (pre-maker-fee)` : ''}</small></td>
+    <td><small><a class="text-link" href="${esc(r.tapeUrl ?? '#')}" target="_blank" rel="noreferrer">tape ↗</a> · ${esc(String(r.tapeSha256 ?? '').slice(0, 12))}</small></td></tr>`).join('');
+  panel.innerHTML = `<div class="metrics-grid">${cards}</div>
+    <p class="verdict">${esc(summary.verdict ?? '')}</p>
+    <div class="table-shell"><table><thead><tr><th>Plan (contract · posted)</th><th>Quoted</th><th>Fill evidence</th><th>Tape in window</th><th>Settlement projection</th><th>Evidence</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="empty-cell">No quote plan recorded yet.</td></tr>'}</tbody></table></div>
+    <p class="micro-note"><span>${esc(summary.modelLabel ?? 'MODELLED')}</span> ${esc(summary.method ?? '')} · <a class="text-link" href="${REPO_TREE}${SEASON_BASE()}forward/execution/maker-model.json" target="_blank" rel="noreferrer">maker-model.json ↗</a> · generated ${esc(formatDate(summary.generatedAt))}</p>`;
 }
 
 function renderSeasonHealth() {
@@ -565,25 +593,31 @@ export function bindForwardEvents() {
 }
 
 const MASTERSITE_MAP = [
-  ['CEO', 'none (verified: no CEO project in the 2026-09-20 MasterSite data file)', '—', "Kalshi Companies series tagged 'CEOs' whose ticker names a CEO market (e.g. KXTESLACEOCHANGE, KXAAPLCEOCHANGE)", 'CEOExitFav'],
-  ['Weather', 'SFWeather (NWS pipeline)', 'NWS gridded forecasts, nightly', 'KXHIGHNY daily-high brackets; NWS point forecast for Central Park archived at decision time', 'WeatherCatalyst · WeatherFader'],
-  ['Insider trades', 'Insider-trades (SEC Form 4 dashboard)', 'Form 4 filings, no point-in-time archive', 'no Kalshi contract settles on a filing; SEC hosts unreachable from shared runners (sibling IR-76/77)', 'Form4Flash (gated)'],
-  ['TheLeap', 'TradingViewTheLeap (contest research layer)', 'futures contest research', 'Kalshi index/commodity range series must be enumerated first (series catalog has 1,040 Financials rows)', 'LeapMapper (gated)'],
-  ['NFL Injury', 'NFLInjuryReport (Actions cron every 10 min)', 'NFL.com injury rows', 'official game price on KXNFLGAME; injury rows are review links only', 'GridironPulse'],
-  ['NBA Injury', 'NBAInjuryReport (ESPN injuries endpoint)', 'ESPN injury rows', 'no machine-readable official NBA feed (project finding); KXNBAGAME price traded instead', 'GridironPulse · TipoffTriage (gated)'],
-  ['FDA Decisions Drug Analysis', 'DrugAnalysis (PDUFA calendar)', '32-entry decision calendar', "KXFDA* series tagged 'Medicine' (approval / approval-date markets)", 'FDAReaction'],
-  ['NCAA Scoreboard', 'Ncaa-football-alerts', 'live college football alerts', 'KXNCAAFGAME (ESPN is listed as a settlement source on the series record)', 'GridironPulse · SportsPredLab'],
-  ['NFL scoreboard', 'NFL-scoreboard', 'live NFL scores', 'KXNFLGAME game markets', 'GridironPulse · SportsPredLab'],
-  ['MLB Scoreboard', 'MLB-Live-PBP · MLB-PBP · MLB-Prediction-model-backtest', 'live play-by-play, model backtest', 'KXMLBGAME game markets (shard 3, fee multiplier 0.5 per series record)', 'GridironPulse · SportsPredLab'],
-  ['Sports Pred', 'SportsPred (22 sports, 95 leagues)', 'scores and model predictions', 'underdog convexity sweep on KX*GAME markets (model output is not evidence)', 'SportsPredLab'],
-  ['Gold', 'GOLD (ring buyer directory — not a price signal)', 'jewelry buyer listings', 'Kalshi KXGOLD15M (Pyth-settled; ~140k contracts per 15-minute market) and KXGOLDH', 'MetalMomentum · TailSprint15 · PanicFader'],
-  ['PinePilot', 'Tradingview-pinescript-editor (18 Pine v6 modes)', 'Pine Script strategy lab', 'SMA5/SMA10 cross replayed on official daily candlesticks with real fees', 'PinePilotX'],
+  ['CEO', 'none — verified: no CEO project exists in the MasterSite directory (52 sites, data/sites.js re-read 2026-09-22)', '—', "Kalshi Companies series tagged 'CEOs' whose ticker names a CEO market (e.g. KXTESLACEOCHANGE, KXAAPLCEOCHANGE)", 'CEOExitFav', 'https://buffedlizard55-lab.github.io/MasterSite/'],
+  ['Weather', 'SFWeather (NWS pipeline)', 'NWS gridded forecasts, nightly', 'KXHIGHNY + every KXHIGH* daily-high bracket; NWS point forecasts archived at decision time', 'WeatherCatalyst · WeatherFader · HeatConfirm', 'https://buffedlizard55-lab.github.io/SFWeather/'],
+  ['Insider trades', 'Insider-trades (SEC Form 4 dashboard)', 'Form 4 filings, no point-in-time archive', 'no Kalshi contract settles on a filing; SEC hosts unreachable from shared runners (sibling IR-76/77)', 'Form4Flash (gated)', 'https://buffedlizard55-lab.github.io/Insider-trades/'],
+  ['TheLeap', 'TradingViewTheLeap (contest research layer)', 'futures contest research', 'Kalshi index/commodity range series must be enumerated first (series catalog has 1,040 Financials rows)', 'LeapMapper (gated)', 'https://buffedlizard55-lab.github.io/TradingViewTheLeap/'],
+  ['NFL Injury', 'NFLInjuryReport (Actions cron every 10 min)', 'NFL.com injury rows', 'official game price on KXNFLGAME; injury rows are review links only', 'GridironPulse · HalftimeHype', 'https://buffedlizard55-lab.github.io/NFLInjuryReport/'],
+  ['NBA Injury', 'NBAInjuryReport (ESPN injuries endpoint)', 'ESPN injury rows', 'no machine-readable official NBA feed (project finding); KXNBAGAME price traded instead', 'GridironPulse · TipoffTriage (gated)', 'https://buffedlizard55-lab.github.io/NBAInjuryReport/'],
+  ['FDA Decisions Drug Analysis', 'DrugAnalysis (PDUFA calendar)', 'decision calendar + biotech reaction notes', "KXFDA* series tagged 'Medicine' (approval / approval-date markets)", 'FDAReaction · FdaRecordCheck', 'https://buffedlizard55-lab.github.io/DrugAnalysis/'],
+  ['NCAA Scoreboard', 'Ncaa-football-alerts', 'live college football alerts', 'KXNCAAFGAME / KXNCAAMBGAME (ESPN is a listed settlement source on the series records)', 'GridironPulse · SportsPredLab · ScorePulse', 'https://buffedlizard55-lab.github.io/Ncaa-football-alerts/'],
+  ['NFL scoreboard', 'NFL-scoreboard', 'live NFL scores', 'KXNFLGAME game markets', 'GridironPulse · SportsPredLab · ScorePulse', 'https://buffedlizard55-lab.github.io/NFL-scoreboard/'],
+  ['MLB Scoreboard', 'MLB-Live-PBP · MLB-PBP · MLB-Prediction-model-backtest', 'live play-by-play, model backtest', 'KXMLBGAME game markets (shard 3, fee multiplier 0.5 per series record)', 'GridironPulse · SportsPredLab · ScorePulse', 'https://buffedlizard55-lab.github.io/MLB-Live-PBP/'],
+  ['Sports Pred', 'SportsPred (22 sports, 95 leagues)', 'scores and model predictions', 'underdog convexity sweep on KX*GAME markets (model output is not evidence)', 'SportsPredLab', 'https://buffedlizard55-lab.github.io/SportsPred/'],
+  ['Gold', 'GOLD (ring buyer directory — not a price signal)', 'jewelry buyer listings', 'Kalshi KXGOLD15M (Pyth-settled) and KXGOLDH traded instead; LBMA JSON is the gold reference feed', 'MetalMomentum · TailSprint15 · PanicFader', 'https://buffedlizard55-lab.github.io/GOLD/'],
+  ['PinePilot', 'Tradingview-pinescript-editor (18 Pine v6 modes)', 'Pine Script strategy lab', 'SMA5/SMA10 cross replayed on official daily candlesticks with real fees', 'PinePilotX', 'https://buffedlizard55-lab.github.io/Tradingview-pinescript-editor/'],
+  ['Paper-sim competitions (mechanics)', 'KalshiPaperSim · StockPaperSim · PriceKalshiHistorical', 'paper-trading competitions, market simulators', 'reverse-engineered for the competition mechanics (depth-bound fills, trades review, leaderboard)', 'this site (Trade Simulator + trades review)', 'https://buffedlizard55-lab.github.io/KalshiPaperSim/'],
+  ['Sport paper competitions (research reads)', 'NFLComp · NBAComp · NHLComp · MLBComp · OLBG-Competition', 'per-sport strategy research + paper competitions', 'research reads only; every price here stays Kalshi official', 'context for the sports personas', 'https://buffedlizard55-lab.github.io/NFLComp/'],
+  ['Social strategies (Reddit/YouTube/X/Facebook)', '— (discovery-only sweep 2026-09-22, IRR-42)', '5 Reddit threads with falsifiable rules; X/Facebook/YouTube returned none', 'recreated mechanically: HeatConfirm · HighProbScalp · PanicFader · HalftimeHype · TailSprint15', 'forward-tested on official prices only', 'https://www.reddit.com/r/Kalshi/'],
 ];
 
 function renderMasterSiteMap() {
   const body = $('#mastersite-map tbody');
   if (!body) return;
-  body.innerHTML = MASTERSITE_MAP.map(([source, project, publishes, mapping, persona]) => `<tr><td><b>${esc(source)}</b></td><td><small>${esc(project)}</small></td><td><small>${esc(publishes)}</small></td><td><small>${esc(mapping)}</small></td><td><small>${esc(persona)}</small></td></tr>`).join('');
+  body.innerHTML = MASTERSITE_MAP.map(([source, project, publishes, mapping, persona, url]) => {
+    const projectCell = url ? `<a class="text-link" href="${esc(url)}" target="_blank" rel="noreferrer">${esc(project)} ↗</a>` : esc(project);
+    return `<tr><td><b>${esc(source)}</b></td><td><small>${projectCell}</small></td><td><small>${esc(publishes)}</small></td><td><small>${esc(mapping)}</small></td><td><small>${esc(persona)}</small></td></tr>`;
+  }).join('');
 }
 
 // ---------------------------------------------------------------- committed backtest (03)
