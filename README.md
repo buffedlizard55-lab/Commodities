@@ -2,8 +2,10 @@
 
 An evidence-first paper-trading lab for Kalshi event contracts:
 
-* an **automated forward-test desk** — 24 return-seeking strategy personas that trade open Kalshi
-  contracts on paper twice an hour from a scheduled, read-only collector (GitHub Actions), with
+* an **automated forward-test desk** — 28 live return-seeking strategy personas (plus 2
+  deliberately gated) that trade open Kalshi contracts on paper from a scheduled, read-only
+  collector (GitHub Actions): a cheap tick every five minutes aimed at in-game markets and a full
+  cycle twice an hour, with
   every fill, exit, settlement, intent, mark and order book committed to this repository — including
   HeatConfirm, a socially discovered weather rule tested forward because its backtest claim is
   third-party (discovery-only, never a price source);
@@ -430,7 +432,8 @@ that shows up as a below-100% "inside range" percentage, not as a corrected fill
   `[desk:settlements]`). The first live run re-read 93 settled markets on 2026-09-22T23:29:48Z:
   93 matches, 0 mismatches, 0 unreachable. It never adjusts the ledger: a mismatch is a committed
   finding with a non-zero exit code and a banner on the site's season-health panel; `verify_data.py`
-  surfaces it as a warning (a monthly artifact deliberately does not block the twice-hourly commit).
+  surfaces it as a warning (a monthly artifact deliberately does not block the regular cycle's
+  commit).
   Unreachable markets are counted as such — never as a match or a mismatch. Offline runs print the
   plan and write nothing. Eleven tests in `tests/test_verify_settlements.py` pin the behaviour.
 * **One-year competition, keyed by UTC year.** `scripts/season.py` decides the season from the
@@ -626,7 +629,7 @@ social sweep). Line by line:
 6. **Signal sources are context, never settlement** (24 of 26 daily-temperature series settle on
    The Weather Company, not the NWS feed the adapter reads — IRR-26).
 7. **GitHub `schedule` is best-effort** — missed cron slots are recorded, not hidden; there is no
-   guarantee of twice-hourly execution without an external pinger.
+   guarantee that a five-minute tick or a cycle is delivered without an external pinger.
 8. **The forward sample is days old, not years** — 13 cycles and 181 closed positions cannot
    confirm or refute a strategy's edge; the archive backtest (63 markets, 291 trades) is the only
    long-horizon evidence and it covers 9 rule sets, not the live roster.
