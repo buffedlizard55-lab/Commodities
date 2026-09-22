@@ -205,6 +205,14 @@ class MakerFeeTests(unittest.TestCase):
         self.assertAlmostEqual(net["makerFee"], 0.4332, places=6)
         self.assertAlmostEqual(net["pnlNetOfMakerFees"], net["pnlBeforeMakerFees"] - expected_fee, places=6)
 
+    def test_summary_fee_totals_are_null_until_something_settles(self):
+        """The runner writes this shape whenever no tape-proven fill has settled yet."""
+        summary = MM.summarize([], "2026-09-22T00:00:00Z")
+        for key in ("projectedMakerFees", "projectedPnlNetOfMakerFees", "projectedPnlBeforeMakerFees"):
+            self.assertIn(key, summary)
+            self.assertIsNone(summary[key])
+        self.assertTrue(summary["makerFeesModelled"])
+
     def test_load_series_fees_reads_the_committed_index_and_defaults_to_empty(self):
         fees = MM.load_series_fees()
         self.assertEqual(fees["KXCPI"]["fee_type"], "quadratic_with_maker_fees")

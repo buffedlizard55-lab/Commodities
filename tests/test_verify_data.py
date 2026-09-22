@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import pathlib
 import tempfile
 import unittest
@@ -172,10 +173,30 @@ class MakerModelTests(unittest.TestCase):
     def test_maker_model_summary_is_labelled_and_counts_consistent(self):
         summary = json.load(open("data/season-2026/forward/execution/maker-model.json"))
         self.assertIn("MODELLED", summary["modelLabel"])
-        self.assertTrue(summary["makerFeesUnverified"])
         with redirect_stdout(io.StringIO()):
             verify_data.verify_maker_model("data/season-2026/forward")
         self.assertEqual(verify_data.FAILURES, [])
+
+    def test_fee_fields_may_be_null_before_anything_settles(self):
+        """IRR-41 regression: a fresh runner summary has no settled fill yet, so its fee totals are
+        null - that is not a verification failure (the runner caught this on 2026-09-22)."""
+        tmp = tempfile.mkdtemp(prefix="verify-maker-")
+        os.makedirs(os.path.join(tmp, "execution"))
+        summary = {"modelLabel": "MODELLED - tape evidence", "makerFeesModelled": True,
+                   "makerFeeSource": "Kalshi fee schedule (July 2026 update) - "
+                                     "https://kalshi.com/docs/kalshi-fee-schedule.pdf",
+                   "plans": 1, "compared": 1, "tapeTradedThrough": 1, "queueUncertain": 0,
+                   "noFillEvidence": 0, "settledProvenFills": 0, "settledWins": 0,
+                   "projectedPnlBeforeMakerFees": None, "projectedMakerFees": None,
+                   "projectedPnlNetOfMakerFees": None, "rows": []}
+        with open(os.path.join(tmp, "execution", "maker-model.json"), "w") as fh:
+            json.dump(summary, fh)
+        try:
+            with redirect_stdout(io.StringIO()):
+                verify_data.verify_maker_model(tmp)
+            self.assertEqual(verify_data.FAILURES, [])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class VerifierEndToEndTests(unittest.TestCase):

@@ -261,9 +261,13 @@ def verify_maker_model(fwd):
     else:
         check("maker.fees_are_modelled_with_a_source",
               "kalshi-fee-schedule" in str(summary.get("makerFeeSource", "")), quiet=True)
+        # The fee fields always exist; they are null until a tape-proven fill has settled, so the
+        # non-null requirement applies only when the summary says something settled.
+        settled = summary.get("settledProvenFills") or 0
         check("maker.fee_fields_present",
-              summary.get("projectedMakerFees") is not None
-              and summary.get("projectedPnlNetOfMakerFees") is not None, quiet=True)
+              "projectedMakerFees" in summary and "projectedPnlNetOfMakerFees" in summary
+              and (settled == 0 or (summary.get("projectedMakerFees") is not None
+                                    and summary.get("projectedPnlNetOfMakerFees") is not None)), quiet=True)
         check("maker.gross_minus_fees_equals_net",
               summary.get("projectedPnlBeforeMakerFees") is None
               or abs((summary["projectedPnlBeforeMakerFees"] - (summary.get("projectedMakerFees") or 0.0))
