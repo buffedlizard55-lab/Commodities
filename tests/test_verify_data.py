@@ -121,19 +121,21 @@ class SourceRegistryTests(unittest.TestCase):
     def test_sources_url_role_and_id_contract(self):
         registry = self._load()
         sources = registry["sources"]
-        self.assertGreaterEqual(len(sources), 70)
+        self.assertGreaterEqual(len(sources), 80)
         self.assertEqual(len({s["id"] for s in sources}), len(sources))
         for source in sources:
             self.assertTrue(source["url"].startswith("https://"))
             self.assertTrue(source.get("name"))
             self.assertTrue(source.get("kind"))
 
-    def test_irregularities_are_numbered_uniquely_through_irr_42(self):
+    def test_irregularities_are_numbered_uniquely_through_irr_44(self):
         registry = self._load()
         codes = [str(item).split(" ")[0].rstrip("·") for item in registry["irregularities"]]
         self.assertEqual(len(set(codes)), len(codes))
-        self.assertIn("IRR-41", codes)
-        self.assertIn("IRR-42", codes)
+        self.assertIn("IRR-41", codes)     # maker fees (resolved 2026-09-22)
+        self.assertIn("IRR-42", codes)     # social sweep round 1 (discovery only)
+        self.assertIn("IRR-43", codes)     # injuries are third-party evidence, never settlement
+        self.assertIn("IRR-44", codes)     # index ranges are a signal mapping, not a forecast
 
 
 class RosterMetadataTests(unittest.TestCase):

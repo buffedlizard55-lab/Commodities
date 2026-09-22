@@ -53,7 +53,7 @@ index.html, styles.css, src/        GitHub Pages site (published from the repo r
   src/app.js                        browser trade simulator: market list, books, intents, paper fills, local ledger
 scripts/
   forward_desk.py                   ONE collector cycle: scan universe -> signals -> intents -> book fills -> settle -> ledger
-  forward_strategies.py             the 24 forward personas (rule functions + provenance) and 4 gated ones
+  forward_strategies.py             the 28 forward personas (rule functions + provenance) and 2 gated ones
   signals.py                        official signal adapters: NWS city gridpoints (Census Gazetteer centroids),
                                     ESPN scoreboards (NFL/NCAAF/NBA/MLB/NHL/WNBA), openFDA Drugs@FDA records
   season.py                         season = UTC year; create/roll over data/season-<year>/ and write data/seasons.json
@@ -84,7 +84,7 @@ scripts/
                                     + 1st of month 06:47 UTC (full settlement backfill) + manual dispatch
 data/
   strategies.json                   persona roster (browser live-book, backtest, forward-desk, gated)
-  source-registry.json              79 official/primary sources + irregularities IRR-01..IRR-42
+  source-registry.json              82 official/primary sources + irregularities IRR-01..IRR-44
   seasons.json                      season index the site reads (active season, cycles, fills, frozen flag)
   universe/                         series-catalog.json (compact, all categories), series-index.json (fees, shards, tags)
   season-2026/                      COMMITTED SEASON MEMORY (durable store)
@@ -111,7 +111,7 @@ data/
     candles-*.csv, raw/, ...        verified backtest inputs (see MANIFEST.md)
     competition.json, trades.json, leaderboard.json, intents.json, explanations.json   backtest outputs
 tests/
-  test_forward_desk.py              29 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
+  test_forward_desk.py              37 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
                                     evidence hashes, HeatConfirm gating (entry needs forecast in bracket, cheap
                                     ask, tight spread; exit only when a fresh forecast leaves the bracket),
                                     EPL/NCAAM universe + ScorePulse thresholds, can-fire proofs for the
@@ -123,6 +123,10 @@ tests/
                                     ESPN scoreboard (incl. the verified nickname rules_primary form, IRR-36,
                                     the added NHL/WNBA leagues and the EPL/NCAAM expansion, IRR-37),
                                     openFDA records incl. 404 = verified absence
+  test_signal_adapters.py           17 tests: ESPN injuries (hard statuses, freshness window, team matching,
+                                   abstain-on-unknown-shape), Cleveland Fed nowcast (caption-mapped tables,
+                                   blank = released), FRED CSV (blank rows absent, official URL), the four
+                                   persona rules that read them,
   test_verify_settlements.py        12 tests: full settlement backfill - match / mismatch / unreachable /
                                     value-scalar / multi-position dedup / shard routing / limit determinism /
                                     multi-season scan / report + append-only history / fractional-second ts (IRR-39)
@@ -131,7 +135,8 @@ tests/
   test_backtest_archive.py          14 tests: fee multipliers, no look-ahead, PnL arithmetic, per-strategy
                                     cash identity, --series filter, curve points, walk-forward fold sums
   test_execution_realism.py         6 tests: tape comparison, no-tape window, optimism verdict (fixtures only)
-  test_maker_model.py               12 tests: quote-plan read/filter, through-price proof, touch = queue-uncertain,
+  test_maker_model.py               16 tests: quote-plan read/filter, through-price proof, touch = queue-uncertain,
+                                   official maker-fee formula (IRR-41), series fee-type lookup,
                                     pre-post prints ignored, window capped by close, settlement projection only from
                                     official results, labelled MODELLED roll-up, end-to-end offline run
   test_trades_review.py             6 tests: fill+close joins, upcoming excludes fills, totals agree with the ledger,
@@ -201,7 +206,7 @@ bands now also require a displayed spread ≤ 5¢). Every change is a commit to
 `scripts/forward_strategies.py`; positions opened under an earlier rule stay in the ledger and the
 cycle ids make before/after results distinguishable. Nothing is ever re-simulated or deleted.
 
-### Personas (24 active, 4 gated)
+### Personas (28 active, 2 gated)
 
 | Username | Rule (short) | Source of the idea |
 |---|---|---|
@@ -219,7 +224,11 @@ cycle ids make before/after results distinguishable. Nothing is ever re-simulate
 | LongshotFader | buy the 80–95¢ side against a 5–20¢ longshot (vol ≥5k) | CEPR favourite-longshot evidence |
 | HeatConfirm | buy YES on a daily-high market when the **NWS forecast high is inside the bracket**, the ask ≤ 42¢ and the spread ≤ 8¢; exit only when a fresh forecast leaves the bracket | r/PredictionsMarkets 500-weather-bots backtest post (discovery only — testing its claim forward IS the experiment) |
 | HalftimeHype | in-game 20–30¢ underdog (spread ≤ 5¢, vol ≥ 10k) while ESPN shows the mapped game live; exit at the first 50¢ bid | r/Kalshi "buy 20–30%, sell near 50%" tip (discovery only, recreated mechanically 2026-09-22; the halftime timing is folded into the 50¢ target and the rule text says so) |
-| *gated:* Form4Flash, LeapMapper, SpreadSmith, TipoffTriage | — | no Kalshi mapping / maker fills unprovable from REST (quote plans + tape-validated maker model instead) / no official feed |
+| InjuryFade | NFL: buy the market's own team ≤60¢ (spread ≤5¢, vol ≥5k) when the **ESPN injuries JSON** shows the *opponent* with a quarterback Out/Doubtful/IR/Suspended dated inside 72h | MasterSite **NFLInjuryReport** (nfl.com primary + ESPN rows with per-row dates) → `KXNFLGAME` |
+| TipoffTriage | NBA: buy ≤55¢ (spread ≤5¢, vol ≥10k) when the opponent carries **3+ hard designations** inside 7 days | MasterSite **NBAInjuryReport** (30-team monitor; ESPN is not league-official — the rule says so and the ledger abstains on any fuzzy club match) → `KXNBAGAME` |
+| NowcastNudge | KXCPI/KXCPIYOY: buy the side the **Cleveland Fed nowcast** favours when it clears the strike by 0.10pp (monthly) / 0.25pp (yearly), ask ≤90¢ | official **Cleveland Fed Inflation Nowcasting** page (verbatim HTML + SHA-256 archived per cycle) |
+| LeapMapper | KXINX/KXNASDAQ100 range markets: buy the side the **FRED** index close already agrees with (YES inside the posted range, NO outside), ask ≤90¢, vol ≥10k | MasterSite **TradingViewTheLeap** mapped to the Kalshi index products; signal = Federal Reserve Bank of St. Louis CSV |
+| *gated:* Form4Flash, SpreadSmith | — | no Kalshi contract settles on a Form 4 filing; maker fills are still unprovable from REST snapshots (quote plans + tape-validated maker model instead) |
 
 Full rule text, "why it should (or should not) work", provenance links and live results are in
 `data/season-2026/forward/leaderboard.json`, per persona in
@@ -265,7 +274,7 @@ their zero-intent ledgers mean the rules never triggered, not that the rules can
 ```bash
 python3 scripts/forward_desk.py --live                 # one real cycle (needs network egress)
 python3 scripts/forward_desk.py --fixtures DIR --now 2026-09-20T15:00:00Z --out /tmp/out   # offline replay
-python3 -m unittest discover -s tests -p 'test_*.py'    # 144 offline tests
+python3 -m unittest discover -s tests -p 'test_*.py'    # 171 offline tests
 python3 scripts/verify_settlements.py                   # offline plan: what the monthly backfill would re-read
 python3 scripts/verify_settlements.py --live            # full settlement backfill (runner; official re-read)
 python3 scripts/discover_universe.py                    # refresh data/universe/
@@ -527,30 +536,66 @@ social sweep). Line by line:
   position** as of the 14:08Z cycle. HalftimeHype starts with its first runner cycle after this
   merge.
 
+### Done in the 2026-09-22 follow-up session
+
+* **Maker fees are verified and modelled (IRR-41 closed).** The official fee schedule (July 2026
+  update) gives `maker fee = round up(M × 0.0175 × C × P × (1−P))` with `M` defaulting to zero, and
+  the series' own `GET /series` record carries the `fee_type`/`fee_multiplier` that set `M`.
+  `paper_engine.maker_fee`/`maker_multiplier` implement it; `maker_model.py` now reports
+  `projectedMakerFees` and `projectedPnlNetOfMakerFees` beside the gross figure and records each
+  plan's own fee type. Verified from the committed index: every `KX*GAME` series the desk trades
+  carries maker fees (KXMLBGAME at 0.5×), while KXINX / KXNASDAQ100 / KXHIGHNY / KXGOLD15M /
+  KXBTC15M / KXETH15M are plain `quadratic` — a resting quote there pays **no** maker fee.
+* **Real-time cadence without paying for it.** The workflow adds a `*/5 * * * *` **live tick**
+  alongside the two hourly cycles: a tick narrows the universe to markets whose own `close_time`
+  falls inside `TICK_LIVE_WINDOW_SECONDS` (3h), skips the archive/backtest/compaction/view rebuilds,
+  and writes nothing at all unless it filled or closed something — quiet slots cost no data, and
+  in-game rules (live score, live book, momentum, injuries) now fire inside the game rather than at
+  the next :07/:37. Tests pin both halves: a live-game tick trades the in-game rule, an idle tick
+  leaves the ledger byte-identical.
+* **Three new official, free, key-less sources wired and archived** (each read verbatim with its
+  SHA-256 committed): the **ESPN league injuries JSON** (dated designations), the **Cleveland Fed
+  Inflation Nowcasting** page (MoM/YoY/quarterly tables parsed by their own captions) and the
+  **FRED CSV** graph endpoint (S&P 500 and Nasdaq-100 closes; blank holiday rows recorded as absent,
+  never carried forward).
+* **Four personas activated/added** — InjuryFade, TipoffTriage, NowcastNudge, LeapMapper — each
+  trading only on data with a committed URL + hash and settling on Kalshi's own official result.
+  Every fill now carries a `signalSources` block (kind, URL, SHA-256, the exact value that fired) so
+  a reviewer can open the source and check the row behind a trade.
+* **A per-cycle source ledger** (`forward/sources/status.json`): one row per official endpoint with
+  `read` / `not_needed` / `failed` and the response hash where one exists — the machine-readable
+  version of "flag irregularities". `verify_data.py` now fails if an archived signal row lacks its
+  official URL or hash, or if the ledger hides a failed read.
+* **Registry + docs refreshed**: 82 sources and IRR-01..IRR-43, including IRR-42 (injury feeds are
+  third-party evidence, never settlement) and IRR-43 (index ranges are a signal mapping, not a
+  forecast).
+
 ### Open items for the next session
 
 * **First settlements of HeatConfirm (2026-09-23) and MetalMomentum's gold position** — judge at
   settlement, never mid-flight; no threshold retuning either way.
 * **First live settlement backfill.** `verify_settlements.py --live` has still never run against
   every settled ticker (`settlement-backfill.json` absent; the monthly cron is the 1st at 06:47
-  UTC). This session's merge will dispatch `mode=settlements` manually — review
+  UTC). The merge dispatches `mode=settlements` manually — review
   `forward/audit/settlement-backfill.json` afterwards (mismatches are findings only).
-* **HalftimeHype + ScorePulse need live games at cycle time.** Both gates are verified-data gates
-  (mapped in-progress game on the ESPN scoreboard); twice-hourly snapshots can only catch games in
-  progress at :07/:37 — cadence is the binding constraint for every in-game rule.
-* **Cron cadence (IRR-34) remains the biggest evidence bottleneck** (13/118 slots). Options, both
-  allowed: an external **free** uptime ping to `workflow_dispatch` (a trigger, never a data
-  source), or accept ~5–10 cycles/day and measure in weeks.
-* **Maker fees (IRR-41):** find a primary fee-schedule source for the maker side before any
-  SpreadSmith PnL number can leave the "before maker fees" label. More quote plans will accumulate
-  fill evidence automatically each cycle.
-* **Cleveland Fed Inflation Nowcast candidate** (from the r/post skeleton): archive the nowcast
-  point-in-time first (official clevelandfed.org feed), then state a bracket-mapping rule against
-  KXCPI-family markets — do not guess the mapping.
-* **LeapMapper** still needs the universe job to enumerate index/commodity range series (the
-  catalog has 1,040 Financials rows) with fee types and tick grids before a rule is stated.
+* **First live reads of the three new adapters.** They are verified offline and were read directly
+  from this sandbox on 2026-09-22; the first runner cycle that trades from them is the proof that
+  the runner's egress sees the same endpoints — check `forward/signals/*.jsonl` and the sources
+  ledger after the first tick with an in-game market.
 * **FDA target dates remain unverifiable** (Drugs@FDA publishes no PDUFA date, IRR-27) — date-driven
-  FDA personas stay out.
+  FDA personas stay out. The sibling `DrugAnalysis` project is the next place to look for a
+  documented date source before any rule is stated.
+* **Insider trading (Form 4) mapping still does not exist.** The sibling `Insider-trades` project
+  proves SEC EDGAR can be read from GitHub runners (submissions JSON + `getcurrent` Atom feed, with
+  a User-Agent), but no Kalshi contract settles on a filing, so Form4Flash stays gated until a
+  matching market exists — do not trade a proxy.
+* **Commodity/official-price personas are the next source family** (the sibling
+  `FUTURESCOMMODITIES` project's access matrix names the key-less ones worth testing next: MOEX ISS,
+  EIA open data, USDA AMS DataMart). Map them to a series whose committed record names a matching
+  settlement source before writing a rule.
+* **Cron delivery is still best-effort** (IRR-34): the tick reduces missed in-game windows, but
+  GitHub can delay or drop schedule events. Keep reading `forward/audit/latest.json` — it grades
+  the delivered slots instead of assuming them.
 
 ### Standing limitations (in the way of the full vision)
 

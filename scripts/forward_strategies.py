@@ -12,6 +12,8 @@ or exchange mechanics) and rendered on the site with the review link.
 """
 from __future__ import annotations
 
+import re
+
 from paper_engine import fnum
 
 DAY = 86_400
@@ -24,13 +26,19 @@ SERIES_GOLD = ["KXGOLD15M", "KXGOLDH"]
 SERIES_WEATHER = ["KXHIGHNY"]
 SERIES_SPORTS = ["KXNFLGAME", "KXNBAGAME", "KXNCAAFGAME", "KXMLBGAME", "KXNHLGAME", "KXWNBAGAME",
                  "KXEPLGAME", "KXNCAAMBGAME"]
+# Index range series (added 2026-09-22): both are Kalshi's liquid daily index markets
+# (data/universe/series-catalog.json: KXINX "S&P 500 range" and KXNASDAQ100 "Nasdaq range",
+# fee_type quadratic with multiplier 1, i.e. NO maker fee on a resting order per the official fee
+# schedule).  The official index level used as a signal comes from FRED (see signal_adapters.py).
+SERIES_INDEX = ["KXINX", "KXNASDAQ100"]
 SELECTOR_CEO = "tag:CEOs&contains:CEO"   # Companies-category series tagged CEOs whose ticker names a CEO market
 SELECTOR_FDA = "prefix:KXFDA&tag:Medicine"  # FDA drug-decision series (excludes FDA-politics series)
 # Every Kalshi daily-high temperature series (verified in data/universe/series-catalog.json:
 # tag "Daily temperature", e.g. KXHIGHLAX/CHI/MIA/AUS/DEN/PHIL/SFO/PHX/SEA/ATL/BOS/DAL/DC/LV/HOU/...).
 SELECTOR_WEATHER = "tag:Daily temperature&prefix:KXHIGH"
 
-TRACKED_SERIES = SERIES_ECON + SERIES_CRYPTO + SERIES_GOLD + SERIES_WEATHER + SERIES_SPORTS
+TRACKED_SERIES = (SERIES_ECON + SERIES_CRYPTO + SERIES_GOLD + SERIES_WEATHER + SERIES_SPORTS
+                  + SERIES_INDEX)
 TRACKED_SELECTORS = [SELECTOR_CEO, SELECTOR_FDA, SELECTOR_WEATHER]
 
 # Minimum live lead before ScorePulse buys the leading side, per sport.  These are rule
@@ -598,6 +606,136 @@ def entry_sma_cross(m, ctx):
     return {"side": "yes", "price": ask, "limit": round(min(0.99, ask + 0.02), 4), "reason": f"daily SMA5 {fast:.3f} > SMA10 {slow:.3f} and last {last:.2f} > SMA10 on verified candles ({len(closes)} bars); YES ask {ask:.2f} (limit +2c)"}
 
 
+def entry_injury_fade(m, ctx):
+    """Buy the team whose opponent just lost its quarterback to a hard designation (ESPN feed).
+
+    Signal source: the ESPN league injuries JSON (public, key-less), which stamps every entry with
+    its own observation date, matched to the Kalshi market through the team names in the market's
+    own rules_primary.  The hypothesis is that pre-game markets under-react to a late quarterback
+    downgrade.  Only the *opponent's* designation is traded, and only when this market's own side is
+    still cheap (<= 60c) and liquid, so the trade is always "the healthy team at a discount".
+    """
+    signal = (ctx.get("injuries") or {}).get(m.get("ticker"))
+    if not signal or not signal.get("freshQbOut"):
+        return None
+    ask, bid = m.get("yes_ask"), m.get("yes_bid")
+    if ask is None or bid is None or not 0 < ask <= 0.60 or (ask - bid) > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    if (m.get("volume_24h") or 0) < 5_000:
+        return None
+    player = (signal.get("freshOutPlayers") or [{}])[0]
+    return {"side": "yes", "price": ask, "limit": 0.60,
+            "reason": f"ESPN injuries ({signal.get('league')}) lists {player.get('athlete')} "
+                      f"({player.get('position')}, {player.get('status')}, {player.get('date')}) out for "
+                      f"{signal.get('espnTeam')} - the opponent of this market's side "
+                      f"'{signal.get('marketTeam')}' (game {signal.get('gameTeamAway')} @ "
+                      f"{signal.get('gameTeamHome')}, {signal.get('scheduled')}); YES ask {ask:.2f} <= 0.60 "
+                      f"with spread {ask - bid:.2f} and 24h volume {m.get('volume_24h'):,.0f}"}
+
+
+def entry_tipoff_triage(m, ctx):
+    """Buy a team whose opponent carries three or more hard 'Out' designations (ESPN NBA feed).
+
+    Signal source: ESPN's league injuries JSON for the NBA, each row dated.  ESPN is NOT official
+    NBA confirmation (the sibling NBAInjuryReport project measured 27 of 30 team blocks published
+    on 2026-09-20), so the rule reads the *count* of hard designations with their dates, trades only
+    when this market's side is still priced as an underdog-or-even (<= 55c) on real volume, and
+    settles on Kalshi's own official result.
+    """
+    signal = (ctx.get("injuries") or {}).get(m.get("ticker"))
+    if not signal or (signal.get("freshHardOut") or 0) < 3:
+        return None
+    ask, bid = m.get("yes_ask"), m.get("yes_bid")
+    if ask is None or bid is None or not 0 < ask <= 0.55 or (ask - bid) > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    if (m.get("volume_24h") or 0) < 10_000:
+        return None
+    names = ", ".join(f"{p.get('athlete')} ({p.get('status')}, {p.get('date')})"
+                      for p in (signal.get("freshOutPlayers") or [])[:4])
+    return {"side": "yes", "price": ask, "limit": 0.55,
+            "reason": f"ESPN injuries (nba) lists {signal.get('freshHardOut')} hard designation(s) in "
+                      f"the last {signal.get('windowHours'):g}h for {signal.get('espnTeam')}, the opponent "
+                      f"of this market's side '{signal.get('marketTeam')}': {names}; YES ask {ask:.2f} "
+                      f"<= 0.55 with spread {ask - bid:.2f} and 24h volume {m.get('volume_24h'):,.0f}"}
+
+
+MARGIN_BY_SERIES = {"KXCPI": 0.10, "KXCPIYOY": 0.25}  # percentage points the nowcast must clear
+
+
+def entry_nowcast_nudge(m, ctx):
+    """Trade the side the official Cleveland Fed nowcast favours on a CPI market for that month.
+
+    Signal source: the Federal Reserve Bank of Cleveland's Inflation Nowcasting page (official,
+    published every business day).  Kalshi's own rules_primary defines these markets as "If the
+    Consumer Price Index (CPI) increases by more than X% (single-decimal) in <month>" and the
+    series record names the Bureau of Labor Statistics as the settlement source
+    (data/universe/series-catalog.json), so the nowcast is compared against a strike that is itself
+    a monthly percent change.  The nowcast is a model output, not the settlement value: the market
+    resolves on the BLS release, and the rule only trades when the nowcast clears the strike by
+    MARGIN_BY_SERIES points and the favoured side is still quoted at or below 90c.
+    """
+    nowcast = (ctx.get("nowcast") or {}).get(m.get("series_ticker"))
+    floor = m.get("floor_strike")
+    margin = MARGIN_BY_SERIES.get(m.get("series_ticker"))
+    if not nowcast or floor is None or margin is None:
+        return None
+    label = nowcast.get("label")
+    title = m.get("title") or ""
+    if label and label not in title:
+        return None  # the market is for a different month than the nowcast row
+    if not re.search(r"Consumer Price Index", m.get("rules_primary") or "", re.IGNORECASE):
+        return None  # the official rule text does not confirm a CPI-strike market
+    value = nowcast.get("value")
+    if value is None:
+        return None
+    above = value >= floor + margin
+    below = value <= floor - margin
+    if not (above or below):
+        return None
+    side = "yes" if above else "no"
+    ask, bid = m.get(f"{side}_ask"), m.get(f"{side}_bid")
+    if ask is None or bid is None or not 0 < ask <= 0.90 or (ask - bid) > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    return {"side": side, "price": ask, "limit": 0.90,
+            "reason": f"Cleveland Fed nowcast {nowcast.get('metric')} for {label} = {value:.2f}% "
+                      f"({nowcast.get('section')}, published {nowcast.get('updated')}) vs strike "
+                      f"{floor:g}% and margin {margin:g}pp -> {side.upper()} at ask {ask:.2f} "
+                      f"(spread {ask - bid:.2f}); settlement stays the official BLS print"}
+
+
+def entry_leap_mapper(m, ctx):
+    """Buy the side of an index range market that the last published official close agrees with.
+
+    Signal source: FRED (Federal Reserve Bank of St. Louis) daily CSV for the same index Kalshi's
+    series tracks (SP500 for KXINX, NASDAQ100 for KXNASDAQ100; both series are listed as
+    "S&P 500 range" / "Nasdaq range" in data/universe/series-catalog.json).  FRED publishes the
+    close after the fact, so the rule is a persistence test - the most recent published close
+    (normally the prior business day) against today's posted range - never a forecast, and a
+    market whose close has passed or whose strikes are missing is skipped.
+    """
+    series = m.get("series_ticker")
+    signal = (ctx.get("index") or {}).get(series)
+    floor, cap = m.get("floor_strike"), m.get("cap_strike")
+    if not signal or floor is None or cap is None or floor > cap:
+        return None
+    latest = (signal.get("latest") or {}).get("value")
+    if latest is None:
+        return None
+    inside = floor <= latest <= cap
+    side = "yes" if inside else "no"
+    ask, bid = m.get(f"{side}_ask"), m.get(f"{side}_bid")
+    if ask is None or bid is None or not 0 < ask <= 0.90 or (ask - bid) > MAX_FAVOURITE_SPREAD + 1e-9:
+        return None
+    if (m.get("volume_24h") or 0) < 10_000:
+        return None
+    where = "inside" if inside else "outside"
+    return {"side": side, "price": ask, "limit": 0.90,
+            "reason": f"FRED {signal.get('seriesId')} close {(signal.get('latest') or {}).get('date')} = "
+                      f"{latest:,.2f} is {where} this market's range [{floor:g}, {cap:g}] -> {side.upper()} "
+                      f"at ask {ask:.2f} (spread {ask - bid:.2f}); the index value is a signal, the "
+                      f"settlement value is Kalshi's official result"}
+
+
 # ----------------------------------------------------------------------------- exit rules
 def exit_hold(position, quotes, ctx):
     return None
@@ -768,21 +906,72 @@ STRATEGIES = [
      "universe": "tracked", "entry": entry_longshot_fader, "exit": exit_hold, "fraction": 0.5,
      "rule": "When one side is a 5-20c longshot on a market with volume >= 5,000, buy the opposite 80-95c side (displayed spread <= 5c) and hold to settlement.",
      "why": "The documented bias: longshots are over-bought. Loses the full stake on the occasional upset."},
+    # --- personas added 2026-09-22 from the requested MasterSite projects and official feeds ---
+    {"id": "injury-fade", "username": "InjuryFade", "name": "Late Quarterback Downgrade Fade", "group": "injury",
+     "source": {"kind": "MasterSite project + official feed",
+                "label": "NFLInjuryReport (nfl.com primary, ESPN injuries JSON with per-row dates) -> Kalshi KXNFLGAME",
+                "url": "https://buffedlizard55-lab.github.io/NFLInjuryReport/"},
+     "universe": ["KXNFLGAME"], "entry": entry_injury_fade, "exit": exit_hold, "fraction": 0.5,
+     "needs_injuries": True,
+     "rule": "On an NFL game market, buy the YES side (the team the market names) at <= 60c with a displayed "
+             "spread <= 5c and 24h volume >= 5,000 when the ESPN injuries feed shows the OPPONENT with a "
+             "quarterback carrying a hard designation (Out/Doubtful/IR/Suspended) dated within the last 72 "
+             "hours; hold to settlement.",
+     "why": "Pre-game prices are supposed to absorb injury news, and the late quarterback downgrade is the "
+            "one input that moves NFL markets most. The ESPN row carries its own observation timestamp, so "
+            "the test is whether the market has already priced the news when the cheaper side is still "
+            "available. ESPN is a signal, never the settlement: Kalshi's official result decides the payoff."},
+    {"id": "tipoff-triage", "username": "TipoffTriage", "name": "NBA Depletion Count", "group": "nba",
+     "source": {"kind": "MasterSite project + official feed",
+                "label": "NBAInjuryReport (30-team monitor) + the ESPN league injuries JSON it reads -> Kalshi KXNBAGAME",
+                "url": "https://buffedlizard55-lab.github.io/NBAInjuryReport/"},
+     "universe": ["KXNBAGAME"], "entry": entry_tipoff_triage, "exit": exit_hold, "fraction": 0.5,
+     "needs_injuries": True,
+     "rule": "On an NBA game market, buy the YES side at <= 55c with a displayed spread <= 5c and 24h volume "
+             ">= 10,000 when the ESPN injuries feed lists three or more hard designations (Out/Doubtful/IR/"
+             "Suspended) dated within the last 7 days for the OPPONENT team; hold to settlement.",
+     "why": "The count, not the name: NBA availability is a rotation problem, and three or more hard "
+            "designations on one side is a measurable depletion state. This persona was gated until now "
+            "because no machine-readable official NBA feed exists; ESPN is not official confirmation "
+            "(NBAInjuryReport measures 27 of 30 team blocks published), so the rule trades only when this "
+            "market's own side is still an underdog-or-even and lets Kalshi's official result settle it."},
+    {"id": "nowcast-nudge", "username": "NowcastNudge", "name": "Cleveland Fed Nowcast Nudge", "group": "macro",
+     "source": {"kind": "official feed",
+                "label": "Federal Reserve Bank of Cleveland Inflation Nowcasting (daily, official) -> Kalshi KXCPI/KXCPIYOY",
+                "url": "https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting"},
+     "universe": SERIES_ECON, "entry": entry_nowcast_nudge, "exit": exit_hold, "fraction": 0.5,
+     "needs_nowcast": True,
+     "rule": "On a KXCPI/KXCPIYOY market whose title names the same month as the nowcast row and whose "
+             "rules_primary defines a CPI percent-change strike, buy the side the official nowcast favours "
+             "(nowcast at least 0.10pp/0.25pp away from the strike for the monthly/yearly series) when that "
+             "side's ask is <= 90c with a displayed spread <= 5c; hold to settlement.",
+     "why": "The Cleveland Fed nowcast is a published, dated, official model estimate of the same quantity "
+            "the market pays on (monthly or year-over-year CPI percent change, BLS being the series' named "
+            "settlement source). It is deliberately compared within a margin: the nowcast is a model, and "
+            "the market resolves on the BLS print, so the edge has to survive both the margin and the fees."},
+    {"id": "leap-mapper", "username": "LeapMapper", "name": "Index Range Persistence (The Leap map)", "group": "contest",
+     "source": {"kind": "MasterSite project + official feed",
+                "label": "TradingViewTheLeap (contest research layer) -> Kalshi KXINX/KXNASDAQ100 index range markets, signal from FRED index closes",
+                "url": "https://buffedlizard55-lab.github.io/TradingViewTheLeap/"},
+     "universe": SERIES_INDEX, "entry": entry_leap_mapper, "exit": exit_hold, "fraction": 0.5,
+     "needs_index": True,
+     "rule": "On a KXINX/KXNASDAQ100 range market (both strikes published) with 24h volume >= 10,000, buy the "
+             "side the last published official index close agrees with - YES when that close is inside the "
+             "posted range, NO when it is outside - at an ask <= 90c with a displayed spread <= 5c; hold to "
+             "settlement.",
+     "why": "Recreated from the contest-style index play the MasterSite TheLeap project researches, mapped to "
+            "the Kalshi products that actually exist (the contest itself trades futures). The signal is the "
+            "official FRED close, published after the fact, so this is a persistence test on the last close, "
+            "not a forecast; Kalshi's official result settles it."},
 ]
 
 GATED = [
     {"id": "sec-insider", "username": "Form4Flash", "name": "SEC Form 4 Catalyst", "group": "insider",
      "source": {"kind": "MasterSite project", "label": "Insider-trades - SEC Form 4 Dashboard", "url": "https://buffedlizard55-lab.github.io/Insider-trades/"},
      "blocker": "No Kalshi contract settles on a Form 4 filing, and SEC EDGAR hosts were measured unreachable from shared GitHub runner IPs by the sibling StockPaperSim (its IR-76/IR-77). Needs a company-event mapping plus a reachable point-in-time filing archive."},
-    {"id": "leap-rotation", "username": "LeapMapper", "name": "The Leap Research Map", "group": "contest",
-     "source": {"kind": "MasterSite project", "label": "TradingViewTheLeap - contest research layer", "url": "https://buffedlizard55-lab.github.io/TradingViewTheLeap/"},
-     "blocker": "The Leap universe is futures (AMP); the Kalshi analogues are index/commodity range series that the universe job must first enumerate and verify (fee type, tick grid) before a rule can be stated."},
     {"id": "spread-smith", "username": "SpreadSmith", "name": "Market-Making Quote Plan", "group": "maker",
      "source": {"kind": "academic", "label": "Optimal market making in prediction markets (stochastic control)", "url": "https://pith.science/paper/2607.17991"},
      "blocker": "Still no fake fills: a REST snapshot cannot prove FIFO queue position, so a touch print is only 'queue-uncertain'. The new tape-validated maker model (scripts/maker_model.py -> forward/execution/maker-model.json) posts each plan one cent inside the touch and later matches it against GET /markets/trades - a print strictly through the posted price proves the resting order would have filled (price priority), and only that state counts. Quote plans appear as upcoming trades; projected PnL is before unverified maker fees (IRR-41)."},
-    {"id": "nba-injury-gate", "username": "TipoffTriage", "name": "NBA Official Report Gate", "group": "nba",
-     "source": {"kind": "MasterSite project", "label": "NBA Injury Watch - 30-Team Injury Monitor", "url": "https://buffedlizard55-lab.github.io/NBAInjuryReport/"},
-     "blocker": "No machine-readable official NBA injury feed exists (the project's own finding); ESPN rows are not official confirmation. GridironPulse trades the KXNBAGAME price instead."},
 ]
 
 STRATEGY_BY_ID = {s["id"]: s for s in STRATEGIES}

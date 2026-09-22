@@ -51,6 +51,15 @@ def check(name, condition, detail="", quiet=False):
         print(f"{'PASS' if condition else 'FAIL'}  {name} {detail}")
 
 
+def read_jsonl(path):
+    rows = []
+    with open(path) as fh:
+        for line in fh:
+            if line.strip():
+                rows.append(json.loads(line))
+    return rows
+
+
 def read_csv(path):
     rows = []
     with open(os.path.join(BASE, path), newline="") as fh:
@@ -234,7 +243,25 @@ def verify_maker_model(fwd):
         summary = json.load(fh)
     rows = summary.get("rows", [])
     check("maker.model_is_labelled", "MODELLED" in str(summary.get("modelLabel", "")), quiet=True)
-    check("maker.fees_flagged_unverified", summary.get("makerFeesUnverified") is True, quiet=True)
+    if summary.get("makerFeesModelled") is not True:
+        # The committed artifact was written before the maker-fee model (IRR-41) landed.  It is
+        # still labelled as modelled evidence - but with the weaker "unverified fees" label - and
+        # the next live cycle rewrites it with the modelled fields, so the strict checks below are
+        # skipped (with a NOTE) only for that older annotation.
+        check("maker.older_artifact_still_labelled",
+              summary.get("makerFeesUnverified") is True, quiet=True)
+        print("NOTE  maker model artifact predates the IRR-41 fee model; the next live cycle "
+              "rewrites it with projectedMakerFees / projectedPnlNetOfMakerFees")
+    else:
+        check("maker.fees_are_modelled_with_a_source",
+              "kalshi-fee-schedule" in str(summary.get("makerFeeSource", "")), quiet=True)
+        check("maker.fee_fields_present",
+              summary.get("projectedMakerFees") is not None
+              and summary.get("projectedPnlNetOfMakerFees") is not None, quiet=True)
+        check("maker.gross_minus_fees_equals_net",
+              summary.get("projectedPnlBeforeMakerFees") is None
+              or abs((summary["projectedPnlBeforeMakerFees"] - (summary.get("projectedMakerFees") or 0.0))
+                     - summary["projectedPnlNetOfMakerFees"]) < 1e-6, quiet=True)
     check("maker.proven_fills_have_tape_proof",
           all(r.get("fillEvidence") == "tape_traded_through" for r in rows
               if r.get("status") == "compared" and (r.get("filledContracts") or 0) > 0), quiet=True)
@@ -250,6 +277,61 @@ def verify_maker_model(fwd):
           f"+ none {summary.get('noFillEvidence')} vs compared {summary.get('compared')}", quiet=True)
     print(f"INFO  maker model: {summary.get('plans', 0)} quote plan(s), {summary.get('tapeTradedThrough', 0)} "
           f"tape-proven (through-price), {summary.get('queueUncertain', 0)} queue-uncertain (MODELLED)")
+
+
+OFFICIAL_SIGNAL_FILES = {
+    "signals/espn-injuries.jsonl": ("ESPN league injuries (public JSON)",
+                                    "https://site.api.espn.com/apis/site/v2/sports/"),
+    "signals/cleveland-fed-nowcast.jsonl": ("Cleveland Fed Inflation Nowcasting",
+                                            "https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting"),
+    "signals/fred-index.jsonl": ("FRED (Federal Reserve Bank of St. Louis)",
+                                 "https://fred.stlouisfed.org/graph/fredgraph.csv?id="),
+}
+
+
+def verify_forward_signals(fwd):
+    """The official-signal archives added 2026-09-22 and the per-cycle source ledger.
+
+    Each archived row must name its own official URL and carry a 64-hex SHA-256 of the verbatim
+    response; the ledger must account for every source with a read / not_needed / failed status and
+    must not contain a failed read that the cycle did not also record as a signal error.
+    """
+    seen = 0
+    for rel, (label, url_prefix) in OFFICIAL_SIGNAL_FILES.items():
+        path = os.path.join(fwd, rel)
+        if not os.path.exists(path):
+            print(f"SKIP  {label} archive (no cycle has read it yet)")
+            continue
+        rows = read_jsonl(path)
+        seen += len(rows)
+        check(f"signals.{os.path.basename(rel)}.rows_present", bool(rows), quiet=True)
+        check(f"signals.{os.path.basename(rel)}.urls_are_official",
+              all(str(r.get("sourceUrl", "")).startswith(url_prefix) for r in rows), quiet=True)
+        check(f"signals.{os.path.basename(rel)}.sha256_recorded",
+              all(len(str(r.get("sha256", ""))) == 64 for r in rows), quiet=True)
+        check(f"signals.{os.path.basename(rel)}.bytes_recorded",
+              all(int(r.get("bytes") or 0) > 0 for r in rows), quiet=True)
+    status_path = os.path.join(fwd, "sources", "status.json")
+    if not os.path.exists(status_path):
+        print("SKIP  source status ledger (no cycle has written it yet)")
+        return
+    with open(status_path) as fh:
+        status = json.load(fh)
+    rows = status.get("sources") or []
+    check("sources.status_schema", status.get("schemaVersion") == 1 and bool(rows), quiet=True)
+    check("sources.status_values_known",
+          all(r.get("status") in {"read", "not_needed", "failed"} for r in rows), quiet=True)
+    check("sources.status_rows_have_urls", all(str(r.get("url", "")).startswith("http") for r in rows), quiet=True)
+    check("sources.read_rows_bind_a_hash",
+          all(len(str(r.get("sha256"))) == 64 for r in rows
+              if r.get("status") == "read" and r.get("sha256")), quiet=True)
+    check("sources.kalshi_api_was_read",
+          any(r.get("source") == "Kalshi Trade API v2" for r in rows), quiet=True)
+    if any(r.get("status") == "failed" for r in rows):
+        check("sources.failed_reads_are_reported",
+              bool(status.get("failed")), quiet=True)
+    print(f"INFO  official signal archive rows: {seen}; source ledger rows: {len(rows)} "
+          f"({sum(1 for r in rows if r.get('status') == 'read')} read)")
 
 
 def verify_trades_review(fwd):
@@ -387,6 +469,7 @@ def verify_forward_ledger(season_dir: str | None = None):
     verify_archive_backtest(os.path.join(fwd, ".."))
     verify_execution_realism(fwd)
     verify_maker_model(fwd)
+    verify_forward_signals(fwd)
     verify_trades_review(fwd)
     verify_season_audit(os.path.join(fwd, ".."))
     verify_settlement_backfill(os.path.join(fwd, ".."))

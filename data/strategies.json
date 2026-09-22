@@ -362,14 +362,14 @@
   {
     "id": "nba-injury",
     "username": "TipoffTriage",
-    "name": "NBA Report Gate",
-    "mode": "source-gated",
+    "name": "NBA Depletion Count",
+    "mode": "forward-desk",
     "tag": "nba",
-    "status": "Kept gated: no machine-readable official NBA injury feed exists (project finding). GridironPulse trades the KXNBAGAME price instead.",
-    "rule": "Do not trade from a third-party injury post; require a dated official NBA report and a verified matching contract.",
-    "why": "The MasterSite audit explicitly flags the absence of a machine-readable official NBA live injury feed. This strategy is visible for research but cannot generate a verified trade here.",
-    "evidence": "Official NBA report if available + Kalshi terms + live Kalshi book",
-    "signal": "blocked"
+    "status": "eligible",
+    "rule": "On an NBA game market, buy the YES side at <= 55c with a displayed spread <= 5c and 24h volume >= 10,000 when the ESPN injuries feed lists three or more hard designations (Out/Doubtful/IR/Suspended) dated within the last 7 days for the OPPONENT team; hold to settlement.",
+    "why": "Counts availability rather than naming players. ESPN is not official NBA confirmation, so the rule only trades when this market's own side is still an underdog-or-even, and Kalshi's official result settles the position.",
+    "evidence": "ESPN league injuries JSON (dated rows) + Kalshi market quote and order book",
+    "signal": "espn_injuries"
   },
   {
     "id": "ncaascore",
@@ -434,13 +434,37 @@
   {
     "id": "leap-rotation",
     "username": "LeapMapper",
-    "name": "The Leap Research Map",
-    "mode": "source-gated",
+    "name": "Index Range Persistence (The Leap map)",
+    "mode": "forward-desk",
     "tag": "contest",
-    "status": "Kept gated: the Kalshi index/commodity range series must be enumerated from the series catalog (1,040 Financials rows) and their fee/tick rules verified before a rule is stated.",
-    "rule": "Use The Leap's official rules and instrument universe to form a hypothesis, never as a substitute for a Kalshi market or verified price.",
-    "why": "The Leap is a separate paper-trading contest. Its results and rules are useful research context, but they do not prove a Kalshi strategy return.",
-    "evidence": "TradingView/AMP Futures contest terms + Kalshi data if a contract mapping exists",
-    "signal": "blocked"
+    "status": "eligible",
+    "rule": "On a KXINX/KXNASDAQ100 range market (both strikes published) with 24h volume >= 10,000, buy the side the last published official index close agrees with - YES when that close is inside the posted range, NO when it is outside - at an ask <= 90c with a displayed spread <= 5c; hold to settlement.",
+    "why": "The MasterSite TradingViewTheLeap project researches contest-style index trading; the contest itself trades futures, so the hypothesis is mapped to the Kalshi index products that exist. The signal is the official FRED close (published after the fact), which makes this a persistence test on the last close rather than a forecast.",
+    "evidence": "FRED CSV index close + Kalshi market strikes, quote and order book",
+    "signal": "fred_index"
+  },
+  {
+    "id": "injury-fade",
+    "username": "InjuryFade",
+    "name": "Late Quarterback Downgrade Fade",
+    "mode": "forward-desk",
+    "tag": "injury",
+    "status": "eligible",
+    "rule": "On an NFL game market, buy the YES side (the team the market names) at <= 60c with a displayed spread <= 5c and 24h volume >= 5,000 when the ESPN injuries feed shows the OPPONENT with a quarterback carrying a hard designation (Out/Doubtful/IR/Suspended) dated within the last 72 hours; hold to settlement.",
+    "why": "Tests whether pre-game NFL prices have already absorbed a late quarterback downgrade. The ESPN row carries its own observation date, the Kalshi price is the execution evidence, and the payoff is Kalshi's official result.",
+    "evidence": "ESPN league injuries JSON (dated rows) + Kalshi market quote and order book",
+    "signal": "espn_injuries"
+  },
+  {
+    "id": "nowcast-nudge",
+    "username": "NowcastNudge",
+    "name": "Cleveland Fed Nowcast Nudge",
+    "mode": "forward-desk",
+    "tag": "macro",
+    "status": "eligible",
+    "rule": "On a KXCPI/KXCPIYOY market whose title names the same month as the nowcast row and whose rules_primary defines a CPI percent-change strike, buy the side the official Cleveland Fed nowcast favours (at least 0.10pp away from the strike for the monthly series, 0.25pp for the yearly series) when that side's ask is <= 90c with a displayed spread <= 5c; hold to settlement.",
+    "why": "The nowcast is an official, dated, published model estimate of the same quantity the market pays on; the margin and the fee have to be cleared for the trade to work, and the settlement is the BLS print named in the series record.",
+    "evidence": "Cleveland Fed Inflation Nowcasting page (verbatim HTML + hash) + Kalshi market quote and order book",
+    "signal": "cleveland_fed_nowcast"
   }
 ]
