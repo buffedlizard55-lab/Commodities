@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timezone
 
@@ -222,6 +223,94 @@ class NowcastTests(unittest.TestCase):
         self.assertEqual(adapter.monthly("2026:Q3", "quarterly", "cpi")["value"], 1.44)
         # the note row is never mistaken for a month
         self.assertIsNone(adapter.monthly("Note: If the cell is blank", "month-over-month", "cpi"))
+
+    def test_a_quarterly_caption_near_a_monthly_table_never_files_it_as_quarterly(self):
+        """Regression for the runner's 2026-09-22T23:21Z read: the quarterly string sat nearest the
+        first (month-over-month) table and the old parser filed that table as the quarterly section,
+        so the quarterly table was dropped and the MoM section vanished."""
+        filler = "<p>" + ("chart legend " * 40) + "</p>"
+        html = ("<html><body>"
+                "<p>Quarterly annualized percent change</p>" + filler +
+                "<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>September 2026</td><td>0.43</td><td>0.20</td><td>0.40</td><td>0.28</td>"
+                "<td>09/22</td></tr></table>"
+                "<p>Inflation, month-over-month percent change</p>"
+                "<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>September 2026</td><td>3.50</td><td>2.39</td><td>3.93</td><td>3.49</td>"
+                "<td>09/22</td></tr></table>"
+                "<p>Inflation, year-over-year percent change</p>"
+                "<table><tr><th>Quarter</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>2026:Q3</td><td>1.44</td><td>2.16</td><td>2.50</td><td>3.00</td>"
+                "<td>09/22</td></tr></table>"
+                "<p>Quarterly annualized percent change</p></body></html>")
+        parsed = SA.parse_nowcast_html(html)
+        self.assertTrue(parsed["diagnostics"]["complete"], parsed["diagnostics"])
+        self.assertEqual(sorted(parsed["tables"]), ["month-over-month", "quarterly", "year-over-year"])
+        self.assertEqual(parsed["tables"]["month-over-month"][0][1], "0.43")
+        self.assertEqual(parsed["tables"]["year-over-year"][0][1], "3.50")
+        self.assertEqual(parsed["tables"]["quarterly"][0][1], "1.44")
+
+    def test_a_marker_inside_a_tag_is_not_a_caption(self):
+        """A link or id named after a section must not steer the classification."""
+        html = ("<html><body>"
+                '<p><a href="#month-over-month" id="month-over-month">Jump to the monthly table</a></p>'
+                "<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>September 2026</td><td>3.50</td><td>2.39</td><td>3.93</td><td>3.49</td>"
+                "<td>09/22</td></tr></table>"
+                "<p>Inflation, year-over-year percent change</p></body></html>")
+        parsed = SA.parse_nowcast_html(html)
+        self.assertEqual(sorted(parsed["tables"]), ["year-over-year"])
+        self.assertEqual(parsed["tables"]["year-over-year"][0][1], "3.50")
+        self.assertFalse(parsed["diagnostics"]["complete"])
+        self.assertIn("month-over-month", parsed["diagnostics"]["missing"])
+
+    def test_a_caption_is_claimed_once_by_the_closest_table(self):
+        html = ("<html><body>"
+                "<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>September 2026</td><td>0.43</td><td>0.20</td><td>0.40</td><td>0.28</td>"
+                "<td>09/22</td></tr></table>"
+                + "<p>" + ("filler " * 800) + "</p>" +
+                "<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>September 2026</td><td>3.50</td><td>2.39</td><td>3.93</td><td>3.49</td>"
+                "<td>09/22</td></tr></table>"
+                "<p>Inflation, month-over-month percent change</p></body></html>")
+        parsed = SA.parse_nowcast_html(html)
+        self.assertEqual(sorted(parsed["tables"]), ["month-over-month"])
+        self.assertEqual(parsed["tables"]["month-over-month"][0][1], "3.50")
+        self.assertFalse(parsed["diagnostics"]["complete"])
+        self.assertTrue(parsed["diagnostics"]["skipped"])
+
+    def test_a_partial_parse_records_why_and_keeps_the_page_for_evidence(self):
+        html = ("<html><body>"
+                "<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th>"
+                "<th>Updated</th></tr>"
+                "<tr><td>September 2026</td><td>0.43</td><td>0.20</td><td>0.40</td><td>0.28</td>"
+                "<td>09/22</td></tr></table>"
+                "<p>Inflation, month-over-month percent change</p></body></html>")
+        raw = html.encode()
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = SA.ClevelandFedNowcast(fetcher=lambda url: (html, raw), raw_dir=tmp)
+            self.assertIsNotNone(adapter.fetch())
+            record = adapter.records[-1]
+            self.assertTrue(record["partial"])
+            self.assertEqual(record["missingSections"], ["year-over-year", "quarterly"])
+            self.assertTrue(record["rawPath"].endswith(".html"))
+            self.assertIn("nowcast-", record["rawPath"])
+            kept = os.path.join(tmp, os.path.basename(record["rawPath"]))
+            self.assertTrue(os.path.exists(kept))
+            with open(kept, "rb") as handle:
+                self.assertEqual(handle.read(), raw)
+            self.assertTrue(adapter.errors and "sections missing" in adapter.errors[-1])
+            # the store stays bounded: at most two dumps are kept
+            adapter.keep_raw_html(b"<html>second</html>", "b" * 64)
+            adapter.keep_raw_html(b"<html>third</html>", "c" * 64)
+            self.assertLessEqual(len([n for n in os.listdir(tmp) if n.endswith(".html")]), 2)
 
     def test_fetch_failure_records_an_error_and_abstains(self):
         def broken(url):

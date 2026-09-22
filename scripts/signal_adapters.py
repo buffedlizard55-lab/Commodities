@@ -38,6 +38,7 @@ Verified endpoint references (all read 2026-09-22):
 """
 from __future__ import annotations
 
+import os
 import re
 import urllib.parse
 import urllib.request
@@ -237,55 +238,126 @@ def _strip_tags(fragment: str) -> str:
 NOWCAST_SECTION_MARKERS = (("month-over-month", "month-over-month"),
                            ("year-over-year", "year-over-year"),
                            ("quarterly", "quarterly annualized"))
+# A monthly table can only ever be one of these two; "quarterly" is decided by a table's own rows.
+MONTHLY_SECTIONS = ("month-over-month", "year-over-year")
 MONTH_ROW = re.compile(r"^(" + "|".join(MONTH_NAMES) + r")\s+(\d{4})$")
 QUARTER_ROW = re.compile(r"^(\d{4}):Q([1-4])$")
+# A caption farther than this from a table is not treated as that table's caption.  The live page
+# keeps them adjacent (a few hundred characters); the reach only guards against a distant or
+# repeated string elsewhere on the page.
+NOWCAST_CAPTION_REACH = 4000
 
 
-def _nearest_marker(text: str, last: bool) -> str | None:
-    """The section a caption text names: the LAST marker in ``text`` (or the first, if asked)."""
-    best = None
+def _html_text_map(html: str):
+    """The page's visible text plus, for every character, its offset in the original HTML.
+
+    Captions are looked up in this text rather than in the raw markup, so a marker hidden inside a
+    tag (an ``id``, an ``href="#month-over-month"``, a script constant) can never be mistaken for a
+    printed caption.
+    """
+    text: list[str] = []
+    offsets: list[int] = []
+    in_tag = False
+    for index, char in enumerate(html):
+        if char == "<":
+            in_tag = True
+        elif char == ">":
+            in_tag = False
+        elif not in_tag:
+            text.append(char)
+            offsets.append(index)
+    return "".join(text), offsets
+
+
+def _caption_positions(html: str) -> list[tuple[int, str]]:
+    """Every printed caption on the page as ``(html_offset, section)``, in document order."""
+    text, offsets = _html_text_map(html)
+    lowered = text.lower()
+    found: list[tuple[int, str]] = []
     for label, marker in NOWCAST_SECTION_MARKERS:
-        index = text.rfind(marker) if last else text.find(marker)
-        if index >= 0 and (best is None or (index > best[0] if last else index < best[0])):
-            best = (index, label)
-    return best[1] if best else None
+        index = lowered.find(marker)
+        while index >= 0:
+            found.append((offsets[index], label))
+            index = lowered.find(marker, index + 1)
+    return sorted(found)
+
+
+def _pair_monthly(tables: list[dict], captions: list[tuple[int, str]]) -> list[tuple[dict, tuple]]:
+    """Pair monthly tables with monthly captions, in document order and cheapest first.
+
+    The page prints its month-over-month caption before its year-over-year caption and its two
+    monthly tables in that same order, whether the captions sit above or below the tables, so a
+    pairing may not cross: a caption can only belong to a table that comes after the previous
+    pair's caption and table.  The cheapest non-crossing pairing wins, a pair farther apart than
+    ``NOWCAST_CAPTION_REACH`` costs more than leaving both unpaired, so it is dropped - which is how
+    an extra mention of a section name in the page's prose cannot shift a real table onto the wrong
+    caption.
+    """
+    monthly = [c for c in captions if c[1] in MONTHLY_SECTIONS]
+    n, m = len(tables), len(monthly)
+    skip = NOWCAST_CAPTION_REACH + 1  # dearer than any acceptable pair, cheaper than no pairing
+
+    def gap(table: dict, position: int) -> int:
+        return min(abs(position - table["start"]), abs(position - table["end"]))
+
+    cost = [[gap(tables[i], pos) for pos, _label in monthly] for i in range(n)]
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    take = [[None] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        dp[i][0] = i * skip
+        take[i][0] = "skip-table"
+    for j in range(1, m + 1):
+        dp[0][j] = j * skip
+        take[0][j] = "skip-caption"
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            best, action = dp[i - 1][j] + skip, "skip-table"
+            if dp[i][j - 1] + skip < best:
+                best, action = dp[i][j - 1] + skip, "skip-caption"
+            paired = dp[i - 1][j - 1] + cost[i - 1][j - 1]
+            if paired < best:
+                best, action = paired, "pair"
+            dp[i][j], take[i][j] = best, action
+    pairs: list[tuple[dict, tuple]] = []
+    i, j = n, m
+    while i > 0 and j > 0:
+        action = take[i][j]
+        if action == "pair":
+            pairs.append((tables[i - 1], monthly[j - 1]))
+            i, j = i - 1, j - 1
+        elif action == "skip-table":
+            i -= 1
+        else:
+            j -= 1
+    pairs.reverse()
+    return pairs
 
 
 def parse_nowcast_html(html: str) -> dict:
     """Extract the published nowcast tables from the official page HTML.
 
     Returns ``{"tables": {"month-over-month": [cells, ...], "year-over-year": [...],
-    "quarterly": [...]}}`` where each row is the table's own cell list (``["September 2026",
-    "0.43", "0.20", "0.40", "0.28", "09/22"]``).  Blank cells stay blank: the page prints
-    nothing when the official actual has already been released, so a missing number can never be
-    read as a value.
+    "quarterly": [...]}, "diagnostics": {...}}`` where each row is the table's own cell list
+    (``["September 2026", "0.43", "0.20", "0.40", "0.28", "09/22"]``).  Blank cells stay blank: the
+    page prints nothing when the official actual has already been released, so a missing number can
+    never be read as a value.
 
-    How a table is classified (verified against the live page on 2026-09-22):
-      * a table whose rows are quarter labels ("2026:Q3") is the quarterly table;
-      * a table of month labels is monthly, and the caption decides which monthly table it is -
-        the live page prints the caption *after* the table ("Inflation, month-over-month percent
-        change"), so the text following the table is checked first and the text before it second;
-      * when no caption is within reach the table's position is used: the page prints the
-        month-over-month table first and the year-over-year table second (IRR-45).
-    A table that still cannot be classified is skipped, never guessed; the first table to claim a
-    section wins, so a duplicate caption cannot overwrite real rows with other rows.
+    Classification (the page's caption placement has not been stable, so no rule assumes a side):
+      * a table whose own rows are quarter labels ("2026:Q3") is the quarterly section - decided by
+        content, never by a caption;
+      * a table of month labels is monthly and takes the nearest printed caption before or after it
+        ("Inflation, month-over-month percent change" / "... year-over-year percent change"), and a
+        caption is claimed at most once, nearest table first;
+      * a monthly table is never filed as the quarterly section, even if a "quarterly annualized"
+        string happens to sit nearer (the runner's 2026-09-22T23:21Z read did exactly that);
+      * a monthly table whose nearest caption is beyond ``NOWCAST_CAPTION_REACH``, or whose caption
+        was already claimed by a closer table, is skipped - never guessed.
+
+    ``diagnostics`` says what was seen and why anything was skipped, and ``complete`` is true only
+    when all three sections were found, so a partial read is visible instead of silently wrong.
     """
-    tables: dict[str, list[list[str]]] = {}
-    monthly_seen = 0
-    matches = list(re.finditer(r"<table[^>]*>(.*?)</table>", html, flags=re.S | re.I))
-    # Which side of its table does this page print captions on?  Judged once, from the first table
-    # (the live page captions below; the older markup captioned above), then applied consistently -
-    # mixing the two would let a neighbouring table's caption claim this table.
-    convention = None
-    if matches:
-        first = matches[0]
-        before = _strip_tags(html[max(0, first.start() - 400):first.start()]).lower()
-        after = _strip_tags(html[first.end():first.end() + 400]).lower()
-        if _nearest_marker(before, last=True):
-            convention = "above"
-        elif _nearest_marker(after, last=False):
-            convention = "below"
-    for match in matches:
+    candidates: list[dict] = []
+    for match in re.finditer(r"<table[^>]*>(.*?)</table>", html, flags=re.S | re.I):
         rows: list[list[str]] = []
         for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", match.group(1), flags=re.S | re.I):
             cells = [_strip_tags(c) for c in
@@ -295,26 +367,43 @@ def parse_nowcast_html(html: str) -> dict:
             head = (cells[0] or "").strip()
             if MONTH_ROW.match(head) or QUARTER_ROW.match(head):
                 rows.append(cells)
-        if not rows:
+        if rows:
+            candidates.append({"start": match.start(), "end": match.end(), "rows": rows,
+                               "quarterly": any(QUARTER_ROW.match((r[0] or "").strip())
+                                                for r in rows)})
+    tables: dict[str, list[list[str]]] = {}
+    skipped: list[str] = []
+    for candidate in candidates:
+        if candidate["quarterly"]:
+            if "quarterly" in tables:
+                skipped.append(f"quarter table at {candidate['start']}: quarterly already found")
+            else:
+                tables["quarterly"] = candidate["rows"]
+    monthly = [c for c in candidates if not c["quarterly"]]
+    captions = _caption_positions(html)
+    claims = []
+    for candidate, (position, label) in _pair_monthly(monthly, captions):
+        distance = min(abs(position - candidate["start"]), abs(position - candidate["end"]))
+        if distance > NOWCAST_CAPTION_REACH:
+            skipped.append(f"monthly table at {candidate['start']}: nearest caption "
+                           f"{distance} characters away")
             continue
-        if any(QUARTER_ROW.match((row[0] or "").strip()) for row in rows):
-            tables.setdefault("quarterly", rows)
+        claims.append((distance, candidate["start"], candidate, label))
+    for distance, position, candidate, label in sorted(claims, key=lambda item: (item[0], item[1])):
+        if label in tables:
+            skipped.append(f"monthly table at {candidate['start']}: caption {label} already taken")
             continue
-        following = _strip_tags(html[match.end():match.end() + 400]).lower()
-        preceding = _strip_tags(html[max(0, match.start() - 400):match.start()]).lower()
-        if convention == "above":
-            label = _nearest_marker(preceding, last=True) or _nearest_marker(following, last=False)
-        else:
-            label = _nearest_marker(following, last=False) or _nearest_marker(preceding, last=True)
-        if not label:
-            monthly_seen += 1
-            label = "month-over-month" if monthly_seen == 1 else "year-over-year" if monthly_seen == 2 else None
-        if not label:
-            continue
-        if label == "month-over-month":
-            monthly_seen += 1
-        tables.setdefault(label, rows)
-    return {"tables": tables}
+        tables[label] = candidate["rows"]
+    for candidate in monthly:
+        if not any(claim[2] is candidate for claim in claims):
+            skipped.append(f"monthly table at {candidate['start']}: no caption paired")
+    missing = [name for name in ("month-over-month", "year-over-year", "quarterly")
+               if name not in tables]
+    return {"tables": tables,
+            "diagnostics": {"tablesSeen": len(candidates), "monthlyTables": len(monthly),
+                            "quarterlyTables": sum(1 for c in candidates if c["quarterly"]),
+                            "captionPositions": len(captions), "skipped": skipped,
+                            "missing": missing, "complete": not missing}}
 
 
 def _cell_number(cell: str):
@@ -344,12 +433,17 @@ def nowcast_row(tables: dict, section: str, label: str) -> dict | None:
 class ClevelandFedNowcast:
     """Official Cleveland Fed inflation nowcast (monthly MoM / YoY and quarterly)."""
 
-    def __init__(self, fetcher=None, url: str = CLEVELAND_FED_NOWCAST_URL):
+    def __init__(self, fetcher=None, url: str = CLEVELAND_FED_NOWCAST_URL,
+                 raw_dir: str | None = None):
         self.fetcher = fetcher or self._fetch_bytes
         self.url = url
+        # When the parse cannot be trusted the verbatim page is kept under raw_dir (the ledger's
+        # raw evidence store) so the parser can be corrected from the bytes, not from memory.
+        self.raw_dir = raw_dir
         self.errors: list[str] = []
         self.records: list[dict] = []
         self.tables: dict = {}
+        self.diagnostics: dict = {}
         self.last_error: str | None = None
 
     @staticmethod
@@ -368,11 +462,13 @@ class ClevelandFedNowcast:
             self.errors.append(self.last_error)
             return None
         try:
-            tables = parse_nowcast_html(html)["tables"]
+            parsed = parse_nowcast_html(html)
         except Exception as error:  # noqa: BLE001
             self.last_error = f"cleveland-fed nowcast parse: {error}"
             self.errors.append(self.last_error)
             return None
+        tables = parsed["tables"]
+        self.diagnostics = parsed.get("diagnostics") or {}
         if not tables:
             self.last_error = "cleveland-fed nowcast parse: no published table rows matched"
             self.errors.append(self.last_error)
@@ -383,9 +479,45 @@ class ClevelandFedNowcast:
                   "at": iso(int(datetime.now(tz=timezone.utc).timestamp())),
                   "sections": {k: len(v) for k, v in tables.items()},
                   "rows": {k: [r[0] for r in v] for k, v in tables.items()}}
+        if not self.diagnostics.get("complete", True):
+            missing = ", ".join(self.diagnostics.get("missing") or []) or "unknown"
+            record["partial"] = True
+            record["missingSections"] = self.diagnostics.get("missing")
+            record["skippedTables"] = self.diagnostics.get("skipped")
+            self.last_error = f"cleveland-fed nowcast parse: sections missing ({missing})"
+            self.errors.append(self.last_error)
+            raw_path = self.keep_raw_html(raw, record["sha256"])
+            if raw_path:
+                record["rawPath"] = raw_path
         self.records.append(record)
         return {"tables": tables, "sourceUrl": self.url, "sha256": record["sha256"],
-                "at": record["at"], "bytes": record["bytes"]}
+                "at": record["at"], "bytes": record["bytes"],
+                "complete": bool(not record.get("partial"))}
+
+    def keep_raw_html(self, raw: bytes, digest: str) -> str | None:
+        """Keep the verbatim page for a parse that could not be trusted (at most two files).
+
+        The page is HTML-only, so when its tables cannot be filed with certainty the bytes are the
+        only way to correct the parser from evidence - and they are committed with the ledger.  The
+        oldest dump is rotated away so the store stays bounded.
+        """
+        if not self.raw_dir:
+            return None
+        try:
+            os.makedirs(self.raw_dir, exist_ok=True)
+            path = os.path.join(self.raw_dir, f"nowcast-{digest[:12]}.html")
+            if not os.path.exists(path):
+                with open(path, "wb") as handle:
+                    handle.write(raw)
+            dumps = sorted((os.path.join(self.raw_dir, name) for name in os.listdir(self.raw_dir)
+                            if name.startswith("nowcast-") and name.endswith(".html")),
+                           key=os.path.getmtime, reverse=True)
+            for stale in dumps[2:]:
+                os.remove(stale)
+            return f"{os.path.basename(os.path.normpath(self.raw_dir))}/{os.path.basename(path)}"
+        except OSError as error:
+            self.errors.append(f"cleveland-fed nowcast raw dump: {error}")
+            return None
 
     def monthly(self, month_label: str, section: str = "month-over-month",
                 metric: str = "cpi", band: tuple[float, float] | None = None) -> dict | None:

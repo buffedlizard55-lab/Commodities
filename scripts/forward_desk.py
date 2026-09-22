@@ -660,7 +660,10 @@ class Cycle:
         if not wanted:
             return
         kwargs = {"fetcher": self.text_fetcher} if self.text_fetcher else {}
-        adapter = SA.ClevelandFedNowcast(**kwargs)
+        # A parse that cannot file all three tables keeps the verbatim page under the season's raw
+        # evidence store, so the parser is corrected from the bytes rather than from memory.
+        raw_dir = os.path.join(os.path.dirname(FORWARD_DIR), "raw")
+        adapter = SA.ClevelandFedNowcast(raw_dir=raw_dir, **kwargs)
         if not adapter.fetch():
             self.signal_errors.extend(adapter.errors)
             return
