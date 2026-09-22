@@ -1,8 +1,8 @@
 # Trades review — every placed trade and every upcoming trade
 
-Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` and `data/season-2026/forward/intents/*.jsonl`. Regenerate with `python3 scripts/trades_review.py`.
+Generated `2026-09-22T21:36:56Z` from `data/season-2026/forward/trades.jsonl` and `data/season-2026/forward/intents/*.jsonl`. Regenerate with `python3 scripts/trades_review.py`.
 
-**Totals:** 287 fills · 4 exits · 180 settlements · 103 open · realized PnL $-44,197.02 · fees $6,681.0392 · slippage $7,487.9168 · 64 upcoming/wanted rows (statuses: not_confirmed_on_book=33, queued=17, skipped_position_cap=14) · 0 maker quote plans (modelled, not fills).
+**Totals:** 305 fills · 4 exits · 194 settlements · 107 open · realized PnL $-43,352.57 · fees $6,855.5015 · slippage $7,520.8678 · 70 upcoming/wanted rows (statuses: not_confirmed_on_book=35, queued=18, quote_plan=1, skipped_position_cap=16) · 1 maker quote plans (modelled, not fills).
 
 ## 1. Placed trades (verified fills against captured order books)
 
@@ -221,7 +221,7 @@ Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` an
 | 211 | @DepthDiver | KXNFLGAME-26SEP27SEAWAS-SEA | NO | 2,132.0 / 2,132.0 | $0.3000 · 2026-09-21T00:26:38Z · $0.3200 | **open** (marked each cycle) | OPEN | $31.3404 · $0.0000 | — | `c2e7e3505a37` | trades.jsonl:361 |
 | 212 | @BookRocket | KXNFLGAME-26SEP27BALDAL-DAL | YES | 3,763.0 / 3,763.0 | $0.4200 · 2026-09-22T04:32:09Z · $0.4500 | **open** (marked each cycle) | OPEN | $64.1667 · $0.0000 | — | `7466047cbe6a` | trades.jsonl:381 |
 | 213 | @BookRocket | KXHIGHLAX-26SEP22-B75.5 | YES | 2,036.0 / 2,036.0 | $0.3873 · 2026-09-22T04:32:09Z · $0.4000 | **open** (marked each cycle) | OPEN | $33.8213 · $76.0365 | — | `ca0f147a0c84` | trades.jsonl:382 |
-| 214 | @TickChaser | KXMLBGAME-26SEP221305TBNYYG1-NYY | NO | 3,451.0 / 3,451.0 | $0.4600 · 2026-09-22T04:32:09Z · $0.4800 | **open** (marked each cycle) | OPEN | $30.0030 · $0.0000 | — | `9d5506fbff63` | trades.jsonl:383 |
+| 214 | @TickChaser | KXMLBGAME-26SEP221305TBNYYG1-NYY | NO | 3,451.0 / 3,451.0 | $0.4600 · 2026-09-22T04:32:09Z · $0.4800 | $0.0000 · 2026-09-22T19:18:18Z · settlement | YES | $30.0030 · $0.0000 | $-1,617.4630 | `9d5506fbff63` | trades.jsonl:383 |
 | 215 | @TickChaser | KXMLBGAME-26SEP222005NYMTEX-TEX | YES | 1,374.0 / 1,374.0 | $0.5800 · 2026-09-22T04:32:10Z · $0.6000 | **open** (marked each cycle) | OPEN | $11.7148 · $0.0000 | — | `992b92e84cd2` | trades.jsonl:384 |
 | 216 | @TailSprint | KXHIGHMIA-26SEP21-B90.5 | YES | 3,359.0 / 3,359.0 | $0.0100 · 2026-09-22T04:32:10Z · $0.0600 | $0.0000 · 2026-09-22T11:11:18Z · settlement | NO | $2.3278 · $0.0000 | $-35.9178 | `e03918b61dcc` | trades.jsonl:385 |
 | 217 | @TailSprint | KXHIGHMIA-26SEP21-B88.5 | NO | 1,680.0 / 1,680.0 | $0.0100 · 2026-09-22T04:32:10Z · $0.0600 | $0.0000 · 2026-09-22T11:11:18Z · settlement | YES | $1.1643 · $0.0000 | $-17.9643 | `7793554ac33e` | trades.jsonl:386 |
@@ -241,7 +241,7 @@ Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` an
 | 231 | @LongshotFader | KXNFLGAME-26SEP27KCMIA-KC | YES | 6,972.0 / 6,972.0 | $0.8700 · 2026-09-22T04:32:14Z · $0.9200 | **open** (marked each cycle) | OPEN | $55.1974 · $0.0000 | — | `4bba0c07e6ff` | trades.jsonl:400 |
 | 232 | @LongshotFader | KXWNBAGAME-26SEP22CONNWSH-WSH | YES | 3,342.0 / 3,342.0 | $0.9100 · 2026-09-22T04:32:14Z · $0.9500 | **open** (marked each cycle) | OPEN | $19.1597 · $0.0000 | — | `ce8e4cdac609` | trades.jsonl:401 |
 | 233 | @DepthDiver | KXNFLGAME-26SEP27KCMIA-KC | NO | 2,262.0 / 2,262.0 | $0.1400 · 2026-09-22T04:32:14Z · $0.1600 | **open** (marked each cycle) | OPEN | $19.0642 · $0.0000 | — | `4bba0c07e6ff` | trades.jsonl:402 |
-| 234 | @DepthDiver | KXMLBGAME-26SEP221305TBNYYG1-NYY | NO | 358.0 / 358.0 | $0.4600 · 2026-09-22T04:32:09Z · $0.4800 | **open** (marked each cycle) | OPEN | $3.1125 · $0.0000 | — | `9d5506fbff63` | trades.jsonl:403 |
+| 234 | @DepthDiver | KXMLBGAME-26SEP221305TBNYYG1-NYY | NO | 358.0 / 358.0 | $0.4600 · 2026-09-22T04:32:09Z · $0.4800 | $0.0000 · 2026-09-22T19:18:18Z · settlement | YES | $3.1125 · $0.0000 | $-167.7925 | `9d5506fbff63` | trades.jsonl:403 |
 | 235 | @BookRocket | KXNFLGAME-26SEP24ATLGB-GB | NO | 1,351.0 / 1,351.0 | $0.2900 · 2026-09-22T09:27:07Z · $0.3400 | **open** (marked each cycle) | OPEN | $19.4720 · $0.0000 | — | `e5f6f1116458` | trades.jsonl:406 |
 | 236 | @BookRocket | KXBTC-26SEP2517-B89750 | YES | 3,858.0 / 3,858.0 | $0.0500 · 2026-09-22T09:27:07Z · $0.1000 | **open** (marked each cycle) | OPEN | $12.8279 · $0.0000 | — | `aacbb0070748` | trades.jsonl:407 |
 | 237 | @TickChaser | KXMLBGAME-26SEP222210SDLAD-LAD | NO | 827.0 / 827.0 | $0.4800 · 2026-09-22T09:27:07Z · $0.5000 | **open** (marked each cycle) | OPEN | $7.2247 · $0.0000 | — | `0e97289429a8` | trades.jsonl:408 |
@@ -257,7 +257,7 @@ Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` an
 | 247 | @DepthDiver | KXBTC15M-26SEP220530-30 | NO | 102.0 / 102.0 | $0.8100 · 2026-09-22T09:27:07Z · $0.8300 | $1.0000 · 2026-09-22T09:30:08Z · settlement | NO | $1.0989 · $0.0000 | $18.2811 | `ce1b0dd0c3ba` | trades.jsonl:418 |
 | 248 | @DepthDiver | KXWNBAGAME-26SEP22CONNWSH-WSH | NO | 440.0 / 440.0 | $0.0900 · 2026-09-22T09:27:07Z · $0.1100 | **open** (marked each cycle) | OPEN | $2.5226 · $0.0000 | — | `2de8623e0a56` | trades.jsonl:419 |
 | 249 | @BookRocket | KXNFLGAME-26SEP27KCMIA-KC | NO | 647.0 / 647.0 | $0.1500 · 2026-09-22T14:09:15Z · $0.2000 | **open** (marked each cycle) | OPEN | $5.7745 · $0.0000 | — | `65db7ad8bfde` | trades.jsonl:430 |
-| 250 | @TickChaser | KXMLBGAME-26SEP221305TBNYYG1-TB | YES | 211.0 / 211.0 | $0.4700 · 2026-09-22T14:09:16Z · $0.4900 | **open** (marked each cycle) | OPEN | $1.8397 · $0.0000 | — | `447e7a098ca8` | trades.jsonl:431 |
+| 250 | @TickChaser | KXMLBGAME-26SEP221305TBNYYG1-TB | YES | 211.0 / 211.0 | $0.4700 · 2026-09-22T14:09:16Z · $0.4900 | $0.0000 · 2026-09-22T19:18:18Z · settlement | NO | $1.8397 · $0.0000 | $-101.0097 | `447e7a098ca8` | trades.jsonl:431 |
 | 251 | @TickChaser | KXNFLGAME-26SEP24ATLGB-GB | NO | 166.0 / 166.0 | $0.2900 · 2026-09-22T14:09:16Z · $0.3100 | **open** (marked each cycle) | OPEN | $2.3926 · $0.0000 | — | `0c15a40aa034` | trades.jsonl:432 |
 | 252 | @TailSprint | KXWNBAGAME-26SEP22LALV-LV | NO | 47.0 / 47.0 | $0.0900 · 2026-09-22T14:09:16Z · $0.1400 | **open** (marked each cycle) | OPEN | $0.2695 · $0.0000 | — | `e509c5f2f595` | trades.jsonl:433 |
 | 253 | @TailSprint | KXWNBAGAME-26SEP22GSPDX-GS | NO | 19.0 / 19.0 | $0.1100 · 2026-09-22T14:09:17Z · $0.1500 | **open** (marked each cycle) | OPEN | $0.1303 · $0.0000 | — | `700a47454060` | trades.jsonl:434 |
@@ -273,14 +273,14 @@ Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` an
 | 263 | @PanicFader | KXBTC15M-26SEP221015-15 | NO | 901.0 / 901.0 | $0.9010 · 2026-09-22T14:09:20Z · $0.9210 | $0.0000 · 2026-09-22T14:15:08Z · settlement | YES | $5.6258 · $0.0000 | $-817.4268 | `114cc6b1254f` | trades.jsonl:444 |
 | 264 | @LongshotFader | KXWNBAGAME-26SEP22LALV-LV | YES | 1,414.0 / 1,414.0 | $0.9200 · 2026-09-22T14:09:16Z · $0.9500 | **open** (marked each cycle) | OPEN | $7.2850 · $0.0000 | — | `e509c5f2f595` | trades.jsonl:445 |
 | 265 | @LongshotFader | KXCPI-26SEP-T0.4 | YES | 721.0 / 721.0 | $0.9000 · 2026-09-22T14:09:20Z · $0.9500 | **open** (marked each cycle) | OPEN | $4.5423 · $0.0000 | — | `2c74907c4d89` | trades.jsonl:446 |
-| 266 | @DepthDiver | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 131.0 / 131.0 | $0.5400 · 2026-09-22T14:09:16Z · $0.5600 | **open** (marked each cycle) | OPEN | $1.1390 · $0.0000 | — | `447e7a098ca8` | trades.jsonl:447 |
+| 266 | @DepthDiver | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 131.0 / 131.0 | $0.5400 · 2026-09-22T14:09:16Z · $0.5600 | $1.0000 · 2026-09-22T19:18:18Z · settlement | NO | $1.1390 · $0.0000 | $59.1210 | `447e7a098ca8` | trades.jsonl:447 |
 | 267 | @DepthDiver | KXNFLGAME-26SEP24ATLGB-GB | NO | 118.0 / 118.0 | $0.2900 · 2026-09-22T14:09:16Z · $0.3100 | **open** (marked each cycle) | OPEN | $1.7008 · $0.0000 | — | `0c15a40aa034` | trades.jsonl:448 |
 | 268 | @TickChaser | KXWNBAGAME-26SEP22CONNWSH-WSH | YES | 27.0 / 27.0 | $0.9400 · 2026-09-22T18:14:33Z · $0.9600 | **open** (marked each cycle) | OPEN | $0.1066 · $0.0000 | — | `410de0326368` | trades.jsonl:452 |
 | 269 | @TickChaser | KXMLBGAME-26SEP222210SDLAD-SD | YES | 27.0 / 27.0 | $0.4600 · 2026-09-22T18:14:33Z · $0.4800 | **open** (marked each cycle) | OPEN | $0.2348 · $0.0000 | — | `b1d8a146b8be` | trades.jsonl:453 |
-| 270 | @TailSprint | KXBTC15M-26SEP221415-15 | YES | 42.0 / 42.0 | $0.0260 · 2026-09-22T18:14:34Z · $0.0760 | **open** (marked each cycle) | OPEN | $0.0745 · $0.0000 | — | `b3e944fc8b18` | trades.jsonl:454 |
-| 271 | @TailSprint | KXGOLD15M-26SEP221415-15 | NO | 550.0 / 550.0 | $0.0010 · 2026-09-22T18:14:34Z · $0.0510 | **open** (marked each cycle) | OPEN | $0.0385 · $0.0000 | — | `b623978fcc30` | trades.jsonl:455 |
-| 272 | @SpikeSurfer | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 4,114.0 / 4,114.0 | $0.8500 · 2026-09-22T18:14:34Z · $0.8700 | **open** (marked each cycle) | OPEN | $18.3588 · $0.0000 | — | `3896ffa5df61` | trades.jsonl:456 |
-| 273 | @SpikeSurfer | KXMLBGAME-26SEP221305TBNYYG1-NYY | YES | 2,080.0 / 2,080.0 | $0.8400 · 2026-09-22T18:14:34Z · $0.8600 | **open** (marked each cycle) | OPEN | $9.7844 · $0.0000 | — | `8f37a80afcdc` | trades.jsonl:457 |
+| 270 | @TailSprint | KXBTC15M-26SEP221415-15 | YES | 42.0 / 42.0 | $0.0260 · 2026-09-22T18:14:34Z · $0.0760 | $0.0000 · 2026-09-22T18:15:08Z · settlement | NO | $0.0745 · $0.0000 | $-1.1665 | `b3e944fc8b18` | trades.jsonl:454 |
+| 271 | @TailSprint | KXGOLD15M-26SEP221415-15 | NO | 550.0 / 550.0 | $0.0010 · 2026-09-22T18:14:34Z · $0.0510 | $0.0000 · 2026-09-22T18:15:18Z · settlement | YES | $0.0385 · $0.0000 | $-0.5885 | `b623978fcc30` | trades.jsonl:455 |
+| 272 | @SpikeSurfer | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 4,114.0 / 4,114.0 | $0.8500 · 2026-09-22T18:14:34Z · $0.8700 | $1.0000 · 2026-09-22T19:18:18Z · settlement | NO | $18.3588 · $0.0000 | $598.7412 | `3896ffa5df61` | trades.jsonl:456 |
+| 273 | @SpikeSurfer | KXMLBGAME-26SEP221305TBNYYG1-NYY | YES | 2,080.0 / 2,080.0 | $0.8400 · 2026-09-22T18:14:34Z · $0.8600 | $1.0000 · 2026-09-22T19:18:18Z · settlement | YES | $9.7844 · $0.0000 | $323.0156 | `8f37a80afcdc` | trades.jsonl:457 |
 | 274 | @SureThing | KXWNBAGAME-26SEP22CONNWSH-WSH | YES | 5,916.0 / 5,916.0 | $0.9400 · 2026-09-22T18:14:33Z · $0.9700 | **open** (marked each cycle) | OPEN | $23.3564 · $0.0000 | — | `410de0326368` | trades.jsonl:458 |
 | 275 | @WeatherCatalyst | KXHIGHLAX-26SEP22-B75.5 | YES | 828.12 / 15,230.0 (14,401.88 unfilled: depth/limit) | $0.2713 · 2026-09-22T18:14:34Z · $0.3000 | **open** (marked each cycle) | OPEN | $11.4596 · $17.6207 | — | `6b045a049aef` | trades.jsonl:459 |
 | 276 | @WeatherCatalyst | KXHIGHMIA-26SEP22-B87.5 | YES | 156.0 / 10,068.0 (9,912.0 unfilled: depth/limit) | $0.3984 · 2026-09-22T18:14:34Z · $0.4200 | **open** (marked each cycle) | OPEN | $2.6173 · $4.4299 | — | `9fe06601b9d5` | trades.jsonl:460 |
@@ -288,13 +288,31 @@ Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` an
 | 278 | @WeatherFader | KXHIGHPHIL-26SEP22-B68.5 | NO | 22.7 / 5,184.0 (5,161.3 unfilled: depth/limit) | $0.8824 · 2026-09-22T18:14:35Z · $0.9200 | **open** (marked each cycle) | OPEN | $0.1649 · $0.0550 | — | `a83f236d0b8b` | trades.jsonl:462 |
 | 279 | @HeatConfirm | KXHIGHMIA-26SEP22-B87.5 | YES | 156.0 / 12,580.0 (12,424.0 unfilled: depth/limit) | $0.3984 · 2026-09-22T18:14:34Z · $0.4200 | **open** (marked each cycle) | OPEN | $2.6173 · $4.4299 | — | `9fe06601b9d5` | trades.jsonl:463 |
 | 280 | @HeatConfirm | KXHIGHLAX-26SEP23-B84.5 | YES | 522.9 / 90,530.0 (90,007.1 unfilled: depth/limit) | $0.0702 · 2026-09-22T18:14:35Z · $0.1000 | **open** (marked each cycle) | OPEN | $2.3878 · $10.5401 | — | `51f3c4a1347b` | trades.jsonl:464 |
-| 281 | @GridironPulse | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 7,532.0 / 7,532.0 | $0.8500 · 2026-09-22T18:14:34Z · $0.9000 | **open** (marked each cycle) | OPEN | $33.6116 · $0.0000 | — | `3896ffa5df61` | trades.jsonl:465 |
-| 282 | @GridironPulse | KXMLBGAME-26SEP221305TBNYYG1-NYY | YES | 3,810.0 / 3,810.0 | $0.8400 · 2026-09-22T18:14:34Z · $0.8900 | **open** (marked each cycle) | OPEN | $17.9223 · $0.0000 | — | `8f37a80afcdc` | trades.jsonl:466 |
-| 283 | @SportsPredLab | KXMLBGAME-26SEP221305TBNYYG1-TB | YES | 54.0 / 54.0 | $0.1600 · 2026-09-22T18:14:34Z · $0.2000 | **open** (marked each cycle) | OPEN | $0.2541 · $0.0000 | — | `3896ffa5df61` | trades.jsonl:467 |
-| 284 | @SportsPredLab | KXMLBGAME-26SEP221305TBNYYG1-NYY | NO | 25.0 / 25.0 | $0.1700 · 2026-09-22T18:14:34Z · $0.2000 | **open** (marked each cycle) | OPEN | $0.1235 · $0.0000 | — | `8f37a80afcdc` | trades.jsonl:468 |
-| 285 | @HighProbScalp | KXGOLDH-26SEP2215-T4363.99 | NO | 101.0 / 6,939.0 (6,838.0 unfilled: depth/limit) | $0.7774 · 2026-09-22T18:14:35Z · $0.8000 | **open** (marked each cycle) | OPEN | $1.2234 · $1.7600 | — | `836cbe9afa19` | trades.jsonl:469 |
-| 286 | @LongshotFader | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 383.0 / 383.0 | $0.8500 · 2026-09-22T18:14:34Z · $0.9000 | **open** (marked each cycle) | OPEN | $1.7092 · $0.0000 | — | `3896ffa5df61` | trades.jsonl:470 |
+| 281 | @GridironPulse | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 7,532.0 / 7,532.0 | $0.8500 · 2026-09-22T18:14:34Z · $0.9000 | $1.0000 · 2026-09-22T19:18:18Z · settlement | NO | $33.6116 · $0.0000 | $1,096.1884 | `3896ffa5df61` | trades.jsonl:465 |
+| 282 | @GridironPulse | KXMLBGAME-26SEP221305TBNYYG1-NYY | YES | 3,810.0 / 3,810.0 | $0.8400 · 2026-09-22T18:14:34Z · $0.8900 | $1.0000 · 2026-09-22T19:18:18Z · settlement | YES | $17.9223 · $0.0000 | $591.6777 | `8f37a80afcdc` | trades.jsonl:466 |
+| 283 | @SportsPredLab | KXMLBGAME-26SEP221305TBNYYG1-TB | YES | 54.0 / 54.0 | $0.1600 · 2026-09-22T18:14:34Z · $0.2000 | $0.0000 · 2026-09-22T19:18:18Z · settlement | NO | $0.2541 · $0.0000 | $-8.8941 | `3896ffa5df61` | trades.jsonl:467 |
+| 284 | @SportsPredLab | KXMLBGAME-26SEP221305TBNYYG1-NYY | NO | 25.0 / 25.0 | $0.1700 · 2026-09-22T18:14:34Z · $0.2000 | $0.0000 · 2026-09-22T19:18:18Z · settlement | YES | $0.1235 · $0.0000 | $-4.3735 | `8f37a80afcdc` | trades.jsonl:468 |
+| 285 | @HighProbScalp | KXGOLDH-26SEP2215-T4363.99 | NO | 101.0 / 6,939.0 (6,838.0 unfilled: depth/limit) | $0.7774 · 2026-09-22T18:14:35Z · $0.8000 | $1.0000 · 2026-09-22T20:03:18Z · settlement | NO | $1.2234 · $1.7600 | $21.2566 | `836cbe9afa19` | trades.jsonl:469 |
+| 286 | @LongshotFader | KXMLBGAME-26SEP221305TBNYYG1-TB | NO | 383.0 / 383.0 | $0.8500 · 2026-09-22T18:14:34Z · $0.9000 | $1.0000 · 2026-09-22T19:18:18Z · settlement | NO | $1.7092 · $0.0000 | $55.7408 | `3896ffa5df61` | trades.jsonl:470 |
 | 287 | @DepthDiver | KXMLBGAME-26SEP222210SDLAD-SD | NO | 32.0 / 32.0 | $0.5500 · 2026-09-22T18:14:33Z · $0.5700 | **open** (marked each cycle) | OPEN | $0.2772 · $0.0000 | — | `b1d8a146b8be` | trades.jsonl:471 |
+| 288 | @TickChaser | KXMLBGAME-26SEP221915CINATL-CIN | NO | 9.0 / 9.0 | $0.7000 · 2026-09-22T21:36:52Z · $0.7200 | **open** (marked each cycle) | OPEN | $0.0662 · $0.0000 | — | `2906415d3239` | trades.jsonl:486 |
+| 289 | @TickChaser | KXMLBGAME-26SEP221915CINATL-ATL | YES | 4.0 / 4.0 | $0.7000 · 2026-09-22T21:36:52Z · $0.7200 | **open** (marked each cycle) | OPEN | $0.0294 · $0.0000 | — | `bbd2aefcd705` | trades.jsonl:487 |
+| 290 | @TailSprint | KXHIGHLAX-26SEP22-T75 | YES | 27.0 / 27.0 | $0.0100 · 2026-09-22T21:36:52Z · $0.0600 | **open** (marked each cycle) | OPEN | $0.0188 · $0.0000 | — | `61779b67d749` | trades.jsonl:488 |
+| 291 | @TailSprint | KXHIGHLAX-26SEP22-B81.5 | YES | 14.0 / 14.0 | $0.0100 · 2026-09-22T21:36:52Z · $0.0600 | **open** (marked each cycle) | OPEN | $0.0098 · $0.0000 | — | `5335fcc76f03` | trades.jsonl:489 |
+| 292 | @SpikeSurfer | KXNHLGAME-26SEP22TBNSH-TB | NO | 5,884.0 / 5,884.0 | $0.6600 · 2026-09-22T21:36:53Z · $0.6800 | **open** (marked each cycle) | OPEN | $92.4259 · $0.0000 | — | `eb1282c4ac8f` | trades.jsonl:490 |
+| 293 | @SpikeSurfer | KXHIGHCHI-26SEP22-B64.5 | YES | 1,602.0 / 2,007.0 (405.0 unfilled: depth/limit) | $0.9900 · 2026-09-22T21:36:53Z · $0.9900 | **open** (marked each cycle) | OPEN | $1.1102 · $0.0000 | — | `46613e7c062b` | trades.jsonl:491 |
+| 294 | @WeatherFader | KXHIGHCHI-26SEP23-B69.5 | NO | 313.0 / 5,228.0 (4,915.0 unfilled: depth/limit) | $0.8883 · 2026-09-22T21:36:53Z · $0.9200 | **open** (marked each cycle) | OPEN | $2.1739 · $5.7301 | — | `733a548822d9` | trades.jsonl:492 |
+| 295 | @HeatConfirm | KXHIGHMIA-26SEP23-B86.5 | YES | 275.0 / 14,795.0 (14,520.0 unfilled: depth/limit) | $0.3312 · 2026-09-22T21:36:53Z · $0.3600 | **open** (marked each cycle) | OPEN | $4.2638 · $5.8201 | — | `40498acd783e` | trades.jsonl:493 |
+| 296 | @GridironPulse | KXWNBAGAME-26SEP22CONNWSH-WSH | YES | 7,712.0 / 7,712.0 | $0.9400 · 2026-09-22T21:36:54Z · $0.9500 | **open** (marked each cycle) | OPEN | $30.4470 · $0.0000 | — | `5964ebf9c1d6` | trades.jsonl:494 |
+| 297 | @GridironPulse | KXWNBAGAME-26SEP22CONNWSH-CONN | NO | 3,856.0 / 3,856.0 | $0.9400 · 2026-09-22T21:36:54Z · $0.9500 | **open** (marked each cycle) | OPEN | $15.2235 · $0.0000 | — | `a4daba38539e` | trades.jsonl:495 |
+| 298 | @SportsPredLab | KXWNBAGAME-26SEP22CONNWSH-WSH | NO | 31.0 / 31.0 | $0.0700 · 2026-09-22T21:36:54Z · $0.1200 | **open** (marked each cycle) | OPEN | $0.1413 · $0.0000 | — | `5964ebf9c1d6` | trades.jsonl:496 |
+| 299 | @SportsPredLab | KXWNBAGAME-26SEP22CONNWSH-CONN | YES | 15.0 / 15.0 | $0.0700 · 2026-09-22T21:36:54Z · $0.1200 | **open** (marked each cycle) | OPEN | $0.0684 · $0.0000 | — | `a4daba38539e` | trades.jsonl:497 |
+| 300 | @PanicFader | KXBTC15M-26SEP221745-45 | NO | 1,060.0 / 1,060.0 | $0.3692 · 2026-09-22T21:36:54Z · $0.3700 | **open** (marked each cycle) | OPEN | $17.2798 · $20.3107 | — | `7b6ed775f7eb` | trades.jsonl:498 |
+| 301 | @PanicFader | KXETH15M-26SEP221745-45 | YES | 360.0 / 360.0 | $0.5500 · 2026-09-22T21:36:54Z · $0.5700 | **open** (marked each cycle) | OPEN | $6.2370 · $0.0000 | — | `b98eb601950c` | trades.jsonl:499 |
+| 302 | @LongshotFader | KXWNBAGAME-26SEP22CONNWSH-CONN | NO | 376.0 / 376.0 | $0.9400 · 2026-09-22T21:36:54Z · $0.9500 | **open** (marked each cycle) | OPEN | $1.4845 · $0.0000 | — | `a4daba38539e` | trades.jsonl:500 |
+| 303 | @LongshotFader | KXWNBAGAME-26SEP22GSPDX-PDX | NO | 194.0 / 194.0 | $0.9100 · 2026-09-22T21:36:54Z · $0.9500 | **open** (marked each cycle) | OPEN | $1.1123 · $0.0000 | — | `8a9c4ad87a15` | trades.jsonl:501 |
+| 304 | @DepthDiver | KXMLBGAME-26SEP221915CINATL-CIN | NO | 105.0 / 105.0 | $0.7000 · 2026-09-22T21:36:52Z · $0.7200 | **open** (marked each cycle) | OPEN | $0.7718 · $0.0000 | — | `2906415d3239` | trades.jsonl:502 |
+| 305 | @DepthDiver | KXBTC15M-26SEP221745-45 | NO | 99.0 / 99.0 | $0.3610 · 2026-09-22T21:36:54Z · $0.3700 | **open** (marked each cycle) | OPEN | $1.5987 · $1.0902 | — | `7b6ed775f7eb` | trades.jsonl:503 |
 
 ## 2. Upcoming trades (what the strategies still want to place, and what they wanted and could not)
 
@@ -364,12 +382,17 @@ Generated `2026-09-22T21:22:58Z` from `data/season-2026/forward/trades.jsonl` an
 | 2026-09-22T18:13:57Z | @LongshotFader | KXBTC15M-26SEP221415-15 | NO @ $0.8900 (limit $0.9500) | 2026-09-22T18:15:00Z | not_confirmed_on_book | fade YES longshot at 0.12: buy NO at 0.89 (favourite-longshot bias; spread <= 5c) | intents/2026-09.jsonl:348 |
 | 2026-09-22T18:13:57Z | @LongshotFader | KXMLBGAME-26SEP221305TBNYYG1-NYY | YES @ $0.8500 (limit $0.9500) | 2026-09-25T17:05:00Z | queued | fade NO longshot at 0.16: buy YES at 0.85 (favourite-longshot bias; spread <= 5c) | intents/2026-09.jsonl:349 |
 | 2026-09-22T18:13:57Z | @DepthDiver | KXHIGHNY-26SEP22-B69.5 | NO @ $0.9000 (limit $0.9200) | 2026-09-23T05:00:00Z | skipped_position_cap | displayed depth imbalance -64.9% toward NO (YES 509 / NO 2,390); limit +2c | intents/2026-09.jsonl:351 |
+| 2026-09-22T21:36:16Z | @PinePilotX | KXFED-26DEC-T4.25 | YES @ $0.4400 (limit $0.4600) | 2026-12-09T18:55:00Z | skipped_position_cap | daily SMA5 0.364 > SMA10 0.279 and last 0.38 > SMA10 on verified candles (25 bars); YES ask 0.44 (limit +2c) | intents/2026-09.jsonl:358 |
+| 2026-09-22T21:36:16Z | @WeatherCatalyst | KXHIGHAUS-26SEP22-B97.5 | YES @ $0.0100 (limit $0.7000) | 2026-09-23T06:00:00Z | skipped_position_cap | NWS forecast high 98.0F (This Afternoon, issued 2026-09-22T21:24:21+00:00) falls in this bracket; YES ask 0.01 <= 0.70 | intents/2026-09.jsonl:359 |
+| 2026-09-22T21:36:16Z | @HeatConfirm | KXHIGHAUS-26SEP22-B97.5 | YES @ $0.0100 (limit $0.4200) | 2026-09-23T06:00:00Z | not_confirmed_on_book | NWS forecast high 98.0F > 77F and falls in this bracket; YES ask 0.01 < 0.42 with spread 0.01 (500-bot top rule, forward recreation) | intents/2026-09.jsonl:361 |
+| 2026-09-22T21:36:16Z | @HeatConfirm | KXHIGHTATL-26SEP23-B82.5 | YES @ $0.1400 (limit $0.4200) | 2026-09-24T05:00:00Z | queued | NWS forecast high 82.0F > 77F and falls in this bracket; YES ask 0.14 < 0.42 with spread 0.01 (500-bot top rule, forward recreation) | intents/2026-09.jsonl:363 |
+| 2026-09-22T21:36:16Z | @MetalMomentum | KXGOLD15M-26SEP221745-45 | NO @ $0.6900 (limit $0.8000) | 2026-09-22T21:45:00Z | not_confirmed_on_book | gold 15-minute early leader NO ask 0.690 in [0.60, 0.80] with 8.7 min left | intents/2026-09.jsonl:368 |
 
 ## 3. SpreadSmith maker quote plans (MODELLED — plans, never fills)
 
 | Posted | Contract | Side | Posted price · size | Spread at post | Closes (UTC) | Reason | Ledger |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | — | no quote plan recorded yet | — |
+| 2026-09-22T21:36:16Z | KXHIGHTDAL-26SEP22-B97.5 | YES | $0.2600 × 8.0 | see bookQuotes | 2026-09-23T06:00:00Z | maker quote plan: post a resting YES bid at 0.2600 (0.01 inside the 0.2500/0.3100 touch, spread 0.06) for 8 contracts - a plan, not a fill; fill evidence is measured later against the official tape | intents/2026-09.jsonl:375 |
 
 ---
 Method: Rendered from forward/trades.jsonl and forward/intents/*.jsonl (append-only, evidence-bound). No row is synthesized; open/unsettled states are stated as such.
