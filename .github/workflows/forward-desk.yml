@@ -139,8 +139,16 @@ jobs:
         if: steps.mode.outputs.mode != 'tick'
         run: python3 scripts/audit_season.py --live || echo "season audit recorded issues (see data/season-*/forward/audit/latest.json)"
 
+      # The verifier always writes its findings into the season's audit directory (committed by the
+      # step below), then the job is failed afterwards - so a runner-only failure is readable from
+      # the repository itself, not just from a log.
       - name: Verify season memory (invariants + hashes)
-        run: python3 scripts/verify_data.py
+        id: verify
+        continue-on-error: true
+        run: |
+          SEASON=$(python3 -c "import json;print(json.load(open('data/seasons.json'))['activeSeason'])" 2>/dev/null || echo 2026)
+          mkdir -p "data/season-$SEASON/forward/audit"
+          python3 scripts/verify_data.py --report "data/season-$SEASON/forward/audit/verify-latest.json"
 
       - name: Offline tests
         if: steps.mode.outputs.mode != 'tick'
@@ -170,6 +178,14 @@ jobs:
             git rebase "origin/${BRANCH}" || { git rebase --abort; exit 1; }
             sleep $((attempt * 5))
           done
+          exit 1
+
+      # Fails the job after the ledger (and the failure report) are committed.
+      - name: Surface verification failures
+        if: steps.verify.outcome == 'failure'
+        run: |
+          echo "verify_data.py reported failures; the report is committed at"
+          echo "data/season-*/forward/audit/verify-latest.json"
           exit 1
 
       - name: Re-deploy GitHub Pages with the new ledger (default branch only)

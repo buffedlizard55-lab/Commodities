@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Verify the historical fixtures and the active season's stored forward ledger.
 
-Run: python3 scripts/verify_data.py
+Run: python3 scripts/verify_data.py [--report PATH]
 Exit code 0 = all checks pass; non-zero = at least one check failed.
+`--report PATH` always writes the machine-readable result ({generatedAt, passed, failed, failures})
+so a run that fails on a CI runner leaves its findings inside the repository instead of only in a
+log: the workflow commits the report and then fails the job.
 The fixed 2026 fixture files remain the reference sample; forward/audit/compaction checks follow
 `data/seasons.json`, including after a 2027 UTC-year rollover.
 """
@@ -40,6 +43,9 @@ def active_season_base() -> str:
 def season_bases() -> list[str]:
     return [os.path.join(DATA_ROOT, name) for name in sorted(os.listdir(DATA_ROOT))
             if name.startswith("season-") and os.path.isdir(os.path.join(DATA_ROOT, name))]
+
+
+REPORT_PATH = None
 
 
 def check(name, condition, detail="", quiet=False):
@@ -479,7 +485,10 @@ def verify_forward_ledger(season_dir: str | None = None):
 
 
 def main():
-    global ACTIVE_BASE
+    global ACTIVE_BASE, REPORT_PATH
+    argv = sys.argv[1:]
+    if "--report" in argv:
+        REPORT_PATH = argv[argv.index("--report") + 1]
     ACTIVE_BASE = active_season_base()
     # ---- KXCPI daily candles ----
     cpi = read_csv("candles-KXCPI-26AUG-T0.8-daily.csv")
@@ -615,6 +624,16 @@ def main():
         print(f"WROTE {os.path.relpath(season_base, DATA_ROOT)}/SHA256SUMS.txt ({len(lines)} files)")
 
     print(f"\n{len(PASSES)} passed, {len(FAILURES)} failed")
+    if REPORT_PATH:
+        report = {"schemaVersion": 1, "generatedAt": __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "passed": len(PASSES), "failed": len(FAILURES), "failures": FAILURES}
+        directory = os.path.dirname(os.path.abspath(REPORT_PATH))
+        os.makedirs(directory, exist_ok=True)
+        with open(REPORT_PATH, "w") as fh:
+            json.dump(report, fh, indent=1)
+            fh.write("\n")
+        print(f"WROTE {REPORT_PATH} ({len(FAILURES)} failure(s))")
     if FAILURES:
         for f in FAILURES:
             print("  " + f)
