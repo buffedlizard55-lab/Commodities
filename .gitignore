@@ -5,6 +5,9 @@ node_modules/
 
 # Regenerable adapter caches. Never commit them: a cache written by a fixture/offline run would
 # look exactly like verified data, and every one of these is rebuilt from the official endpoint.
+# (The NWS gridpoint cache is the deliberate exception: data/universe/nws-gridpoints.json IS
+# committed, because each entry carries its resolution proof - Census place, points URL + SHA-256,
+# grid id - and since IRR-40 fixture cycles write their adapter caches under a test-local universe
+# dir, so a fixture can no longer overwrite the committed file either.)
 data/universe/fda-records.json
 data/universe/place-centroids.json
-data/season-*/forward/signals/gridpoints.json

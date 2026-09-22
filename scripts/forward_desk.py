@@ -77,13 +77,22 @@ FEE_TYPES_MODELED = {"quadratic", "quadratic_with_maker_fees", "quadratic_with_c
 MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
 
 
-def set_paths(forward_dir=None, series_index=None, season=None):
-    """Redirect outputs (used by tests so they never touch the committed season memory)."""
-    global FORWARD_DIR, SERIES_INDEX_PATH, SEASON, WRITE_SEASONS_INDEX
+def set_paths(forward_dir=None, series_index=None, season=None, universe_dir=None):
+    """Redirect outputs (used by tests so they never touch the committed season memory).
+
+    When a test forward dir is set, the adapter-cache universe dir moves under it too (IRR-40):
+    a fixture cycle must be able to write its openFDA / place-centroid / gridpoint caches, but
+    never into the committed data/universe/ - a cache written by a fixture run would look
+    identical to verified data.
+    """
+    global FORWARD_DIR, SERIES_INDEX_PATH, SEASON, WRITE_SEASONS_INDEX, UNIVERSE_DIR
     if forward_dir:
         FORWARD_DIR = forward_dir
+        UNIVERSE_DIR = universe_dir or os.path.join(forward_dir, "universe")
         SERIES_INDEX_PATH = series_index or os.path.join(forward_dir, "series-index.json")
         WRITE_SEASONS_INDEX = False
+    elif universe_dir:
+        UNIVERSE_DIR = universe_dir
     elif series_index:
         SERIES_INDEX_PATH = series_index
     if season:
@@ -530,7 +539,11 @@ class Cycle:
                 if title:
                     weather[series_ticker] = title
         if weather:
-            adapter = SIG.NwsCities(fetcher=fetcher)
+            # IRR-40: explicit cache paths under the (possibly redirected) universe dir, so a
+            # fixture cycle writes its caches next to its own ledger, never into data/universe/.
+            adapter = SIG.NwsCities(gridpoints_path=os.path.join(UNIVERSE_DIR, "nws-gridpoints.json"),
+                                    fetcher=fetcher,
+                                    centroids=SIG.PlaceCentroids(cache_path=os.path.join(UNIVERSE_DIR, "place-centroids.json")))
             chosen = dict(sorted(weather.items())[:MAX_NWS_CITIES])
             forecasts, _records = adapter.capture(chosen)
             self.nws_cities = adapter
@@ -556,7 +569,7 @@ class Cycle:
                     self.espn[ticker] = signal
         fda_markets = [m for m in self.markets.values() if SIG.FDA_DRUG_SERIES.match(m["series_ticker"])]
         if fda_markets:
-            adapter = SIG.OpenFdaRecords(fetcher=fetcher)
+            adapter = SIG.OpenFdaRecords(cache_path=os.path.join(UNIVERSE_DIR, "fda-records.json"), fetcher=fetcher)
             self.fda_adapter = adapter
             for m in sorted(fda_markets, key=lambda x: (-(x["volume_24h"] or 0), x["ticker"]))[:MAX_FDA_LOOKUPS]:
                 try:
