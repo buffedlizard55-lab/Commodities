@@ -440,7 +440,9 @@ rules trigger on the adapter shapes they require, so their empty ledgers mean "n
 not "dead code". A second community backtest (1,000 strategies on `KXBTC15M`) was found and logged
 as corroboration of the panic-fade archetype — discovery-only, no new rule. A line-by-line
 review of the runner's state then found the scheduled desk firing but failing verification on six
-consecutive cycles (~22 h, observed 2026-09-22 via `gh run list`): the settlement re-read compared
+consecutive cycles (~22 h, observed 2026-09-22 via `gh run list`; the tripwire had landed in PR #8,
+commit `a24abc2`, merged 2026-09-21T04:30Z — the 00:26Z cycle was the last pre-tripwire success):
+the settlement re-read compared
 the ledger's second-precision exitAt against the API's fractional-second `settlement_ts` with strict
 string equality, so every reachable sample mismatched, the audit reported FAIL, and the ledger froze
 at the 2026-09-21T00:26Z cycle (IRR-39). Fixed the same day with second-precision comparison plus a
