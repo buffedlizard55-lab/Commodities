@@ -1,17 +1,17 @@
 {
- "generatedAt": "2026-09-22T23:18:16Z",
+ "generatedAt": "2026-09-22T23:22:33Z",
  "ledger": {
   "cycleErrorRows": 0,
-  "cyclesWithApiErrors": 7,
+  "cyclesWithApiErrors": 8,
   "equityCsvVsStateMismatches": [],
   "eventKinds": {
    "exit": 4,
-   "fill": 316,
+   "fill": 329,
    "settlement": 197
   },
-  "events": 517,
-  "eventsTotal": 517,
-  "evidenceBound": 517,
+  "events": 530,
+  "eventsTotal": 530,
+  "evidenceBound": 530,
   "fillsWithoutExitOrPosition": 0,
   "intentStatusByStrategy": {
    "book-edge": {
@@ -37,15 +37,16 @@
     "filled": 8
    },
    "game-favourite": {
-    "filled": 17,
+    "filled": 19,
     "not_confirmed_on_book": 1,
     "queued": 1
    },
    "gold-leader": {
     "filled": 1,
-    "not_confirmed_on_book": 2
+    "not_confirmed_on_book": 3
    },
    "halftime-hype": {
+    "filled": 1,
     "not_confirmed_on_book": 2,
     "queued": 1
    },
@@ -65,39 +66,44 @@
     "filled": 5,
     "not_confirmed_on_book": 1
    },
+   "nowcast-nudge": {
+    "filled": 2
+   },
    "panic-fade": {
-    "filled": 15
+    "filled": 17
    },
    "pinepilot": {
     "filled": 8,
     "skipped_position_cap": 4
    },
    "scalp-8095": {
-    "filled": 9,
+    "filled": 11,
     "not_confirmed_on_book": 9,
     "queued": 1
    },
    "spike-surfer": {
-    "filled": 23
+    "filled": 24,
+    "skipped_position_cap": 1
    },
    "spread-smith": {
-    "quote_plan": 3
+    "quote_plan": 5
    },
    "sure-thing": {
     "filled": 17,
     "not_confirmed_on_book": 1
    },
    "tail-sprint": {
-    "filled": 31,
+    "filled": 32,
     "not_confirmed_on_book": 1,
-    "queued": 1
+    "queued": 1,
+    "skipped_position_cap": 1
    },
    "tick-chaser": {
     "filled": 30,
     "skipped_position_cap": 1
    },
    "underdog-sweep": {
-    "filled": 18
+    "filled": 20
    },
    "weather-bracket": {
     "filled": 11,
@@ -113,7 +119,7 @@
     "skipped_position_cap": 5
    }
   },
-  "openPositions": 115,
+  "openPositions": 128,
   "orphanFillSample": [],
   "settledOrExited": 201
  },
@@ -249,17 +255,17 @@
  },
  "schedule": {
   "cron": "7,37 * * * * (UTC)",
-  "cycles": 16,
-  "executed": 16,
+  "cycles": 17,
+  "executed": 17,
   "expectedSlots": 136,
   "extraManual": 3,
   "firstCycle": "2026-09-20T03:21:26Z",
-  "lastCycle": "2026-09-22T23:15:57Z",
+  "lastCycle": "2026-09-22T23:21:09Z",
   "late": 12,
-  "matchedSlots": 13,
+  "matchedSlots": 14,
   "maxGapHours": 28.09,
   "medianDelayMin": 49.1,
-  "missed": 123,
+  "missed": 122,
   "missedSlotsSample": [
    "2026-09-20T04:07Z",
    "2026-09-20T04:37Z",
@@ -293,22 +299,22 @@
    "2026-09-20T20:37Z"
   ],
   "note": "GitHub's schedule trigger is best-effort: delayed and missed slots are expected behaviour of the platform, recorded here rather than smoothed away.",
-  "onTime": 1
+  "onTime": 2
  },
  "schemaVersion": 1,
  "season": "2026",
  "signals": {
-  "latestCycle": "20260922T231557Z",
+  "latestCycle": "20260922T232109Z",
   "latestSignalErrors": [],
   "note": "a source that answers nothing shows 0 here with its error lines below it - that is the adapter abstaining, never a defaulted value (the same fail-closed rule as the desk).",
   "totals": {
    "candlesArchived": 72,
-   "espnLiveSignals": 10,
-   "espnSignals": 305,
-   "fdaNoRecord": 48,
-   "fdaSignals": 48,
-   "nwsCentralPark": 16,
-   "nwsCityForecasts": 504,
+   "espnLiveSignals": 20,
+   "espnSignals": 353,
+   "fdaNoRecord": 56,
+   "fdaSignals": 56,
+   "nwsCentralPark": 17,
+   "nwsCityForecasts": 588,
    "signalErrors": 78
   }
  },
@@ -319,7 +325,7 @@
   "compactedFiles": 0,
   "hashVerifyFailures": [],
   "hashVerifyPass": 0,
-  "indexUpdatedAt": "2026-09-22T23:18:16Z",
+  "indexUpdatedAt": "2026-09-22T23:22:33Z",
   "linesPreserved": 0,
   "note": "evidence/ and quotes/ captures older than the compaction horizon are gzipped with their SHA-256 kept (IRR-24); append-only ledgers are never compressed."
  },
@@ -340,43 +346,47 @@
    },
    "game-favourite": {
     "compared": 14,
-    "medianAbsCentsDiff": 0.9087
+    "medianAbsCentsDiff": 0.9494
    },
    "gold-leader": {
     "compared": 1,
     "medianAbsCentsDiff": 1.2129
+   },
+   "halftime-hype": {
+    "compared": 1,
+    "medianAbsCentsDiff": 0.7047
    },
    "heat-confirm": {
     "compared": 3,
     "medianAbsCentsDiff": 3.3825
    },
    "longshot-fader": {
-    "compared": 17,
-    "medianAbsCentsDiff": 0.9512
+    "compared": 16,
+    "medianAbsCentsDiff": 0.9756
    },
    "micro-tail": {
-    "compared": 4,
-    "medianAbsCentsDiff": 2.0012
+    "compared": 2,
+    "medianAbsCentsDiff": 1.532
    },
    "panic-fade": {
-    "compared": 9,
-    "medianAbsCentsDiff": 8.1241
+    "compared": 10,
+    "medianAbsCentsDiff": 10.1808
    },
    "pinepilot": {
     "compared": 1,
     "medianAbsCentsDiff": 3.0
    },
    "scalp-8095": {
-    "compared": 7,
-    "medianAbsCentsDiff": 4.2298
+    "compared": 8,
+    "medianAbsCentsDiff": 3.5715
    },
    "spike-surfer": {
-    "compared": 12,
-    "medianAbsCentsDiff": 0.9861
+    "compared": 13,
+    "medianAbsCentsDiff": 1.0
    },
    "sure-thing": {
     "compared": 6,
-    "medianAbsCentsDiff": 0.8856
+    "medianAbsCentsDiff": 0.8894
    },
    "tail-sprint": {
     "compared": 13,
@@ -388,7 +398,7 @@
    },
    "underdog-sweep": {
     "compared": 14,
-    "medianAbsCentsDiff": 0.1505
+    "medianAbsCentsDiff": 0.1651
    },
    "weather-bracket": {
     "compared": 6,
@@ -399,20 +409,20 @@
     "medianAbsCentsDiff": 4.1905
    },
    "yield-sniper": {
-    "compared": 3,
-    "medianAbsCentsDiff": 1.022
+    "compared": 2,
+    "medianAbsCentsDiff": 0.511
    }
   },
   "compared": 167,
-  "generatedAt": "2026-09-22T23:18:12Z",
-  "insideTapeRangePct": 68.26,
-  "meanAbsCentsDiff": 2.2885,
+  "generatedAt": "2026-09-22T23:22:31Z",
+  "insideTapeRangePct": 66.47,
+  "meanAbsCentsDiff": 2.4967,
   "medianAbsCentsDiff": 1.0,
   "method": "GET /markets/trades?ticker=&min_ts=&max_ts= (official, unauthenticated); desk fills from forward/trades.jsonl. Every comparison stores the tape response hash and URL.",
   "noTapeInWindow": 33,
-  "tapeCoveredPct": 67.07,
+  "tapeCoveredPct": 69.46,
   "tapeFetchFailed": 0,
-  "verdict": "167 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 73.65% had a real print within 1c of the desk's VWAP, 67.07% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 68.26% of fills. The desk is close to the tape.",
-  "withinOneCentPct": 73.65
+  "verdict": "167 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 73.05% had a real print within 1c of the desk's VWAP, 69.46% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 66.47% of fills. The desk is close to the tape.",
+  "withinOneCentPct": 73.05
  }
 }
