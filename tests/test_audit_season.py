@@ -107,6 +107,17 @@ class SignalsAndTapeTests(unittest.TestCase):
         self.assertEqual(out["totals"]["fdaSignals"], 1)
         self.assertEqual(out["totals"]["signalErrors"], 5)
 
+    def test_central_park_count_only_counts_cycles_that_captured(self):
+        # nwsCaptured is a per-cycle boolean. A cycle whose weather fetch failed must not be
+        # counted as a Central Park capture (the previous expression reported len(cycles) as
+        # soon as ANY capture succeeded, overstating coverage).
+        cycles = [cycle("2026-09-20T07:07:00Z", nwsCaptured=True),
+                  cycle("2026-09-20T07:37:00Z", nwsCaptured=False),
+                  cycle("2026-09-20T08:07:00Z", nwsCaptured=True)]
+        out = AUD.audit_signals(cycles)
+        self.assertEqual(out["totals"]["nwsCentralPark"], 2)
+        self.assertEqual(len(cycles), 3)  # 3 cycles total, only 2 captured
+
     def test_missing_tape_summary_is_reported_as_unavailable(self):
         tmp = tempfile.mkdtemp(prefix="audit-tape-")
         try:

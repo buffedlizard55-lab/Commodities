@@ -94,11 +94,12 @@ data/
     candles-*.csv, raw/, ...        verified backtest inputs (see MANIFEST.md)
     competition.json, trades.json, leaderboard.json, intents.json, explanations.json   backtest outputs
 tests/
-  test_forward_desk.py              18 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
+  test_forward_desk.py              19 offline tests: two-cycle lifecycle, IOC fills, partial-exit refusal,
                                     evidence hashes, HeatConfirm gating (entry needs forecast in bracket, cheap
                                     ask, tight spread; exit only when a fresh forecast leaves the bracket),
                                     EPL/NCAAM universe + ScorePulse thresholds, can-fire proofs for the
-                                    zero-intent FdaRecordCheck / WeatherFader rules
+                                    zero-intent FdaRecordCheck / WeatherFader rules, and the IRR-40 regression
+                                    (a fixture cycle never writes the committed data/universe adapter caches)
   test_signals.py                   26 tests: Census gazetteer -> NWS gridpoint (alias/suffix matching),
                                     ESPN scoreboard (incl. the verified nickname rules_primary form, IRR-36,
                                     the added NHL/WNBA leagues and the EPL/NCAAM expansion, IRR-37),
@@ -112,9 +113,10 @@ tests/
                                     cash identity, --series filter, curve points, walk-forward fold sums
   test_execution_realism.py         6 tests: tape comparison, no-tape window, optimism verdict (fixtures only)
   test_archive_history.py           4 tests: chunk tiling, per-request hashes, diff detection, failed chunks
-  test_audit_season.py              11 tests: slot on-time/late/missed counts, orphan-fill detection, equity
-                                    drift, signal totals, tape summary, live re-read unavailable offline, audit history,
-                                    second-precision ts comparison + fail-closed branches (IRR-39)
+  test_audit_season.py              12 tests: slot on-time/late/missed counts, orphan-fill detection, equity
+                                    drift, signal totals (incl. the Central Park capture count, IRR-40), tape
+                                    summary, live re-read unavailable offline, audit history, second-precision ts
+                                    comparison + fail-closed branches (IRR-39)
   site-smoke.mjs                    jsdom checks: index.html + one mapped and one unmatched strategy artifact against the committed data
                                     (board, filters, ledger tabs, health panel, archive board + walk-forward,
                                     execution realism)
@@ -232,7 +234,7 @@ their zero-intent ledgers mean the rules never triggered, not that the rules can
 ```bash
 python3 scripts/forward_desk.py --live                 # one real cycle (needs network egress)
 python3 scripts/forward_desk.py --fixtures DIR --now 2026-09-20T15:00:00Z --out /tmp/out   # offline replay
-python3 -m unittest discover -s tests -p 'test_*.py'    # 100 offline tests
+python3 -m unittest discover -s tests -p 'test_*.py'    # 102 offline tests
 python3 scripts/verify_settlements.py                   # offline plan: what the monthly backfill would re-read
 python3 scripts/verify_settlements.py --live            # full settlement backfill (runner; official re-read)
 python3 scripts/discover_universe.py                    # refresh data/universe/
@@ -419,12 +421,54 @@ this browser's local storage (separate from the committed season). Fail-closed o
    exit; only Kalshi's official `result` + `settlement_ts` settles a position. Where a series names a
    different settlement source than the signal (24 of the 26 daily-temperature series settle on The
    Weather Company, not NWS), the registry says so (IRR-26).
-8. **Regenerable caches are gitignored.** `data/universe/fda-records.json`,
-   `data/universe/place-centroids.json` and `forward/signals/gridpoints.json` are rebuilt from the
+8. **Regenerable caches are gitignored (with one provenance-bearing exception).**
+   `data/universe/fda-records.json` and `data/universe/place-centroids.json` are rebuilt from the
    official endpoint on demand; a cache written by a fixture run would look identical to verified
-   data, so none of them is ever committed.
+   data, so neither is ever committed — and since IRR-40 the desk writes those caches under a
+   universe dir that `set_paths` redirects for test output, so a fixture cycle physically cannot
+   create or modify them. The deliberate exception is `data/universe/nws-gridpoints.json`, which IS
+   committed: every entry carries its resolution proof (Census place name, NWS points URL + SHA-256,
+   grid id/x/y, retrieval time), so it is evidence of the city→gridpoint chain, not a regenerable
+   lookup.
 
 ## Known limitations and next work (for the next session)
+
+**Done in this session (2026-09-22, 2nd pass)** — the README's standing "read the season audit,
+not just the board" item, executed on the committed data as of the `20260922T043112Z` cycle, plus
+a line-by-line code pass that found and fixed two defects (IRR-40). What the audit actually says:
+*11 cycles over 98 expected `:07/:37` slots — 1 on-time, 7 late, 90 missed, 3 manual extras;
+median delay 49.1 min; longest gap 28.09 h*, which is the IRR-39 freeze window (the last
+pre-tripwire success was 2026-09-21T00:26Z; the next committed cycle is 2026-09-22T04:31Z). All
+**78 recorded signal errors are historical**: they come from exactly three pre-fix cycles
+(2026-09-20T19:40Z / 22:20Z / 2026-09-21T00:26Z, 26 each), and their lines match the *old*
+adapter behaviour — unparseable series titles ("Atlanta Max Temperature"), missing Census
+coordinates, and an openFDA 404 logged as an error instead of a verified absence. The current code
+parses all six of those titles correctly (checked directly), and the first post-fix cycle captured
+**84 city forecasts with 0 signal errors**. Live settlement re-read 8/8 match; the trade-tape
+comparison now covers **154 fills (median |desk − tape| 1.00¢, 79.22% within 1¢ of a real print,
+75.32% inside the tape's price range, 46 no-print windows)**. The board itself: 23 accounts,
+**portfolio equity $182,994.16 (−20.44%)** vs $230,000 start; LongshotFader +43.82% (16 settled),
+GridironPulse +28.73% (11/11 settled), SureThing +14.77% lead; DipHunter −99.83% ($16.63 left) is
+the ranked bottom; **three personas remain unranked with zero fills — ScorePulse, FdaRecordCheck
+and MetalMomentum** (the last has one `not_confirmed_on_book` intent: a 60–80¢ gold ask that no
+longer held on the fresh book). **HeatConfirm, judged honestly with the data we have: 2 fills
+(KXHIGHTDAL 97–98 bracket @ 0.2468 VWAP; KXHIGHDEN 81–82 bracket @ 0.3052 VWAP), 0 settlements —
+both settle 2026-09-23, so the experiment has produced no closed trade yet.** The sample is too
+thin to confirm or refute the 500-bot claim; no threshold was touched, per the standing rule. The
+line-by-line pass also fixed: (1) the desk's signal adapters used default cache paths, so an
+offline fixture cycle (whose ledger includes an open KXFDA market) wrote a TESTDRUG record into
+the committed `data/universe/fda-records.json` — `set_paths` now redirects the universe dir for
+test output, the adapters take explicit cache paths, a regression test proves a fixture cycle
+never creates or modifies the committed `fda-records.json` / `place-centroids.json` /
+`nws-gridpoints.json`, and the stale `data/season-*/forward/signals/gridpoints.json` ignore line
+was replaced by a note that `data/universe/nws-gridpoints.json` is committed by design (each entry
+carries its resolution proof); (2) `audit_season.py` computed `nwsCentralPark` as
+`total("nwsCaptured") and len(cycles)` — the total number of cycles whenever *any* capture
+succeeded, overstating weather coverage in any season with a failed fetch; it now counts the
+cycles that actually captured, with a regression test. 102 offline tests pass. Merging this
+branch restores the twice-hourly cron — GitHub's scheduler is best-effort even when healthy (the
+pre-freeze audit already showed 35 of 42 slots missed), and the IRR-39 freeze on top of that lost
+another ~28 h of slots entirely.
 
 **Done this session (2026-09-22)** — the prior session's open list, worked first: the
 **signal-coverage expansion** continued with `KXEPLGAME` (EPL soccer, 2-goal ScorePulse threshold)
@@ -466,20 +510,29 @@ documented (IRR-33); the HeatConfirm persona from the weather-bot discovery post
 board/ledger text filters, archive equity curves and season-health panel.
 
 * **Let HeatConfirm run and judge it honestly.** Its entire premise is a third-party backtest claim
-  (discovery-only). After ~2–4 weeks of cycles, read `forward/strategies/heat-confirm.json`: did a
-  fresh forecast inside the bracket + cheap tight ask actually settle YES above breakeven? If the
-  sample is still thin, say so; do not promote, demote or retune the bracket thresholds mid-season.
-* **Read the season audit, not just the board.** `forward/audit/latest.json` now quantifies what the
-  runner actually achieved (last audit: 10 cycles over 42 expected slots, 1 on-time / 6 late / 35
-  missed, longest gap 5.56 h) — and `gh run list` showed the six cycles after that firing but failing
-  verification for ~22 h (IRR-39 timestamp bug, fixed 2026-09-22). Cadence and verification health
-  together are the binding constraint on how fast this experiment accumulates evidence. Options if
-  that matters: an external free ping to `workflow_dispatch` is allowed (it is not a data source);
-  simply accept ~5–10 cycles/day.
+  (discovery-only). State as of 2026-09-22T04:31Z (read from `forward/strategies/heat-confirm.json`
+  and `trades.jsonl#L395`–`#L396`): 2 fills, both entered the same cycle — the KXHIGHTDAL 97–98°F
+  bracket at 0.2468 VWAP (NWS forecast 97.0°F, spread 3¢) and the KXHIGHDEN 81–82°F bracket at
+  0.3052 VWAP (forecast 81.0°F, spread 1¢) — and **0 settlements: both markets settle 2026-09-23**,
+  so the rule has no closed trade to judge yet (mark −0.29%, entirely open positions). The sample
+  is thin by design; the first settlement is the first honest datapoint. Do not promote, demote or
+  retune the bracket thresholds mid-season.
+* **Read the season audit, not just the board.** `forward/audit/latest.json` (2026-09-22T04:33Z)
+  quantifies what the runner actually achieved: **11 cycles over 98 expected slots — 1 on-time /
+  7 late / 90 missed, 3 manual extras, median delay 49.1 min, longest gap 28.09 h**; the gap spans
+  the IRR-39 freeze (last pre-tripwire success 2026-09-21T00:26Z, next commit 2026-09-22T04:31Z,
+  six fired-but-failed cycles in between per `gh run list`). The audit's `signalErrors` total (78)
+  is fully historical: three pre-fix cycles each recorded 26 lines of old-adapter behaviour and the
+  first post-fix cycle captured 84 city forecasts with 0 errors (verified line by line, IRR-40
+  note). Cadence and verification health together remain the binding constraint on how fast this
+  experiment accumulates evidence. Options if that matters: an external free ping to
+  `workflow_dispatch` is allowed (it is not a data source); simply accept ~5–10 cycles/day.
 * **Full settlement backfill: built, first live run pending.** `scripts/verify_settlements.py`
   now exists (monthly cron + `workflow_dispatch` mode `settlements` + site panel + 12 tests). The
   first *live* full re-read happens on the next runner pass; until then the offline plan is the
-  committed state (63 unique settled tickers in Season 2026). Review
+  committed state (**84 unique settled tickers in Season 2026** as of the 2026-09-22T14:08Z cycle,
+  up from 63 at the 04:31Z review — it keeps growing as cycles settle markets; re-run
+  `python3 scripts/verify_settlements.py` for the current number). Review
   `forward/audit/settlement-backfill.json` after the first run; mismatches are findings only.
 * **KXFED history is request-complete, not calendar-dense.** The committed full-life capture has
   327 official daily bars across five distinct request windows plus an index that records the 2025-08
@@ -493,8 +546,10 @@ board/ledger text filters, archive equity curves and season-health panel.
   test — EPL games are in season now, NCAAM starts in November (IRR-37: Kalshi's `rules_primary`
   phrasing for both series gets its first confirmation on the runner). **FdaRecordCheck** remains
   untested-not-refuted: its openFDA lookups only fire when a `KXFDA*` market naming a drug is open
-  (can-fire tests added 2026-09-22 prove the rule triggers on an approved record). Do not loosen
-  the 85¢/97¢ caps to manufacture trades.
+  (can-fire tests added 2026-09-22 prove the rule triggers on an approved record). **MetalMomentum**
+  is the third unranked persona: zero fills, one `not_confirmed_on_book` intent (its 60–80¢ gold ask
+  did not survive to the fresh book). Do not loosen the 85¢/97¢ caps or the 60–80¢ band to manufacture
+  trades.
 * **FDA target dates remain unverifiable.** Drugs@FDA publishes no PDUFA action date (IRR-27), so
   date-driven FDA personas stay out. `KXFDAAPPROVE` volume is small (76k) — check whether the series
   is even worth trading before adding rules.

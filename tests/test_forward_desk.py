@@ -354,6 +354,25 @@ class DeskCycleTests(unittest.TestCase):
         for row in board["rows"]:
             self.assertAlmostEqual(row["equity"], row["cash"], places=2)
 
+    def test_fixture_cycle_never_writes_committed_universe_caches(self):
+        """IRR-40: a fixture cycle's adapter caches must land under the test universe dir, never
+        in the committed data/universe/ (a fixture-written cache would look like verified data)."""
+        committed = os.path.join(ROOT, "data", "universe")
+        snapshot = {}
+        for name in ("fda-records.json", "place-centroids.json", "nws-gridpoints.json"):
+            path = os.path.join(committed, name)
+            snapshot[name] = (os.path.exists(path), os.path.getmtime(path) if os.path.exists(path) else None)
+        self.run_cycle(build_fixtures(), T0)  # fixture includes an open KXFDA market -> FDA adapter fires
+        for name, (existed, mtime) in snapshot.items():
+            path = os.path.join(committed, name)
+            self.assertEqual(os.path.exists(path), existed, f"committed {name} created or deleted by a fixture cycle")
+            if existed:
+                self.assertEqual(os.path.getmtime(path), mtime, f"committed {name} modified by a fixture cycle")
+        # and the fixture's own cache sits next to its own ledger
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "universe", "fda-records.json")))
+        record = FD.read_json(os.path.join(self.tmp, "universe", "fda-records.json"))
+        self.assertTrue(record["records"], "fixture cycle left no FDA cache under the test universe dir")
+
     def test_scalar_settlement_uses_official_value(self):
         cycle, _ = self.run_cycle(build_fixtures(), T0)
         fx = build_fixtures(settled=True)

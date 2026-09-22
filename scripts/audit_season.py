@@ -216,8 +216,12 @@ def audit_signals(cycles: list[dict]) -> dict:
     def total(key):
         return sum(int(c.get(key) or 0) for c in cycles)
     latest = cycles[-1] if cycles else {}
+    # nwsCaptured is a per-cycle boolean (one Central Park point forecast per cycle when it
+    # succeeds), so its total IS the number of cycles that captured Central Park.  The previous
+    # form (`total(...) and len(cycles)`) reported the TOTAL number of cycles whenever at least
+    # one capture succeeded, overstating coverage in any season with a failed weather fetch.
     return {
-        "totals": {"nwsCentralPark": total("nwsCaptured") and len(cycles),
+        "totals": {"nwsCentralPark": total("nwsCaptured"),
                    "nwsCityForecasts": total("nwsCityForecasts"), "espnSignals": total("espnSignals"),
                    "espnLiveSignals": total("espnLiveSignals"), "fdaSignals": total("fdaSignals"),
                    "fdaNoRecord": total("fdaNoRecord"), "signalErrors": total("signalErrorCount"),
