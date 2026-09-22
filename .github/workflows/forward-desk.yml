@@ -6,15 +6,27 @@ name: Forward desk cycle
 # Nothing here can place a real order: no credentials exist and the client is read-only.
 #
 # Notes
-#  * GitHub runs `schedule` triggers only on the default branch and may delay them under load;
-#    every cycle records its own wall-clock time in data/season-<UTC year>/forward/cycles/*.jsonl.
+#  * GitHub runs `schedule` triggers only on the default branch, five minutes is the shortest
+#    interval it accepts, and delivery is best-effort under load (2026-09-22: only 13 of 118
+#    expected 7/37 slots actually ran, which is why the desk now also takes */5 ticks).  Every run
+#    records its own wall-clock time in data/season-<UTC year>/forward/cycles/*.jsonl, and
+#    scripts/audit_season.py grades the delivered slots rather than assuming them.
+#  * A */5 tick is deliberately cheap: it only looks at markets whose own close_time is inside
+#    TICK_LIVE_WINDOW_SECONDS (3h), skips the archive/view rebuilds, and writes nothing at all
+#    unless it actually filled or closed something - so quiet slots cost no data and no commits.
+#    Ticks cover in-game play (live score, live book, momentum); the 7/37 cycles still do the
+#    archiving, maker model, backtest, compaction and audit work.
 #  * `workflow_dispatch` lets a maintainer run a cycle (or the universe discovery) on any branch.
+#    A push to an arena branch whose commit message carries [desk:cycle] / [desk:universe] /
+#    [desk:settlements] / [desk:both] runs that mode, which is how the settlement backfill is
+#    exercised without dispatch rights.
 
 on:
   push:
     branches: ["arena/**"]        # test hook: only runs when the commit message contains [desk]
   schedule:
-    - cron: "7,37 * * * *"      # desk cycle, twice an hour
+    - cron: "*/5 * * * *"       # live tick: in-game markets only (see TICK_LIVE_WINDOW_SECONDS)
+    - cron: "7,37 * * * *"      # full desk cycle, twice an hour
     - cron: "17 6 * * 1"        # weekly series-catalog refresh (Monday 06:17 UTC)
     - cron: "47 6 1 * *"        # monthly full settlement backfill (1st of month, 06:47 UTC)
   workflow_dispatch:
@@ -49,6 +61,7 @@ jobs:
           if [ -z "$MODE" ] && [ "${{ github.event_name }}" = "push" ]; then
             case "${{ github.event.head_commit.message }}" in
               *"[desk:universe]"*) MODE=universe ;;
+              *"[desk:settlements]"*) MODE=settlements ;;
               *"[desk:both]"*) MODE=both ;;
               *) MODE=cycle ;;
             esac
@@ -57,6 +70,7 @@ jobs:
             case "${{ github.event.schedule }}" in
               "17 6 * * 1") MODE=universe ;;
               "47 6 1 * *") MODE=settlements ;;
+              "*/5 * * * *") MODE=tick ;;
               *) MODE=cycle ;;
             esac
           fi
@@ -80,6 +94,14 @@ jobs:
         if: steps.mode.outputs.mode == 'cycle' || steps.mode.outputs.mode == 'both'
         run: python3 scripts/forward_desk.py --live
 
+      # Live tick: the cheapest real-time pass.  It narrows the universe to markets closing inside
+      # the next three hours, skips the archive/view rebuilds, and persists nothing when it neither
+      # filled nor closed a position.  Only the append-only ledger and the account state are written,
+      # so the data cost of a 5-minute slot is proportional to what actually traded.
+      - name: Run one live tick (in-game markets only)
+        if: steps.mode.outputs.mode == 'tick'
+        run: python3 scripts/forward_desk.py --live --tick
+
       # Measures this cycle's fills against the official trade tape (GET /markets/trades).
       # Never fatal: a missing tape window is recorded as its own status, not a failed build.
       - name: Compare fills with the official trade tape
@@ -90,6 +112,7 @@ jobs:
       # the official trade tape after its post time.  MODELLED evidence about hypothetical resting
       # orders only (forward/execution/maker-model.json); never a ledger fill.  Never fatal.
       - name: Match maker quote plans against the official trade tape
+        if: steps.mode.outputs.mode != 'tick'
         run: python3 scripts/maker_model.py --live || echo "maker model comparison incomplete"
 
       # Archive the full official candle history for the KXFED market (bounded chunks, one hash each).
@@ -99,14 +122,17 @@ jobs:
 
       # Replay the committed candle archive bar by bar (verified tape only, official results only).
       - name: Rebuild the archive backtest
+        if: steps.mode.outputs.mode != 'tick'
         run: python3 scripts/backtest_archive.py
 
       # Storage: verify existing compacted evidence still matches its recorded hash, then compact
       # evidence/quotes older than 3 days.  Append-only ledger files are never touched.
       - name: Check compacted storage (all seasons)
+        if: steps.mode.outputs.mode != 'tick'
         run: python3 scripts/compact_storage.py --all-seasons --check
 
       - name: Compact old evidence and quote captures (all seasons)
+        if: steps.mode.outputs.mode != 'tick'
         run: python3 scripts/compact_storage.py --all-seasons --days 3 --apply
 
       # Season health audit: cron-slot schedule gaps, ledger coverage, compaction state, signal
@@ -114,12 +140,22 @@ jobs:
       # GET /markets/{ticker}.  A mismatched settlement flips the report to FAIL and is then
       # caught by the verifier below, which fails the run - the issue stays in the repo log.
       - name: Season health audit
+        if: steps.mode.outputs.mode != 'tick'
         run: python3 scripts/audit_season.py --live || echo "season audit recorded issues (see data/season-*/forward/audit/latest.json)"
 
+      # The verifier always writes its findings into the season's audit directory (committed by the
+      # step below), then the job is failed afterwards - so a runner-only failure is readable from
+      # the repository itself, not just from a log.
       - name: Verify season memory (invariants + hashes)
-        run: python3 scripts/verify_data.py
+        id: verify
+        continue-on-error: true
+        run: |
+          SEASON=$(python3 -c "import json;print(json.load(open('data/seasons.json'))['activeSeason'])" 2>/dev/null || echo 2026)
+          mkdir -p "data/season-$SEASON/forward/audit"
+          python3 scripts/verify_data.py --report "data/season-$SEASON/forward/audit/verify-latest.json"
 
       - name: Offline tests
+        if: steps.mode.outputs.mode != 'tick'
         run: python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Commit and push the ledger
@@ -146,6 +182,14 @@ jobs:
             git rebase "origin/${BRANCH}" || { git rebase --abort; exit 1; }
             sleep $((attempt * 5))
           done
+          exit 1
+
+      # Fails the job after the ledger (and the failure report) are committed.
+      - name: Surface verification failures
+        if: steps.verify.outcome == 'failure'
+        run: |
+          echo "verify_data.py reported failures; the report is committed at"
+          echo "data/season-*/forward/audit/verify-latest.json"
           exit 1
 
       - name: Re-deploy GitHub Pages with the new ledger (default branch only)

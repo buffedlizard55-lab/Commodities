@@ -551,6 +551,7 @@ class EspnScoreboard:
         self.events: list[dict] = []
         self.snapshots: list[dict] = []
         self._by_date: dict[str, list[dict]] = {}
+        self._snapshot_meta: dict[str, dict] = {}
 
     def _compact_event(self, event: dict, league_key: str) -> dict:
         competitions = event.get("competitions") or [{}]
@@ -581,6 +582,8 @@ class EspnScoreboard:
             self.errors.append(f"espn {league} {date_yyyymmdd}: {error}")
             return []
         events = [self._compact_event(e, league_key) for e in (payload.get("events") or [])]
+        self._snapshot_meta[date_yyyymmdd] = {"url": url, "sha256": sha256_bytes(raw),
+                                             "retrievedAt": iso(int(time.time()))}
         self.snapshots.append({"kind": "espn-scoreboard", "league": league_key, "sport": sport, "date": date_yyyymmdd,
                                "url": url, "events": len(events), "retrievedAt": iso(int(time.time())),
                                "sha256": sha256_bytes(raw),
@@ -665,11 +668,17 @@ class EspnScoreboard:
         diff = None
         if away_score is not None and home_score is not None:
             diff = (home_score - away_score) if side == "home" else (away_score - home_score)
+        source = None
+        for day, bucket in self._by_date.items():
+            if any(e.get("id") == event.get("id") for e in bucket):
+                source = self._snapshot_meta.get(day)
+                break
         return {"espnEventId": event.get("id"), "league": series, "state": event.get("state"),
                 "detail": event.get("detail"), "clock": event.get("clock"),
                 "scheduled": game["scheduled"], "away": game["away"], "home": game["home"],
                 "marketSide": side, "awayScore": away_score, "homeScore": home_score,
-                "scoreDiff": diff, "completed": event.get("completed"), "matchedVia": found["matchedVia"]}
+                "scoreDiff": diff, "completed": event.get("completed"), "matchedVia": found["matchedVia"],
+                "sourceUrl": (source or {}).get("url"), "sha256": (source or {}).get("sha256")}
 
 
 def _number(value):

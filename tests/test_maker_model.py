@@ -158,10 +158,69 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(summary["tapeTradedThrough"], 1)
         self.assertEqual(summary["queueUncertain"], 1)
         self.assertEqual(summary["noFillEvidence"], 1)
-        self.assertTrue(summary["makerFeesUnverified"])
+        self.assertTrue(summary["makerFeesModelled"])
+        self.assertIn("makerFeeSource", summary)
+        self.assertIn("kalshi-fee-schedule", summary["makerFeeSource"])
         self.assertIn("MODELLED", summary["modelLabel"])
         self.assertEqual(summary["tapeTradedThrough"] + summary["queueUncertain"]
                          + summary["noFillEvidence"], summary["compared"])
+
+
+class MakerFeeTests(unittest.TestCase):
+    """IRR-41: the maker side of the fee schedule now has a primary source and is modelled.
+
+    Official schedule (https://kalshi.com/docs/kalshi-fee-schedule.pdf, July 2026 update):
+        maker fees = round up(M x 0.0175 x C x P x (1-P)), M defaulting to 0 unless indicated.
+    The series' own fee_type decides whether the series carries maker fees at all.
+    """
+
+    def test_maker_multiplier_follows_the_series_fee_type(self):
+        from paper_engine import maker_multiplier
+        self.assertEqual(maker_multiplier("quadratic", 1), 0.0)          # no maker fee
+        self.assertEqual(maker_multiplier(None, 1), 0.0)                 # unknown -> documented default
+        self.assertEqual(maker_multiplier("quadratic_with_maker_fees", 1), 1.0)
+        self.assertEqual(maker_multiplier("quadratic_with_combo_maker_fees", 1), 1.0)
+
+    def test_maker_fee_matches_the_published_formula(self):
+        from paper_engine import maker_fee
+        # 100 contracts at 50c: 0.0175 x 100 x 0.5 x 0.5 = 0.4375 -> rounded up at $0.000001
+        self.assertAlmostEqual(maker_fee(0.50, 100), 0.4375, places=6)
+        # a series without maker fees pays nothing
+        self.assertEqual(maker_fee(0.50, 100, multiplier=0), 0.0)
+        # one quarter of the taker rate at the same price/quantity
+        from paper_engine import taker_fee
+        self.assertAlmostEqual(maker_fee(0.50, 100), taker_fee(0.50, 100) / 4, places=6)
+
+    def test_settlement_projection_reports_gross_and_net(self):
+        results = {"KXTINY-26SEP20-YES": {"result": "yes", "settlementTs": "2026-09-20T16:00:00Z"}}
+        gross = MM.project_settlement(plan(), 0.55, 100.0, results, "quadratic", 1)
+        self.assertEqual(gross["makerFeeMultiplier"], 0.0)
+        self.assertEqual(gross["makerFee"], 0.0)
+        self.assertEqual(gross["pnlNetOfMakerFees"], gross["pnlBeforeMakerFees"])
+        net = MM.project_settlement(plan(), 0.55, 100.0, results, "quadratic_with_maker_fees", 1)
+        # the exchange rounds the fee up to a centicent ($0.0001), so 0.433125 -> 0.4332
+        import math
+        expected_fee = math.ceil(0.0175 * 100 * 0.55 * 0.45 * 10000 - 1e-9) / 10000
+        self.assertAlmostEqual(net["makerFee"], expected_fee, places=6)
+        self.assertAlmostEqual(net["makerFee"], 0.4332, places=6)
+        self.assertAlmostEqual(net["pnlNetOfMakerFees"], net["pnlBeforeMakerFees"] - expected_fee, places=6)
+
+    def test_summary_fee_totals_are_null_until_something_settles(self):
+        """The runner writes this shape whenever no tape-proven fill has settled yet."""
+        summary = MM.summarize([], "2026-09-22T00:00:00Z")
+        for key in ("projectedMakerFees", "projectedPnlNetOfMakerFees", "projectedPnlBeforeMakerFees"):
+            self.assertIn(key, summary)
+            self.assertIsNone(summary[key])
+        self.assertTrue(summary["makerFeesModelled"])
+
+    def test_load_series_fees_reads_the_committed_index_and_defaults_to_empty(self):
+        fees = MM.load_series_fees()
+        self.assertEqual(fees["KXCPI"]["fee_type"], "quadratic_with_maker_fees")
+        # verified in data/universe/series-index.json: every game series the desk trades carries
+        # maker fees (KXNFLGAME m=1, KXMLBGAME m=0.5); company series like AAPLCEOCHANGE do not.
+        self.assertEqual(fees["KXNFLGAME"]["fee_type"], "quadratic_with_maker_fees")
+        self.assertEqual(fees["AAPLCEOCHANGE"]["fee_type"], "quadratic")
+        self.assertEqual(MM.load_series_fees("/nonexistent/series-index.json"), {})
 
 
 class EndToEndTests(unittest.TestCase):

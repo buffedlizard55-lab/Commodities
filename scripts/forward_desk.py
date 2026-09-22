@@ -40,6 +40,7 @@ from paper_engine import (STARTING_CASH, normalize_market, parse_book, book_quot
                           taker_fee, iso, parse_ts, fnum)
 import forward_strategies as FS  # noqa: E402
 import signals as SIG  # noqa: E402
+import signal_adapters as SA  # noqa: E402
 from season import resolve_forward_dir, write_seasons_index, season_for  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -68,6 +69,17 @@ MAX_MICRO_MARKETS = 6
 MAX_CANDLE_ARCHIVES_PER_CYCLE = 10
 MAX_NWS_CITIES = 12          # one NWS gridpoint forecast per city per cycle (official api.weather.gov)
 MAX_FDA_LOOKUPS = 8          # openFDA Drugs@FDA lookups per cycle (results cached 7 days)
+# Injury/nowcast/index adapters added 2026-09-22 (scripts/signal_adapters.py).  The window is how
+# far back an ESPN designation row may be dated to still count as news about an upcoming game.
+INJURY_WINDOWS = {"KXNFLGAME": 72.0, "KXNBAGAME": 168.0}
+# Kalshi CPI series -> (nowcast section, sanity band for the published percent change).
+NOWCAST_SERIES = {"KXCPI": ("month-over-month", (-2.0, 2.0)),
+                  "KXCPIYOY": ("year-over-year", (-5.0, 20.0))}
+FRED_LOOKBACK_DAYS = 10
+# Tick mode (2026-09-22): a short, cheap cycle aimed at in-game markets - it only looks at markets
+# that close inside this many hours, skips the archive/view rebuilds a full cycle does, and writes
+# nothing at all when no live market exists (so a quiet tick leaves no commit behind).
+TICK_LIVE_WINDOW_SECONDS = 3 * 3600
 EXIT_FLOOR_TOLERANCE = 0.03
 MARKETABLE_LIMIT_THROUGH = 0.05  # entries are IOC limits at min(rule bound, touch + 5c)
 RECENT_EVENTS = 200
@@ -75,6 +87,16 @@ RECENT_INTENTS = 150
 QUOTE_LOG_LIMIT = 200
 FEE_TYPES_MODELED = {"quadratic", "quadratic_with_maker_fees", "quadratic_with_combo_maker_fees"}
 MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+
+
+MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August",
+               "September", "October", "November", "December"]
+
+
+def current_month_label(now_ts: int) -> str:
+    """The UTC month the cycle runs in, in the Cleveland Fed table's own label format."""
+    stamp = datetime.fromtimestamp(int(now_ts), tz=timezone.utc)
+    return f"{MONTH_NAMES[stamp.month - 1]} {stamp.year}"
 
 
 def set_paths(forward_dir=None, series_index=None, season=None, universe_dir=None):
@@ -469,7 +491,8 @@ def account_for(state: dict, strategy: dict) -> dict:
 
 # ----------------------------------------------------------------------------- the cycle
 class Cycle:
-    def __init__(self, client, now_ts: int, index: dict, state: dict, nws_fetcher=fetch_json_url):
+    def __init__(self, client, now_ts: int, index: dict, state: dict, nws_fetcher=fetch_json_url,
+                 text_fetcher=None, tick: bool = False):
         self.client = client
         self.now_ts = now_ts
         self.cycle_id = datetime.fromtimestamp(now_ts, tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -486,6 +509,11 @@ class Cycle:
         self.book_meta: dict[str, dict] = {}
         self.market_records: dict[str, dict] = {}
         self.nws_fetcher = nws_fetcher
+        # Separate hook for non-JSON official sources (Cleveland Fed HTML, FRED CSV); None means
+        # the adapter's own urllib fetcher is used.
+        self.text_fetcher = text_fetcher
+        self.tick = bool(tick)
+        self.tick_actionable = False
         self.nws_record = None
         self.candles = {}
         self.candles1m = {}
@@ -502,11 +530,25 @@ class Cycle:
         self.nws_cities: "SIG.NwsCities | None" = None
         self.espn_adapter: "SIG.EspnScoreboard | None" = None
         self.fda_adapter: "SIG.OpenFdaRecords | None" = None
+        self.injuries: dict[str, dict] = {}
+        self.nowcast: dict[str, dict] = {}
+        self.index_close: dict[str, dict] = {}
+        self.injuries_adapter: "SA.EspnInjuries | None" = None
+        self.nowcast_adapter: "SA.ClevelandFedNowcast | None" = None
+        self.index_adapter: "SA.FredSeries | None" = None
 
     # -- data ---------------------------------------------------------------------------
     def load_universe(self):
         tracked = resolve_selector(self.index, "tracked")
         self.markets = fetch_open_markets(self.client, self.index, tracked, self.errors)
+        if self.tick:
+            # In-game only: keep the markets whose own official close_time falls inside the live
+            # window, so a tick is about games that are being played right now.
+            horizon = self.now_ts + TICK_LIVE_WINDOW_SECONDS
+            live = {t: m for t, m in self.markets.items()
+                    if m.get("close_ts") and self.now_ts <= m["close_ts"] <= horizon}
+            self.books = {t: b for t, b in self.books.items() if t in live}
+            self.markets = live
         self.nws, self.nws_record = capture_nws(self.markets, self.cycle_id, self.now_ts, self.nws_fetcher, self.errors)
         self.candles = capture_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
         self.candles1m = capture_micro_candles(self.client, self.index, self.markets, self.now_ts, self.errors)
@@ -521,7 +563,8 @@ class Cycle:
 
     def ctx(self, book=None) -> dict:
         return {"now_ts": self.now_ts, "candles": self.candles, "candles1m": self.candles1m,
-                "nws": self.nws_signals(), "espn": self.espn, "fda": self.fda, "book": book}
+                "nws": self.nws_signals(), "espn": self.espn, "fda": self.fda, "book": book,
+                "injuries": self.injuries, "nowcast": self.nowcast, "index": self.index_close}
 
     def capture_signal_adapters(self):
         """Point-in-time signals from the other official public sources (each one archived).
@@ -580,6 +623,79 @@ class Cycle:
                 if signal:
                     self.fda[m["ticker"]] = signal
             self.signal_errors.extend(adapter.errors)
+        self.capture_injury_signals(fetcher)
+        self.capture_nowcast()
+        self.capture_index_closes()
+
+    def capture_injury_signals(self, fetcher):
+        """ESPN league injury snapshots -> one signal per game market (opponent's hard outs)."""
+        leagues = sorted({m["series_ticker"] for m in self.markets.values()
+                          if m["series_ticker"] in SA.INJURY_LEAGUES})
+        if not leagues:
+            return
+        adapter = SA.EspnInjuries(fetcher=fetcher)
+        for league in leagues:
+            adapter.fetch(league)
+        self.injuries_adapter = adapter
+        self.signal_errors.extend(adapter.errors)
+        for ticker, m in self.markets.items():
+            if m["series_ticker"] not in adapter.leagues or adapter.reports.get(m["series_ticker"]) is None:
+                continue
+            game = SIG.game_from_market(m)
+            if not game:
+                continue
+            window = INJURY_WINDOWS.get(m["series_ticker"], 72.0)
+            try:
+                signal = SA.injury_signal_for_market(adapter, m, game, self.now_ts, window)
+            except Exception as error:  # noqa: BLE001 - a bad row must not stop the cycle
+                self.signal_errors.append(f"espn-injuries signal {ticker}: {error}")
+                continue
+            if signal:
+                self.injuries[ticker] = signal
+
+    def capture_nowcast(self):
+        """Cleveland Fed inflation nowcast for the tracked CPI series (verbatim HTML archived)."""
+        wanted = sorted({m["series_ticker"] for m in self.markets.values()
+                         if m["series_ticker"] in NOWCAST_SERIES})
+        if not wanted:
+            return
+        kwargs = {"fetcher": self.text_fetcher} if self.text_fetcher else {}
+        # A parse that cannot file all three tables keeps the verbatim page under the season's raw
+        # evidence store, so the parser is corrected from the bytes rather than from memory.
+        raw_dir = os.path.join(os.path.dirname(FORWARD_DIR), "raw")
+        adapter = SA.ClevelandFedNowcast(raw_dir=raw_dir, **kwargs)
+        if not adapter.fetch():
+            self.signal_errors.extend(adapter.errors)
+            return
+        self.nowcast_adapter = adapter
+        label = current_month_label(self.now_ts)
+        for series_ticker in wanted:
+            section, band = NOWCAST_SERIES[series_ticker]
+            row = adapter.monthly(label, section=section, metric="cpi", band=band)
+            if row:
+                self.nowcast[series_ticker] = row
+
+    def capture_index_closes(self):
+        """FRED official index closes for the tracked index-range series."""
+        wanted = sorted({m["series_ticker"] for m in self.markets.values()
+                         if m["series_ticker"] in SA.FRED_SERIES})
+        if not wanted:
+            return
+        kwargs = {"fetcher": self.text_fetcher} if self.text_fetcher else {}
+        adapter = SA.FredSeries(**kwargs)
+        start = datetime.fromtimestamp(self.now_ts - FRED_LOOKBACK_DAYS * 86400, tz=timezone.utc).strftime("%Y-%m-%d")
+        end = datetime.fromtimestamp(self.now_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        for series_ticker in wanted:
+            fred_id = SA.FRED_SERIES[series_ticker][0]
+            try:
+                observed = adapter.close(fred_id, start, end)
+            except Exception as error:  # noqa: BLE001
+                self.signal_errors.append(f"fred {fred_id}: {error}")
+                continue
+            if observed:
+                self.index_close[series_ticker] = observed
+        self.index_adapter = adapter
+        self.signal_errors.extend(adapter.errors)
 
     def get_book(self, ticker: str) -> dict | None:
         if ticker in self.books:
@@ -617,6 +733,50 @@ class Cycle:
                   "sha256": sha256_bytes(raw)}
         self.market_records[ticker] = record
         return record
+
+    def signal_sources(self, ticker: str) -> list[dict]:
+        """Every official source this cycle read that produced a signal for this ticker.
+
+        One row per source with its own URL and the SHA-256 of the verbatim response, so a fill can
+        be reviewed against the exact bytes behind it.  A source that did not speak to this ticker
+        is absent (nothing is inferred); an entry always names its kind.
+        """
+        out: list[dict] = []
+        m = self.markets.get(ticker) or {}
+        series = m.get("series_ticker")
+        injury = self.injuries.get(ticker)
+        if injury:
+            out.append({"kind": "espn_injuries", "url": injury.get("sourceUrl"),
+                        "sha256": injury.get("sha256"), "detail":
+                        {"league": injury.get("league"), "team": injury.get("espnTeam"),
+                         "hardOut": injury.get("freshHardOut"), "qbOut": injury.get("freshQbOut"),
+                         "players": [p.get("athlete") for p in (injury.get("freshOutPlayers") or [])][:4]}})
+        espn = self.espn.get(ticker)
+        if espn:
+            out.append({"kind": "espn_scoreboard", "url": espn.get("sourceUrl"), "sha256": espn.get("sha256"),
+                        "detail": {"eventId": espn.get("espnEventId"), "state": espn.get("state"),
+                                   "detail": espn.get("detail"), "scoreDiff": espn.get("scoreDiff")}})
+        fda = self.fda.get(ticker)
+        if fda:
+            out.append({"kind": "openfda", "url": fda.get("source"), "sha256": fda.get("sha256"),
+                        "detail": {"drug": fda.get("drug"), "approved": bool(fda.get("approvedRecord"))}})
+        nowcast = self.nowcast.get(series)
+        if nowcast:
+            out.append({"kind": "cleveland_fed_nowcast", "url": nowcast.get("sourceUrl"),
+                        "sha256": nowcast.get("sha256"),
+                        "detail": {"section": nowcast.get("section"), "metric": nowcast.get("metric"),
+                                   "value": nowcast.get("value"), "label": nowcast.get("label")}})
+        index = self.index_close.get(series)
+        if index:
+            out.append({"kind": "fred_index", "url": index.get("sourceUrl"), "sha256": index.get("sha256"),
+                        "detail": {"seriesId": index.get("seriesId"),
+                                   "latest": (index.get("latest") or {}).get("date"),
+                                   "value": (index.get("latest") or {}).get("value")}})
+        nws = self.nws_signals().get(ticker) if series and series.startswith("KXHIGH") else None
+        if nws:
+            out.append({"kind": "nws_forecast", "url": nws.get("source"), "sha256": nws.get("sha256"),
+                        "detail": {"high": nws.get("high"), "low": nws.get("low")}})
+        return out
 
     def evidence_book(self, ticker: str) -> dict:
         """Bind a fill/exit to the verbatim order-book response (stored once per cycle+ticker)."""
@@ -941,6 +1101,8 @@ class Cycle:
             # weather entry keyed on); exits may compare the live signal against it, never against
             # anything re-fetched for the entry bar.  Carried verbatim from the signal dict.
             "signalMeta": dict(signal.get("meta") or {}),
+            # signalSources: the official feeds behind this entry (URL + verbatim-response hash).
+            "signalSources": self.signal_sources(m["ticker"]),
             "evidence": evidence, "lastMark": None,
         }
         position["lastMark"] = self.mark(position, book_quotes(self.books[m["ticker"]]).get(f"{signal['side']}_bid"),
@@ -953,6 +1115,7 @@ class Cycle:
             "entryPrice": execution["vwap"], "entryTouch": execution["touch"], "entryNotional": execution["notional"],
             "entryFee": execution["fee"], "slippageEntry": slip, "levelsConsumed": len(execution["fills"]),
             "entryAt": position["entryAt"], "closeTime": position["closeTime"], "reason": signal["reason"], "evidence": evidence,
+            "signalSources": position["signalSources"],
             "limitPrice": execution.get("limit"), "feeMultiplier": multiplier,
         })
         return position
@@ -1034,6 +1197,13 @@ class Cycle:
     def run(self) -> dict:
         started = time.time()
         self.load_universe()
+        if self.tick and not self.markets:
+            # Nothing is being played inside the window: a tick is a no-op and persists nothing.
+            return {"cycle": self.cycle_id, "at": iso(self.now_ts), "tick": "no_live_markets",
+                    "liveWindowHours": TICK_LIVE_WINDOW_SECONDS / 3600,
+                    "durationSec": round(time.time() - started, 1),
+                    "apiCalls": len(self.client.calls), "marketsSeen": 0, "persisted": False,
+                    "note": "tick cycle: no market's official close_time falls inside the live window"}
         for strategy in FS.STRATEGIES:
             account = account_for(self.state, strategy)
             self.reconcile(strategy, account)
@@ -1042,11 +1212,17 @@ class Cycle:
             account = account_for(self.state, strategy)
             if self.markets:
                 self.enter(strategy, account)
-        self.emit_maker_plans()
+        if not self.tick:
+            self.emit_maker_plans()
         for strategy in FS.STRATEGIES:
             self.mark_and_record(strategy, account_for(self.state, strategy))
-        self.archive_settled_candles()
-        self.log_quotes()
+        if not self.tick:
+            self.archive_settled_candles()
+            self.log_quotes()
+        else:
+            # An actionable tick is one that actually filled or closed something; a tick that only
+            # looked is not committed (the next full cycle re-renders every view anyway).
+            self.tick_actionable = any(e["kind"] in ("fill", "exit", "settlement") for e in self.events)
         summary = {
             "cycle": self.cycle_id, "at": iso(self.now_ts), "durationSec": round(time.time() - started, 1),
             "apiCalls": len(self.client.calls), "apiErrors": sum(1 for c in self.client.calls if c["status"] != 200),
@@ -1060,8 +1236,11 @@ class Cycle:
             "nwsCityForecasts": len(getattr(self, "nws_forecasts", {}) or {}), "espnSignals": len(self.espn),
             "espnLiveSignals": sum(1 for s in self.espn.values() if s.get("state") == "in"),
             "fdaSignals": len(self.fda), "fdaNoRecord": sum(1 for s in self.fda.values() if not s.get("approvedRecord")),
+            "injurySignals": len(self.injuries), "injuryQbOutSignals": sum(1 for x in self.injuries.values() if x.get("freshQbOut")),
+            "nowcastSignals": len(self.nowcast), "indexCloses": len(self.index_close),
             "signalErrors": self.signal_errors[:30], "signalErrorCount": len(self.signal_errors),
             "season": self.state.get("season", SEASON),
+            "tick": ("live" if self.tick_actionable else "idle") if self.tick else None,
             "errors": self.errors[:40], "errorCount": len(self.errors),
         }
         self.persisted_intents = self.dedupe_intents()
@@ -1073,17 +1252,93 @@ class Cycle:
                                "evidence": f"evidence/{self.day}.jsonl", "nws": "signals/nws-central-park.jsonl",
                                "nwsCities": "signals/nws-cities.jsonl", "espn": "signals/espn-scoreboard.jsonl",
                                "openfda": "signals/openfda.jsonl", "strategies": "strategies/", "summary": f"summary/{self.day}.json",
+                               "espnInjuries": "signals/espn-injuries.jsonl", "nowcast": "signals/cleveland-fed-nowcast.jsonl",
+                               "fredIndex": "signals/fred-index.jsonl", "sources": "sources/status.json",
                                "execution": "execution/", "candles": "candles/index.jsonl", "compressed": "COMPRESSED.json",
                                "tradesReview": "trades-review.md", "tradesReviewJson": "trades-review.json",
                                "makerModel": "execution/maker-model.json"}
         return summary
 
+    def sources_status(self) -> dict:
+        """Per-cycle status of every official source this cycle read (links for manual review).
+
+        One row per endpoint: the source's own URL, whether the cycle actually read it, how many
+        records/values it produced, and the SHA-256 of the last verbatim response when the adapter
+        returned one.  A source that was not needed this cycle is listed as `not_needed`; a source
+        that failed is listed as `failed` with the adapter's own error text - never silently absent.
+        """
+        def rows_for(records, source, url_key="sourceUrl"):
+            out = []
+            for record in records or []:
+                # adapters name their response URL differently ("sourceUrl" in this module,
+                # "url"/"source" in signals.py); a ledger row must always carry the real URL.
+                url = record.get(url_key) or record.get("url") or record.get("source")
+                out.append({"source": source, "status": "read", "url": url,
+                            "at": record.get("at") or record.get("retrievedAt"),
+                            "sha256": record.get("sha256"),
+                            "bytes": record.get("bytes"), "detail": record.get("seriesId")
+                            or record.get("league") or record.get("sections")})
+            return out
+        sources = []
+        # market data (always present when the universe loaded)
+        sources.append({"source": "Kalshi Trade API v2", "url": "https://external-api.kalshi.com/trade-api/v2",
+                        "status": "read" if self.markets else "failed",
+                        "detail": {"marketsSeen": len(self.markets), "apiCalls": len(self.client.calls)},
+                        "at": iso(self.now_ts)})
+        sources.append({"source": "NWS point forecast (KXHIGHNY gridpoint)", "url": NWS_FORECAST_URL,
+                        "status": "read" if self.nws_record else "not_needed",
+                        "detail": {"mapped": (self.nws_record or {}).get("mapped")}, "at": iso(self.now_ts)})
+        if self.nws_cities:
+            sources.extend(rows_for(self.nws_cities.records, "NWS city gridpoint forecasts"))
+        elif self.nws_record is None:
+            sources.append({"source": "NWS city gridpoint forecasts", "url": SIG.NWS_ROOT,
+                            "status": "not_needed", "detail": {}, "at": iso(self.now_ts)})
+        if self.espn_adapter:
+            sources.extend(rows_for(self.espn_adapter.snapshots, "ESPN scoreboard (public JSON)"))
+        else:
+            sources.append({"source": "ESPN scoreboard (public JSON)",
+                            "url": SIG.ESPN_SCOREBOARD.format(sport="football", league="nfl"),
+                            "status": "not_needed", "detail": {}, "at": iso(self.now_ts)})
+        if self.fda_adapter:
+            sources.extend(rows_for(self.fda_adapter.records, "openFDA Drugs@FDA"))
+        if self.injuries_adapter:
+            sources.extend(rows_for(self.injuries_adapter.records, "ESPN league injuries (public JSON)"))
+        elif SA.INJURY_LEAGUES:
+            sources.append({"source": "ESPN league injuries (public JSON)",
+                            "url": SA.ESPN_INJURIES_URL.format(sport="football", league="nfl"),
+                            "status": "not_needed", "detail": {}, "at": iso(self.now_ts)})
+        if self.nowcast_adapter:
+            sources.extend(rows_for(self.nowcast_adapter.records, "Cleveland Fed Inflation Nowcasting"))
+        if self.index_adapter:
+            sources.extend(rows_for(self.index_adapter.records, "FRED (Federal Reserve Bank of St. Louis)"))
+        errors = list(self.signal_errors)
+        return {"schemaVersion": 1, "generatedAt": iso(self.now_ts), "cycle": self.cycle_id,
+                "sources": sources, "sourceCount": len(sources),
+                "failed": [e for e in errors if e], "errorCount": len(errors),
+                "note": "One row per official endpoint this cycle could read; status is read / "
+                        "not_needed / failed, and every read row carries the verbatim response "
+                        "hash where the adapter returned one. A failed read is recorded here and "
+                        "the dependent strategy abstains."}
+
     def persist(self, summary: dict):
+        if summary.get("tick") in ("no_live_markets", "idle"):
+            # Nothing was live, or the tick looked but had nothing to do: both leave the ledger
+            # untouched, so a quiet 5-minute slot produces no commit and no data growth.
+            return
         append_jsonl(os.path.join(FORWARD_DIR, "evidence", f"{self.day}.jsonl"), self.evidence_rows)
         append_jsonl(os.path.join(FORWARD_DIR, "trades.jsonl"), self.events)
         append_jsonl(os.path.join(FORWARD_DIR, "intents", f"{self.month}.jsonl"), self.persisted_intents)
         append_jsonl(os.path.join(FORWARD_DIR, "cycles", f"{self.month}.jsonl"), [summary])
         append_jsonl(os.path.join(FORWARD_DIR, "candles", "index.jsonl"), self.archived)
+        if self.tick:
+            # A live tick appends the trade/intent/cycle rows and the account state; the equity
+            # curve, quote log and rendered views are rebuilt by the next full cycle, which reads
+            # these same append-only files.
+            self.state["cycles"] += 0  # counters were already advanced in run()
+            write_json(os.path.join(FORWARD_DIR, "sources", "status.json"), self.sources_status())
+            attach_state_position_refs(self.state)
+            write_json(os.path.join(FORWARD_DIR, "state.json"), self.state)
+            return
         append_csv(os.path.join(FORWARD_DIR, "equity", f"{self.month}.csv"),
                    ["cycle", "at", "strategyId", "username", "cash", "openPositions", "markedPositions", "liquidationValue", "equity",
                     "realizedPnl", "feesPaid", "slippagePaid", "markValue"], self.equity_rows)
@@ -1100,6 +1355,14 @@ class Cycle:
         if self.fda_adapter and self.fda_adapter.records:
             append_jsonl(os.path.join(FORWARD_DIR, "signals", "openfda.jsonl"), self.fda_adapter.records)
             self.fda_adapter.save()
+        if self.injuries_adapter and self.injuries_adapter.records:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "espn-injuries.jsonl"), self.injuries_adapter.records)
+        if self.nowcast_adapter and self.nowcast_adapter.records:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "cleveland-fed-nowcast.jsonl"),
+                         self.nowcast_adapter.records)
+        if self.index_adapter and self.index_adapter.records:
+            append_jsonl(os.path.join(FORWARD_DIR, "signals", "fred-index.jsonl"), self.index_adapter.records)
+        write_json(os.path.join(FORWARD_DIR, "sources", "status.json"), self.sources_status())
         attach_state_position_refs(self.state)
         write_json(os.path.join(FORWARD_DIR, "state.json"), self.state)
         write_json(os.path.join(FORWARD_DIR, "leaderboard.json"), build_leaderboard(self.state, self.state.get("season")))
@@ -1139,6 +1402,23 @@ class Cycle:
                               "applications": r.get("applications")}
                              for r in (self.fda_adapter.records if self.fda_adapter else [])]
         recent["fdaSignals"] = self.fda
+        # The 2026-09-22 adapters: one compact row per read so the site's signals tab can show the
+        # official URL, the retrieval time, the response hash and the value that was used.
+        recent["injuries"] = [{"league": r.get("league"), "url": r.get("sourceUrl"), "sha256": r.get("sha256"),
+                               "bytes": r.get("bytes"), "at": r.get("at"), "teamCount": r.get("teamCount"),
+                               "playerCount": r.get("playerCount"), "season": r.get("season")}
+                              for r in (self.injuries_adapter.records if self.injuries_adapter else [])]
+        recent["injurySignals"] = self.injuries
+        recent["nowcast"] = [{"url": r.get("sourceUrl"), "sha256": r.get("sha256"), "at": r.get("at"),
+                              "sections": r.get("sections"), "rows": r.get("rows")}
+                             for r in (self.nowcast_adapter.records if self.nowcast_adapter else [])]
+        recent["nowcastSignals"] = self.nowcast
+        recent["indexCloses"] = [{"seriesId": r.get("seriesId"), "url": r.get("sourceUrl"), "sha256": r.get("sha256"),
+                                  "at": r.get("at"), "latestDate": r.get("latestDate"), "latest": r.get("latest"),
+                                  "observed": r.get("observed")}
+                                 for r in (self.index_adapter.records if self.index_adapter else [])]
+        recent["indexSignals"] = self.index_close
+        recent["sourceStatus"] = self.sources_status()
         recent["signalErrors"] = self.signal_errors[:30]
         write_json(path, recent, compact=True)
 
@@ -1553,6 +1833,9 @@ def main(argv=None):
     parser.add_argument("--fixtures", help="directory of recorded responses (offline replay)")
     parser.add_argument("--now", help="ISO timestamp to use as the cycle clock (fixtures mode)")
     parser.add_argument("--dry-run", action="store_true", help="run but do not persist anything")
+    parser.add_argument("--tick", action="store_true",
+                        help="cheap live-window cycle: only markets closing inside 3h, no view rebuilds, "
+                             "no-op (nothing persisted) when no market is live")
     parser.add_argument("--out", help="override the forward-desk output directory (tests)")
     parser.add_argument("--series-index", help="override the series index path (tests)")
     parser.add_argument("--season", help="force a season year (default: the UTC year of the cycle clock)")
@@ -1571,9 +1854,9 @@ def main(argv=None):
         else:
             _forward, season_name, rolled_over = use_season(now_ts)
     if args.fixtures:
-        client, nws = fixture_client(args.fixtures)
+        client, nws, text = fixture_client(args.fixtures)
     else:
-        client, nws = KalshiClient(), fetch_json_url
+        client, nws, text = KalshiClient(), fetch_json_url, None
     index = load_series_index()
     seeded = seed_index_from_catalog(index)
     ensure_series(client, index, sorted(set(resolve_selector(index, "tracked"))), errors := [])
@@ -1584,7 +1867,8 @@ def main(argv=None):
     if state.get("season") != SEASON:  # rolled over into a directory that held another season
         state = new_state(now_ts, SEASON)
     backfill_counters(state)
-    cycle = Cycle(client, now_ts, index, state, nws_fetcher=nws)
+    cycle = Cycle(client, now_ts, index, state, nws_fetcher=nws, text_fetcher=text,
+                  tick=getattr(args, "tick", False))
     cycle.errors.extend(errors)
     if rolled_over:
         cycle.errors.append(f"season rollover: started Season {SEASON} at {iso(now_ts)} with fresh "
@@ -1628,7 +1912,11 @@ def backfill_counters(state: dict):
 
 
 def fixture_client(directory: str):
-    """Load DIR/kalshi.json ({path?query: body}) and DIR/nws.json (forecast body)."""
+    """Load DIR/kalshi.json ({path?query: body}), DIR/nws.json and DIR/text.json ({url: content}).
+
+    ``text.json`` feeds the non-JSON official adapters (Cleveland Fed HTML, FRED CSV) in offline
+    runs; when the file is absent those adapters abstain exactly as they would on a failed read.
+    """
     kalshi = read_json(os.path.join(directory, "kalshi.json"), {})
     nws_body = read_json(os.path.join(directory, "nws.json"), None)
 
@@ -1637,7 +1925,15 @@ def fixture_client(directory: str):
             raise RuntimeError("no NWS fixture")
         raw = json.dumps(nws_body, separators=(",", ":")).encode()
         return nws_body, raw
-    return FixtureClient(kalshi), nws_fetcher
+    text_bodies = read_json(os.path.join(directory, "text.json"), {}) or {}
+
+    def text_fetcher(url):
+        if url not in text_bodies:
+            raise RuntimeError(f"no fixture response recorded for {url}")
+        body = text_bodies[url]
+        return body, body.encode("utf-8")
+
+    return FixtureClient(kalshi), nws_fetcher, text_fetcher
 
 
 if __name__ == "__main__":

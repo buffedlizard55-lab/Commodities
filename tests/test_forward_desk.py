@@ -163,6 +163,8 @@ def signal_fetcher(url):
     body = None
     if "api.weather.gov" in url:
         body = nws_body()
+    elif "site.api.espn.com" in url and url.endswith("/injuries"):
+        body = injury_body() if "/basketball/" in url else nfl_injury_body()
     elif "site.api.espn.com" in url:
         body = espn_body()
     elif "api.fda.gov" in url:
@@ -175,6 +177,307 @@ def signal_fetcher(url):
 def evidence_hashes(base, rel):
     with open(os.path.join(base, rel)) as fh:
         return {json.loads(l)["sha256"] for l in fh}
+
+
+def injury_body():
+    """ESPN league injuries shape verified live 2026-09-22T22:51:42Z (basketball/nba).
+
+    Trimmed to two clubs: the Lakers block carries three hard designations inside the window, the
+    Suns block carries one.  Each row keeps ESPN's own status string and observation date, placed
+    before the fixture cycle time (T0) exactly as the live rows sit behind the cycle that reads them.
+    """
+    return {"timestamp": "2026-09-22T22:51:42Z", "status": "success",
+            "season": {"year": 2027, "type": 1, "name": "Preseason", "displayName": "2026-27"},
+            "injuries": [
+                {"id": "13", "displayName": "Los Angeles Lakers", "injuries": [
+                    {"id": "1", "status": "Out", "date": "2026-09-19T19:50Z", "shortComment": "torn ACL",
+                     "athlete": {"displayName": "Laker One", "position": {"abbreviation": "C"},
+                                 "team": {"abbreviation": "LAL"}}},
+                    {"id": "2", "status": "Out", "date": "2026-09-20T01:00Z", "shortComment": "ankle",
+                     "athlete": {"displayName": "Laker Two", "position": {"abbreviation": "PG"},
+                                 "team": {"abbreviation": "LAL"}}},
+                    {"id": "3", "status": "Doubtful", "date": "2026-09-20T02:00Z", "shortComment": "wrist",
+                     "athlete": {"displayName": "Laker Three", "position": {"abbreviation": "SF"},
+                                 "team": {"abbreviation": "LAL"}}}]},
+                {"id": "23", "displayName": "Phoenix Suns", "injuries": [
+                    {"id": "4", "status": "Out", "date": "2026-09-19T20:00Z", "shortComment": "knee",
+                     "athlete": {"displayName": "Suns One", "position": {"abbreviation": "PF"},
+                                 "team": {"abbreviation": "PHX"}}}]},
+            ]}
+
+
+def nfl_injury_body():
+    """NFL variant: the Bills block carries a quarterback OUT dated inside the 72h window."""
+    return {"timestamp": "2026-09-20T14:00:00Z", "status": "success",
+            "season": {"year": 2026, "type": 2, "name": "Regular Season", "displayName": "2026"},
+            "injuries": [
+                {"id": "2", "displayName": "Buffalo Bills", "injuries": [
+                    {"id": "5", "status": "Out", "date": "2026-09-20T12:00Z", "shortComment": "shoulder",
+                     "athlete": {"displayName": "Bills QB", "position": {"abbreviation": "QB"},
+                                 "team": {"abbreviation": "BUF"}}}]},
+            ]}
+
+
+NOWCAST_TABLE_HTML = """
+<html><body>
+<h2>Inflation, month-over-month percent change</h2>
+<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th><th>Updated</th></tr>
+<tr><td>September 2026</td><td>0.43</td><td>0.20</td><td>0.40</td><td>0.28</td><td>09/22</td></tr>
+</table>
+<h2>Inflation, year-over-year percent change</h2>
+<table><tr><th>Month</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th><th>Updated</th></tr>
+<tr><td>September 2026</td><td>3.50</td><td>2.39</td><td>3.93</td><td>3.49</td><td>09/22</td></tr>
+</table>
+<h2>Quarterly annualized percent change</h2>
+<table><tr><th>Quarter</th><th>CPI</th><th>Core CPI</th><th>PCE</th><th>Core PCE</th><th>Updated</th></tr>
+<tr><td>2026:Q3</td><td>1.44</td><td>2.16</td><td>2.50</td><td>3.00</td><td>09/22</td></tr>
+</table>
+</body></html>
+"""
+
+FRED_BODY = "observation_date,SP500\n2026-09-18,7650.50\n2026-09-21,\nobservation_date,NASDAQ100\n2026-09-18,29644.17\n"
+
+
+def official_text_fetcher(url):
+    """Cleveland Fed HTML and FRED CSV fixtures; anything else raises (the adapter abstains)."""
+    if "clevelandfed.org" in url:
+        return NOWCAST_TABLE_HTML, NOWCAST_TABLE_HTML.encode()
+    if "fred.stlouisfed.org" in url:
+        body = ("observation_date,SP500\n2026-09-18,7650.50\n2026-09-21,\n"
+                if "id=SP500" in url else "observation_date,NASDAQ100\n2026-09-18,29644.17\n")
+        return body, body.encode()
+    raise RuntimeError(f"no text fixture for {url}")
+
+
+def build_new_signal_fixtures():
+    """Cycle world for the 2026-09-22 adapters: injuries, CPI nowcast and index range markets."""
+    fx = build_fixtures()
+    fx["series/KXNBAGAME"] = series("KXNBAGAME", fee_type="quadratic_with_maker_fees", category="Sports")
+    fx["series/KXCPI"] = series("KXCPI", category="Economics", title="CPI")
+    fx["series/KXINX"] = series("KXINX", category="Financials", title="S&P 500 range")
+    nba = [market("KXNBAGAME-26SEP22PHXLAL-PHX", "KXNBAGAME-26SEP22PHXLAL", "2026-09-22T23:00:00Z", 0.50, 0.53,
+                  last=0.53, prev=0.52, volume=40000, open_time="2026-09-16T12:00:00Z", yes_sub_title="PHX Suns",
+                  rules_primary="If Phoenix wins the PHX Suns vs LAL Lakers Pro Basketball game originally "
+                                "scheduled for Sep 22, 2026, then the market resolves to Yes.")]
+    nfl = [market("KXNFLGAME-26SEP21DETBUF-DET", "KXNFLGAME-26SEP21DETBUF", "2026-09-21T23:00:00Z", 0.44, 0.47,
+                  last=0.47, prev=0.45, volume=60000, open_time="2026-09-15T12:00:00Z", yes_sub_title="DET Lions",
+                  rules_primary="If Detroit wins the DET Lions vs BUF Bills Pro Football game originally "
+                                "scheduled for Sep 21, 2026, then the market resolves to Yes.")]
+    cpi = [market("KXCPI-26SEP-T0.3", "KXCPI-26SEP", "2026-10-13T12:00:00Z", 0.70, 0.73, volume=12000,
+                  yes_sub_title="Above 0.3%", strike_type="greater", floor_strike=0.3,
+                  title="Will CPI rise more than 0.3% in September 2026?",
+                  rules_primary="If the Consumer Price Index (CPI) increases by more than 0.3% (single-decimal) "
+                                "in September 2026, then the market resolves to Yes.")]
+    inx = [market("KXINX-26SEP22-B7550", "KXINX-26SEP22", "2026-09-22T20:00:00Z", 0.57, 0.60, volume=25000,
+                  strike_type="between", floor_strike=7550, cap_strike=7700,
+                  title="Will the S&P 500 close between 7550 and 7700 on Sep 22, 2026?")]
+    fx["markets?series_ticker=KXNBAGAME&status=open&limit=200"] = {"cursor": "", "markets": nba}
+    fx["markets?series_ticker=KXNFLGAME&status=open&limit=200"]["markets"].extend(nfl)
+    fx["markets?series_ticker=KXCPI&status=open&limit=200"] = {"cursor": "", "markets": cpi}
+    fx["markets?series_ticker=KXINX&status=open&limit=200"] = {"cursor": "", "markets": inx}
+    # books reproduce each market's quoted ask (yes ask = 1 - best NO bid), so the desk's
+    # book-confirmation step accepts the rule's price instead of downgrading the intent.
+    fx[f"markets/KXNBAGAME-26SEP22PHXLAL-PHX/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.50, 3000)], [(0.47, 8000)])
+    fx[f"markets/KXNFLGAME-26SEP21DETBUF-DET/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.44, 3000)], [(0.53, 8000)])
+    fx[f"markets/KXCPI-26SEP-T0.3/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.70, 4000)], [(0.27, 9000)])
+    fx[f"markets/KXINX-26SEP22-B7550/orderbook?depth={FD.BOOK_DEPTH}"] = book([(0.57, 4000)], [(0.40, 9000)])
+    return fx
+
+
+class TickModeTests(unittest.TestCase):
+    """`--tick`: cheap live-window cycles for in-game markets (2026-09-22)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="forward-desk-tick-")
+        FD.set_paths(forward_dir=self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_cycle_full(self, fixtures, now_ts):
+        client = FixtureClient(fixtures)
+        index = FD.load_series_index()
+        errors = []
+        FD.ensure_series(client, index, FS.TRACKED_SERIES + ["KXFDAAPPROVE"], errors)
+        state = FD.read_json(os.path.join(self.tmp, "state.json")) or FD.new_state(now_ts)
+        cycle = FD.Cycle(client, now_ts, index, state, nws_fetcher=signal_fetcher,
+                         text_fetcher=official_text_fetcher)
+        cycle.errors.extend(errors)
+        summary = cycle.run()
+        cycle.persist(summary)
+        return cycle, summary
+
+    def run_tick(self, fixtures, now_ts):
+        client = FixtureClient(fixtures)
+        index = FD.load_series_index()
+        errors = []
+        FD.ensure_series(client, index, FS.TRACKED_SERIES + ["KXFDAAPPROVE"], errors)
+        state = FD.read_json(os.path.join(self.tmp, "state.json")) or FD.new_state(now_ts)
+        cycle = FD.Cycle(client, now_ts, index, state, nws_fetcher=signal_fetcher,
+                         text_fetcher=official_text_fetcher, tick=True)
+        cycle.errors.extend(errors)
+        summary = cycle.run()
+        cycle.persist(summary)
+        return cycle, summary
+
+    def test_tick_only_keeps_markets_closing_inside_the_window(self):
+        # T0 is 2026-09-20T15:00Z: the 15-minute BTC market closes at 15:10, the NFL game at 23:00
+        # (both inside 3h), the weather market the next morning (outside), the NFL week-2 game too.
+        cycle, summary = self.run_tick(build_fixtures(), T0)
+        self.assertEqual(summary["tick"], "live")
+        self.assertLessEqual(summary["marketsSeen"], 4)
+        self.assertTrue(all(m["close_ts"] <= T0 + FD.TICK_LIVE_WINDOW_SECONDS
+                            for m in cycle.markets.values()))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "strategies/score-pulse.json")),
+                         "a tick must not rebuild the rendered strategy pages")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "equity/2026-09.csv")),
+                         "a tick leaves the equity curve to the next full cycle")
+        # the append-only record and the account state are still written
+        for rel in ("state.json", "trades.jsonl", "cycles/2026-09.jsonl", "sources/status.json"):
+            self.assertTrue(os.path.exists(os.path.join(self.tmp, rel)), rel)
+
+    def test_live_game_tick_fills_in_real_time(self):
+        """A tick fired while the game is in progress trades the live-score rule, not 30 minutes later."""
+        # 2026-09-20T22:30Z: both NFL fixtures are inside the 3h window (closing 23:00 and 01:00) and
+        # ESPN shows Charlie leading Delta 21-7, so the live-score rule trades on the tick itself -
+        # no waiting for the next 30-minute slot.  The closed BTC market is not part of the universe.
+        cycle, summary = self.run_tick(build_fixtures(), T0 + 27000)
+        self.assertEqual(summary["tick"], "live")
+        fills = [(e["strategyId"], e["ticker"]) for e in cycle.events if e["kind"] == "fill"]
+        self.assertIn(("score-pulse", "KXNFLGAME-26SEP20CCCDDD-CCC"), fills)
+        self.assertEqual(len(cycle.markets), 2)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "equity/2026-09.csv")))
+
+    def test_idle_tick_writes_nothing(self):
+        """A tick that looks at live markets but has nothing to do must not touch the ledger."""
+        cycle, _ = self.run_cycle_full(build_fixtures(), T0)          # the full cycle takes the fills
+        before = {rel: (os.path.getsize(os.path.join(self.tmp, rel))
+                        if os.path.exists(os.path.join(self.tmp, rel)) else None)
+                  for rel in ("trades.jsonl", "equity/2026-09.csv", "state.json")}
+        _, summary = self.run_tick(build_fixtures(), T0 + 600)
+        self.assertEqual(summary["tick"], "idle")
+        after = {rel: (os.path.getsize(os.path.join(self.tmp, rel))
+                       if os.path.exists(os.path.join(self.tmp, rel)) else None)
+                 for rel in ("trades.jsonl", "equity/2026-09.csv", "state.json")}
+        self.assertEqual(before, after, "an idle tick must not grow the ledger")
+
+    def test_tick_with_no_live_market_persists_nothing(self):
+        fixtures = build_fixtures()
+        quiet = parse_ts("2026-09-23T12:00:00Z")   # all fixture markets have closed by then
+        cycle, summary = self.run_tick(fixtures, quiet)
+        self.assertEqual(summary["tick"], "no_live_markets")
+        self.assertEqual(summary["marketsSeen"], 0)
+        self.assertEqual(os.listdir(self.tmp), [], "a quiet tick must leave the ledger untouched")
+
+
+class NewSignalWiringTests(unittest.TestCase):
+    """The 2026-09-22 adapters end to end: capture, archive, trade, and source-status ledger."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="forward-desk-new-signals-")
+        FD.set_paths(forward_dir=self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_cycle(self, fixtures, now_ts):
+        client = FixtureClient(fixtures)
+        index = FD.load_series_index()
+        errors = []
+        FD.ensure_series(client, index, FS.TRACKED_SERIES + ["KXFDAAPPROVE"], errors)
+        state = FD.read_json(os.path.join(self.tmp, "state.json")) or FD.new_state(now_ts)
+        cycle = FD.Cycle(client, now_ts, index, state, nws_fetcher=signal_fetcher,
+                         text_fetcher=official_text_fetcher)
+        cycle.errors.extend(errors)
+        summary = cycle.run()
+        FD.save_series_index(index)
+        cycle.persist(summary)
+        return cycle, summary
+
+    def test_signals_are_captured_archived_and_traded(self):
+        cycle, summary = self.run_cycle(build_new_signal_fixtures(), T0)
+        self.assertEqual(len(cycle.injuries), 2)                 # PHX vs LAL, DET vs BUF
+        self.assertEqual(len(cycle.nowcast), 1)
+        self.assertEqual(len(cycle.index_close), 1)
+        self.assertEqual(summary["injurySignals"], 2)
+        self.assertEqual(summary["nowcastSignals"], 1)
+        self.assertEqual(summary["indexCloses"], 1)
+        for error in cycle.signal_errors:
+            self.assertNotIn("Traceback", error)
+
+        fills = [e for e in cycle.events if e["kind"] == "fill"]
+        by_strategy = {}
+        for e in fills:
+            by_strategy.setdefault(e["strategyId"], []).append(e)
+
+        # TipoffTriage: the Lakers carry three hard designations -> buy the Suns at the 0.53 ask.
+        triage = by_strategy.get("tipoff-triage")
+        self.assertTrue(triage, f"tipoff-triage did not fill; injuries={cycle.injuries}")
+        self.assertEqual(triage[0]["ticker"], "KXNBAGAME-26SEP22PHXLAL-PHX")
+        self.assertEqual(triage[0]["side"], "yes")
+        self.assertIn("ESPN injuries", triage[0]["reason"])
+
+        # InjuryFade: the Bills' quarterback is OUT inside 72h -> buy the Lions at the 0.47 ask.
+        fade = by_strategy.get("injury-fade")
+        self.assertTrue(fade, f"injury-fade did not fill; injuries={cycle.injuries}")
+        self.assertEqual(fade[0]["ticker"], "KXNFLGAME-26SEP21DETBUF-DET")
+        self.assertIn("Bills QB", fade[0]["reason"])
+
+        # NowcastNudge: 0.43% MoM CPI clears the 0.3% strike by the 0.10pp margin -> YES.
+        nudge = by_strategy.get("nowcast-nudge")
+        self.assertTrue(nudge, f"nowcast-nudge did not fill; nowcast={cycle.nowcast}")
+        self.assertEqual(nudge[0]["ticker"], "KXCPI-26SEP-T0.3")
+        self.assertEqual(nudge[0]["side"], "yes")
+        self.assertIn("Cleveland Fed nowcast", nudge[0]["reason"])
+
+        # LeapMapper: the last published S&P 500 close (7650.50) is inside [7550, 7700] -> YES.
+        leap = by_strategy.get("leap-mapper")
+        self.assertTrue(leap, f"leap-mapper did not fill; index={cycle.index_close}")
+        self.assertEqual(leap[0]["ticker"], "KXINX-26SEP22-B7550")
+        self.assertIn("7,650.50", leap[0]["reason"])
+
+        # every one of these fills cites the official feed it read, with the response hash
+        expected = {"tipoff-triage": ("espn_injuries", "/injuries"),
+                    "injury-fade": ("espn_injuries", "/injuries"),
+                    "nowcast-nudge": ("cleveland_fed_nowcast", "clevelandfed.org"),
+                    "leap-mapper": ("fred_index", "fred.stlouisfed.org")}
+        for strategy_id, (kind, url_part) in expected.items():
+            sources = by_strategy[strategy_id][0]["signalSources"]
+            match = [source for source in sources if source["kind"] == kind]
+            self.assertTrue(match, f"{strategy_id} fill did not cite {kind}: {sources}")
+            self.assertIn(url_part, match[0]["url"])
+            self.assertEqual(len(match[0]["sha256"]), 64)
+        # the sources ledger is also on the persisted position (state.json), same hash
+        position = next(p for p in cycle.state["accounts"]["tipoff-triage"]["positions"]
+                        if p["ticker"] == "KXNBAGAME-26SEP22PHXLAL-PHX")
+        self.assertEqual(position["signalSources"][0]["sha256"],
+                         by_strategy["tipoff-triage"][0]["signalSources"][0]["sha256"])
+
+    def test_official_signal_files_and_source_status_are_written(self):
+        cycle, _ = self.run_cycle(build_new_signal_fixtures(), T0)
+        for rel in ("signals/espn-injuries.jsonl", "signals/cleveland-fed-nowcast.jsonl",
+                    "signals/fred-index.jsonl", "sources/status.json"):
+            self.assertTrue(os.path.exists(os.path.join(self.tmp, rel)), rel)
+        injury_rows = [json.loads(line) for line in open(os.path.join(self.tmp, "signals/espn-injuries.jsonl"))]
+        self.assertEqual({row["league"] for row in injury_rows}, {"KXNFLGAME", "KXNBAGAME"})
+        self.assertTrue(all(len(row["sha256"]) == 64 for row in injury_rows))
+        fred_rows = [json.loads(line) for line in open(os.path.join(self.tmp, "signals/fred-index.jsonl"))]
+        self.assertEqual(fred_rows[0]["seriesId"], "SP500")
+        status = FD.read_json(os.path.join(self.tmp, "sources/status.json"))
+        # every ledger row must carry a real official URL (this is what the site renders for review)
+        for row in status["sources"]:
+            self.assertTrue(str(row.get("url", "")).startswith("http"),
+                            f"ledger row has no URL: {row}")
+            self.assertIn(row.get("status"), {"read", "not_needed", "failed"})
+        names = {row["source"] for row in status["sources"]}
+        for wanted in ("ESPN league injuries (public JSON)", "Cleveland Fed Inflation Nowcasting",
+                       "FRED (Federal Reserve Bank of St. Louis)", "ESPN scoreboard (public JSON)",
+                       "NWS point forecast (KXHIGHNY gridpoint)", "Kalshi Trade API v2"):
+            self.assertIn(wanted, names)
+        injuries_row = next(row for row in status["sources"] if row["source"] == "ESPN league injuries (public JSON)")
+        self.assertEqual(injuries_row["status"], "read")
+        self.assertTrue(injuries_row["url"].endswith("/injuries"))
+        self.assertEqual(len(injuries_row["sha256"]), 64)
 
 
 class EngineTests(unittest.TestCase):

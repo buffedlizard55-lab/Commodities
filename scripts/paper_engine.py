@@ -81,6 +81,42 @@ def taker_fee(price: float, contracts: float, multiplier: float = 1.0) -> float:
     return math.ceil(raw * FEE_GRID - 1e-9) / FEE_GRID
 
 
+# ------------------------------------------------------------------------------- maker fees
+# Primary source: Kalshi's published fee schedule ("Fee Schedule for July 2026 - 7.7.26 Update",
+# https://kalshi.com/docs/kalshi-fee-schedule.pdf):
+#     maker fees = round up(M x 0.0175 x C x P x (1-P)),  M defaults to 0 unless otherwise indicated
+# so a resting order pays nothing on a series without a maker multiplier, and one quarter of the
+# taker rate when the series carries one.  The Trade API exposes a series' fee_type
+# (quadratic | quadratic_with_maker_fees | quadratic_with_combo_maker_fees | flat - see
+# https://docs.kalshi.com/api-reference/exchange/get-series-fee-changes) and a single
+# fee_multiplier; the fee schedule's Non-Standard Fees table lists maker multipliers per series
+# (e.g. KXCPI maker 1 / taker 1), which is what that multiplier is used for here.
+MAKER_FEE_COEFFICIENT = 0.0175
+MAKER_FEE_TYPES = {"quadratic_with_maker_fees", "quadratic_with_combo_maker_fees"}
+
+
+def maker_multiplier(fee_type: str | None, fee_multiplier: float | None = 1.0) -> float:
+    """Maker-side multiplier for a series record (0 when the series has no maker fees).
+
+    Conservative by construction: a fee type that carries maker fees uses the series' recorded
+    multiplier (the fee schedule lists 1 for every market series observed so far), and every other
+    fee type is modelled at the documented default of 0.
+    """
+    if (fee_type or "") not in MAKER_FEE_TYPES:
+        return 0.0
+    value = fnum(fee_multiplier)
+    return float(value) if value else 0.0
+
+
+def maker_fee(price: float, contracts: float, multiplier: float = 1.0) -> float:
+    """Kalshi maker fee for a resting order that ultimately executes (0 when multiplier is 0)."""
+    if contracts <= 0 or price <= 0 or price >= 1 or not multiplier:
+        return 0.0
+    raw = MAKER_FEE_COEFFICIENT * contracts * price * (1.0 - price) * multiplier
+    return math.ceil(raw * FEE_GRID - 1e-9) / FEE_GRID
+
+
+
 def normalize_market(raw: dict) -> dict:
     """Flatten the fields the strategies use.  Raw is preserved by the caller if needed."""
     yes_bid = fnum(raw.get("yes_bid_dollars"))
