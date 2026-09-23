@@ -610,8 +610,11 @@ social sweep). Line by line:
   EIA open data, USDA AMS DataMart). Map them to a series whose committed record names a matching
   settlement source before writing a rule.
 * **Cron delivery is still best-effort** (IRR-34): the tick reduces missed in-game windows, but
-  GitHub can delay or drop schedule events. Keep reading `forward/audit/latest.json` — it grades
-  the delivered slots instead of assuming them.
+  GitHub can delay or drop schedule events — the first hours after this work merged into `main`
+  showed a cycle arriving ~10 minutes late and consecutive five-minute slots not delivered at all.
+  Every cycle row now records its trigger (`schedule:*/5 * * * *`, `push`, `manual:<mode>`), so
+  delivery can be attributed from the ledger itself; keep reading `forward/audit/latest.json`, which
+  grades the delivered slots instead of assuming them.
 
 ### Standing limitations (in the way of the full vision)
 

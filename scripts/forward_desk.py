@@ -80,6 +80,11 @@ FRED_LOOKBACK_DAYS = 10
 # that close inside this many hours, skips the archive/view rebuilds a full cycle does, and writes
 # nothing at all when no live market exists (so a quiet tick leaves no commit behind).
 TICK_LIVE_WINDOW_SECONDS = 3 * 3600
+# Which trigger started this process, set by the workflow ("schedule:*/5 * * * *", "push", "manual").
+# Cron delivery is best-effort (IRR-34) and runner logs are not readable from every environment, so
+# the value is recorded in each cycle row: the ledger itself then shows which trigger produced which
+# rows - and whether the five-minute ticks were ever delivered.
+DESK_TRIGGER = (os.environ.get("DESK_TRIGGER") or "").strip() or None
 EXIT_FLOOR_TOLERANCE = 0.03
 MARKETABLE_LIMIT_THROUGH = 0.05  # entries are IOC limits at min(rule bound, touch + 5c)
 RECENT_EVENTS = 200
@@ -1200,6 +1205,7 @@ class Cycle:
         if self.tick and not self.markets:
             # Nothing is being played inside the window: a tick is a no-op and persists nothing.
             return {"cycle": self.cycle_id, "at": iso(self.now_ts), "tick": "no_live_markets",
+                    "trigger": DESK_TRIGGER,
                     "liveWindowHours": TICK_LIVE_WINDOW_SECONDS / 3600,
                     "durationSec": round(time.time() - started, 1),
                     "apiCalls": len(self.client.calls), "marketsSeen": 0, "persisted": False,
@@ -1240,6 +1246,7 @@ class Cycle:
             "nowcastSignals": len(self.nowcast), "indexCloses": len(self.index_close),
             "signalErrors": self.signal_errors[:30], "signalErrorCount": len(self.signal_errors),
             "season": self.state.get("season", SEASON),
+            "trigger": DESK_TRIGGER,
             "tick": ("live" if self.tick_actionable else "idle") if self.tick else None,
             "errors": self.errors[:40], "errorCount": len(self.errors),
         }

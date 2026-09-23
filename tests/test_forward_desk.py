@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -319,6 +320,28 @@ class TickModeTests(unittest.TestCase):
         summary = cycle.run()
         cycle.persist(summary)
         return cycle, summary
+
+    def test_the_cycle_row_names_the_trigger_that_started_it(self):
+        """IRR-34: cron delivery is best-effort and runner logs are not always readable, so every
+        cycle row says which trigger produced it ("schedule:*/5 * * * *", "push", "manual:cycle")."""
+        with mock.patch.object(FD, "DESK_TRIGGER", "schedule:*/5 * * * *"):
+            cycle, summary = self.run_cycle_full(build_fixtures(), T0)
+        self.assertEqual(summary["trigger"], "schedule:*/5 * * * *")
+        with open(os.path.join(self.tmp, "cycles", "2026-09.jsonl")) as handle:
+            rows = [json.loads(line) for line in handle.read().splitlines() if line]
+        self.assertEqual(rows[-1]["trigger"], "schedule:*/5 * * * *")
+
+    def test_a_run_with_no_trigger_records_null_never_a_guess(self):
+        with mock.patch.object(FD, "DESK_TRIGGER", None):
+            cycle, summary = self.run_cycle_full(build_fixtures(), T0)
+        self.assertIsNone(summary["trigger"])
+
+    def test_a_no_live_markets_tick_still_names_its_trigger(self):
+        with mock.patch.object(FD, "DESK_TRIGGER", "schedule:*/5 * * * *"):
+            cycle, summary = self.run_tick(build_fixtures(), T0 + 100 * 86400)
+        self.assertEqual(summary["tick"], "no_live_markets")
+        self.assertEqual(summary["trigger"], "schedule:*/5 * * * *")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "cycles", "2026-09.jsonl")))
 
     def test_tick_only_keeps_markets_closing_inside_the_window(self):
         # T0 is 2026-09-20T15:00Z: the 15-minute BTC market closes at 15:10, the NFL game at 23:00
