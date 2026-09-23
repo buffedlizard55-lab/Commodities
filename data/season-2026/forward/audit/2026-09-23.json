@@ -1,44 +1,46 @@
 {
- "generatedAt": "2026-09-23T00:02:57Z",
+ "generatedAt": "2026-09-23T04:29:16Z",
  "ledger": {
   "cycleErrorRows": 0,
-  "cyclesWithApiErrors": 9,
+  "cyclesWithApiErrors": 10,
   "equityCsvVsStateMismatches": [],
   "eventKinds": {
-   "exit": 6,
-   "fill": 340,
-   "settlement": 202
+   "exit": 4,
+   "fill": 357,
+   "settlement": 244
   },
-  "events": 548,
-  "eventsTotal": 548,
-  "evidenceBound": 548,
+  "events": 605,
+  "eventsTotal": 605,
+  "evidenceBound": 605,
   "fillsWithoutExitOrPosition": 0,
   "intentStatusByStrategy": {
    "book-edge": {
     "filled": 13,
     "not_confirmed_on_book": 12,
     "queued": 9,
-    "skipped_position_cap": 4
+    "skipped_position_cap": 6
    },
    "ceo-fav": {
     "filled": 3
    },
    "depth-diver": {
-    "filled": 29,
-    "skipped_position_cap": 5
+    "filled": 30,
+    "no_liquidity_or_cash": 1,
+    "queued": 1,
+    "skipped_position_cap": 6
    },
    "dip-hunter": {
     "filled": 22,
     "not_confirmed_on_book": 2,
     "queued": 1,
-    "skipped_position_cap": 5
+    "skipped_position_cap": 7
    },
    "fda-premium": {
     "filled": 8
    },
    "game-favourite": {
     "filled": 21,
-    "not_confirmed_on_book": 1,
+    "not_confirmed_on_book": 2,
     "queued": 1,
     "skipped_position_cap": 1
    },
@@ -55,56 +57,57 @@
     "filled": 9,
     "not_confirmed_on_book": 1,
     "queued": 1,
-    "skipped_position_cap": 1
-   },
-   "longshot-fader": {
-    "filled": 26,
-    "not_confirmed_on_book": 4,
-    "queued": 3,
     "skipped_position_cap": 2
    },
+   "longshot-fader": {
+    "filled": 27,
+    "not_confirmed_on_book": 5,
+    "queued": 4,
+    "skipped_position_cap": 1
+   },
    "micro-tail": {
-    "filled": 7,
+    "filled": 11,
     "not_confirmed_on_book": 1
    },
    "nowcast-nudge": {
     "filled": 3
    },
    "panic-fade": {
-    "filled": 18
+    "filled": 20
    },
    "pinepilot": {
     "filled": 8,
-    "skipped_position_cap": 4
+    "skipped_position_cap": 5
    },
    "scalp-8095": {
-    "filled": 12,
-    "not_confirmed_on_book": 11,
+    "filled": 13,
+    "not_confirmed_on_book": 13,
     "queued": 1
    },
    "spike-surfer": {
     "filled": 26,
-    "skipped_position_cap": 1
+    "skipped_position_cap": 2
    },
    "spread-smith": {
-    "quote_plan": 10
+    "quote_plan": 12
    },
    "sure-thing": {
-    "filled": 17,
+    "filled": 19,
     "not_confirmed_on_book": 2
    },
    "tail-sprint": {
-    "filled": 32,
+    "filled": 33,
+    "no_liquidity_or_cash": 1,
     "not_confirmed_on_book": 1,
-    "queued": 1,
-    "skipped_position_cap": 3
+    "queued": 2,
+    "skipped_position_cap": 4
    },
    "tick-chaser": {
-    "filled": 30,
-    "skipped_position_cap": 2
+    "filled": 32,
+    "skipped_position_cap": 1
    },
    "underdog-sweep": {
-    "filled": 20,
+    "filled": 22,
     "no_liquidity_or_cash": 2,
     "queued": 1
    },
@@ -113,18 +116,19 @@
     "skipped_position_cap": 3
    },
    "weather-fade": {
-    "filled": 7
+    "filled": 8,
+    "skipped_position_cap": 1
    },
    "yield-sniper": {
     "filled": 14,
     "not_confirmed_on_book": 1,
     "queued": 1,
-    "skipped_position_cap": 5
+    "skipped_position_cap": 7
    }
   },
-  "openPositions": 132,
+  "openPositions": 109,
   "orphanFillSample": [],
-  "settledOrExited": 208
+  "settledOrExited": 248
  },
  "live": {
   "attempts": 8,
@@ -134,141 +138,141 @@
   "mismatches": [],
   "samples": [
    {
-    "apiResult": "yes",
-    "apiSettlementTs": "2026-09-20T19:57:34.695019Z",
-    "apiSettlementValue": "1.0000",
+    "apiResult": "no",
+    "apiSettlementTs": "2026-09-23T01:59:18.203031Z",
+    "apiSettlementValue": "0.0000",
     "apiStatus": "finalized",
-    "ledgerResult": "yes",
-    "ledgerSettlementTs": "2026-09-20T19:57:34Z",
-    "positionId": "tail-sprint-KXNFLGAME-26SEP20NOBAL-NO-20260920T172252Z",
-    "responseSha256": "35ea5bf55490ce2fea0eb2bdc2c49c17ef40cccfbf1c133a9c3dde4ff6f3f52e",
+    "ledgerResult": "no",
+    "ledgerSettlementTs": "2026-09-23T01:59:18Z",
+    "positionId": "halftime-hype-KXNHLGAME-26SEP22CBJBUF-CBJ-20260922T232109Z",
+    "responseSha256": "2b518bfb29e3098178e2961588db1988a11bd40736921256575e5ba65f36085d",
     "resultMatches": true,
     "settlementMatches": true,
-    "strategyId": "tail-sprint",
-    "ticker": "KXNFLGAME-26SEP20NOBAL-NO",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20NOBAL-NO"
+    "strategyId": "halftime-hype",
+    "ticker": "KXNHLGAME-26SEP22CBJBUF-CBJ",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNHLGAME-26SEP22CBJBUF-CBJ"
    },
    {
     "apiResult": "yes",
-    "apiSettlementTs": "2026-09-20T20:07:34.90074Z",
+    "apiSettlementTs": "2026-09-23T02:17:08.208797Z",
     "apiSettlementValue": "1.0000",
     "apiStatus": "finalized",
     "ledgerResult": "yes",
-    "ledgerSettlementTs": "2026-09-20T20:07:34Z",
-    "positionId": "spike-surfer-KXNFLGAME-26SEP20PHITEN-PHI-20260920T194043Z",
-    "responseSha256": "c928b248f12c1220c3984b78a6039c2a4c1fdf912e6922a435a1c968f262624e",
+    "ledgerSettlementTs": "2026-09-23T02:17:08Z",
+    "positionId": "halftime-hype-KXNHLGAME-26SEP22FLACAR-CAR-20260922T234700Z",
+    "responseSha256": "8312eff8bd96e797a5ece06141ee4db0ae41bf47cbef7d5d8529d58b252e8717",
+    "resultMatches": true,
+    "settlementMatches": true,
+    "strategyId": "halftime-hype",
+    "ticker": "KXNHLGAME-26SEP22FLACAR-CAR",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNHLGAME-26SEP22FLACAR-CAR"
+   },
+   {
+    "apiResult": "no",
+    "apiSettlementTs": "2026-09-23T02:17:08.208797Z",
+    "apiSettlementValue": "0.0000",
+    "apiStatus": "finalized",
+    "ledgerResult": "no",
+    "ledgerSettlementTs": "2026-09-23T02:17:08Z",
+    "positionId": "halftime-hype-KXNHLGAME-26SEP22FLACAR-FLA-20260922T234700Z",
+    "responseSha256": "a812335b3dcc5eefde6e72a01917ad995480d0f74782f774bac8a10ce207504c",
+    "resultMatches": true,
+    "settlementMatches": true,
+    "strategyId": "halftime-hype",
+    "ticker": "KXNHLGAME-26SEP22FLACAR-FLA",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNHLGAME-26SEP22FLACAR-FLA"
+   },
+   {
+    "apiResult": "no",
+    "apiSettlementTs": "2026-09-23T02:53:18.207087Z",
+    "apiSettlementValue": "0.0000",
+    "apiStatus": "finalized",
+    "ledgerResult": "no",
+    "ledgerSettlementTs": "2026-09-23T02:53:18Z",
+    "positionId": "spike-surfer-KXNHLGAME-26SEP22TBNSH-TB-20260922T213616Z",
+    "responseSha256": "63acae4b73ee4bcf4bb2b5e59bae2cbe7265d084d6a738398a0b34f901957abb",
     "resultMatches": true,
     "settlementMatches": true,
     "strategyId": "spike-surfer",
-    "ticker": "KXNFLGAME-26SEP20PHITEN-PHI",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20PHITEN-PHI"
-   },
-   {
-    "apiResult": "yes",
-    "apiSettlementTs": "2026-09-20T19:59:34.757099Z",
-    "apiSettlementValue": "1.0000",
-    "apiStatus": "finalized",
-    "ledgerResult": "yes",
-    "ledgerSettlementTs": "2026-09-20T19:59:34Z",
-    "positionId": "longshot-fader-KXNFLGAME-26SEP20PITNE-NE-20260920T172252Z",
-    "responseSha256": "16108304a2a6b866ee0eac79011a8c1fd807028d6bb7820ffc4840ecfde2579e",
-    "resultMatches": true,
-    "settlementMatches": true,
-    "strategyId": "longshot-fader",
-    "ticker": "KXNFLGAME-26SEP20PITNE-NE",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20PITNE-NE"
+    "ticker": "KXNHLGAME-26SEP22TBNSH-TB",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNHLGAME-26SEP22TBNSH-TB"
    },
    {
     "apiResult": "no",
-    "apiSettlementTs": "2026-09-20T19:59:34.757099Z",
+    "apiSettlementTs": "2026-09-23T01:57:28.274859Z",
     "apiSettlementValue": "0.0000",
     "apiStatus": "finalized",
     "ledgerResult": "no",
-    "ledgerSettlementTs": "2026-09-20T19:59:34Z",
-    "positionId": "longshot-fader-KXNFLGAME-26SEP20PITNE-PIT-20260920T172252Z",
-    "responseSha256": "3673df9be12f0029e5d886596e26c7eef01276780b0bdb679f65923bbb33a78a",
+    "ledgerSettlementTs": "2026-09-23T01:57:28Z",
+    "positionId": "longshot-fader-KXWNBAGAME-26SEP22CONNWSH-CONN-20260922T213616Z",
+    "responseSha256": "edd7a590c1722e8445646ed332c55b1f9e03dfd3ad4cf5b81292b89d9b7ccabf",
     "resultMatches": true,
     "settlementMatches": true,
     "strategyId": "longshot-fader",
-    "ticker": "KXNFLGAME-26SEP20PITNE-PIT",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20PITNE-PIT"
-   },
-   {
-    "apiResult": "no",
-    "apiSettlementTs": "2026-09-20T23:23:24.646606Z",
-    "apiSettlementValue": "0.0000",
-    "apiStatus": "finalized",
-    "ledgerResult": "no",
-    "ledgerSettlementTs": "2026-09-20T23:23:24Z",
-    "positionId": "sure-thing-KXNFLGAME-26SEP20SEAARI-ARI-20260920T222007Z",
-    "responseSha256": "0a4ad7e2ea8f85b41a6a2020e404e747185d297578b43bfcb617ec3d5ce43817",
-    "resultMatches": true,
-    "settlementMatches": true,
-    "strategyId": "sure-thing",
-    "ticker": "KXNFLGAME-26SEP20SEAARI-ARI",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20SEAARI-ARI"
+    "ticker": "KXWNBAGAME-26SEP22CONNWSH-CONN",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXWNBAGAME-26SEP22CONNWSH-CONN?exchange_index=3"
    },
    {
     "apiResult": "yes",
-    "apiSettlementTs": "2026-09-20T23:23:24.646606Z",
+    "apiSettlementTs": "2026-09-23T01:57:28.274859Z",
     "apiSettlementValue": "1.0000",
     "apiStatus": "finalized",
     "ledgerResult": "yes",
-    "ledgerSettlementTs": "2026-09-20T23:23:24Z",
-    "positionId": "sure-thing-KXNFLGAME-26SEP20SEAARI-SEA-20260920T222007Z",
-    "responseSha256": "1fd93c86278f06dfacbc63e490f4421dd902bb6f41ec3aeaac223463292fb3fc",
-    "resultMatches": true,
-    "settlementMatches": true,
-    "strategyId": "sure-thing",
-    "ticker": "KXNFLGAME-26SEP20SEAARI-SEA",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20SEAARI-SEA"
-   },
-   {
-    "apiResult": "yes",
-    "apiSettlementTs": "2026-09-20T23:37:24.773813Z",
-    "apiSettlementValue": "1.0000",
-    "apiStatus": "finalized",
-    "ledgerResult": "yes",
-    "ledgerSettlementTs": "2026-09-20T23:37:24Z",
-    "positionId": "longshot-fader-KXNFLGAME-26SEP20WASDAL-DAL-20260920T222007Z",
-    "responseSha256": "fd78417eb6be2be2a0e93f6b1222c82b49e0c34bdc11ecc98cf32831797b9545",
+    "ledgerSettlementTs": "2026-09-23T01:57:28Z",
+    "positionId": "longshot-fader-KXWNBAGAME-26SEP22CONNWSH-WSH-20260922T043112Z",
+    "responseSha256": "65ae5a2754f2334dfe2e1f0aaa6862119ceb6e213caa720ae7e1f5fa4b5e6e5d",
     "resultMatches": true,
     "settlementMatches": true,
     "strategyId": "longshot-fader",
-    "ticker": "KXNFLGAME-26SEP20WASDAL-DAL",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20WASDAL-DAL"
+    "ticker": "KXWNBAGAME-26SEP22CONNWSH-WSH",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXWNBAGAME-26SEP22CONNWSH-WSH?exchange_index=3"
    },
    {
     "apiResult": "no",
-    "apiSettlementTs": "2026-09-20T23:37:24.773813Z",
+    "apiSettlementTs": "2026-09-23T04:22:28.222267Z",
     "apiSettlementValue": "0.0000",
     "apiStatus": "finalized",
     "ledgerResult": "no",
-    "ledgerSettlementTs": "2026-09-20T23:37:24Z",
-    "positionId": "longshot-fader-KXNFLGAME-26SEP20WASDAL-WAS-20260920T222007Z",
-    "responseSha256": "f4a6a503b15131114f597fe269b95a747c67af10569644e350ba4eb472ffb332",
+    "ledgerSettlementTs": "2026-09-23T04:22:28Z",
+    "positionId": "underdog-sweep-KXWNBAGAME-26SEP22LALV-LA-20260922T232109Z",
+    "responseSha256": "19372e360b2c1a60c858a1a1b385acd2dffcc5a5681a83f5bdf0bf1a64553fab",
+    "resultMatches": true,
+    "settlementMatches": true,
+    "strategyId": "underdog-sweep",
+    "ticker": "KXWNBAGAME-26SEP22LALV-LA",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXWNBAGAME-26SEP22LALV-LA?exchange_index=3"
+   },
+   {
+    "apiResult": "yes",
+    "apiSettlementTs": "2026-09-23T04:22:28.222267Z",
+    "apiSettlementValue": "1.0000",
+    "apiStatus": "finalized",
+    "ledgerResult": "yes",
+    "ledgerSettlementTs": "2026-09-23T04:22:28Z",
+    "positionId": "longshot-fader-KXWNBAGAME-26SEP22LALV-LV-20260922T140820Z",
+    "responseSha256": "32bb66eac9db65b78bca35a4bbcf44832cec19eda41e72489604ceceb182b445",
     "resultMatches": true,
     "settlementMatches": true,
     "strategyId": "longshot-fader",
-    "ticker": "KXNFLGAME-26SEP20WASDAL-WAS",
-    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNFLGAME-26SEP20WASDAL-WAS"
+    "ticker": "KXWNBAGAME-26SEP22LALV-LV",
+    "url": "https://external-api.kalshi.com/trade-api/v2/markets/KXWNBAGAME-26SEP22LALV-LV?exchange_index=3"
    }
   ],
   "unreachable": null
  },
  "schedule": {
   "cron": "7,37 * * * * (UTC)",
-  "cycles": 19,
-  "executed": 19,
-  "expectedSlots": 137,
+  "cycles": 21,
+  "executed": 21,
+  "expectedSlots": 146,
   "extraManual": 4,
   "firstCycle": "2026-09-20T03:21:26Z",
-  "lastCycle": "2026-09-23T00:01:35Z",
-  "late": 13,
-  "matchedSlots": 15,
+  "lastCycle": "2026-09-23T04:27:40Z",
+  "late": 14,
+  "matchedSlots": 17,
   "maxGapHours": 28.09,
   "medianDelayMin": 45.9,
-  "missed": 122,
+  "missed": 129,
   "missedSlotsSample": [
    "2026-09-20T04:07Z",
    "2026-09-20T04:37Z",
@@ -302,45 +306,45 @@
    "2026-09-20T20:37Z"
   ],
   "note": "GitHub's schedule trigger is best-effort: delayed and missed slots are expected behaviour of the platform, recorded here rather than smoothed away.",
-  "onTime": 2
+  "onTime": 3
  },
  "schemaVersion": 1,
  "season": "2026",
  "signals": {
-  "latestCycle": "20260923T000135Z",
+  "latestCycle": "20260923T042740Z",
   "latestSignalErrors": [],
   "note": "a source that answers nothing shows 0 here with its error lines below it - that is the adapter abstaining, never a defaulted value (the same fail-closed rule as the desk).",
   "totals": {
-   "candlesArchived": 75,
-   "espnLiveSignals": 38,
-   "espnSignals": 472,
-   "fdaNoRecord": 72,
-   "fdaSignals": 72,
-   "nwsCentralPark": 19,
-   "nwsCityForecasts": 756,
+   "candlesArchived": 85,
+   "espnLiveSignals": 50,
+   "espnSignals": 507,
+   "fdaNoRecord": 80,
+   "fdaSignals": 80,
+   "nwsCentralPark": 20,
+   "nwsCityForecasts": 840,
    "signalErrors": 78
   }
  },
  "status": "PASS",
  "storage": {
-  "bytesAfter": 43586,
-  "bytesBefore": 244554,
-  "compactedFiles": 2,
+  "bytesAfter": 0,
+  "bytesBefore": 0,
+  "compactedFiles": 0,
   "hashVerifyFailures": [],
-  "hashVerifyPass": 2,
-  "indexUpdatedAt": "2026-09-23T00:02:57Z",
-  "linesPreserved": 557,
+  "hashVerifyPass": 0,
+  "indexUpdatedAt": "2026-09-23T04:29:16Z",
+  "linesPreserved": 0,
   "note": "evidence/ and quotes/ captures older than the compaction horizon are gzipped with their SHA-256 kept (IRR-24); append-only ledgers are never compressed."
  },
  "tape": {
   "available": true,
   "byStrategy": {
    "book-edge": {
-    "compared": 8,
-    "medianAbsCentsDiff": 1.9945
+    "compared": 6,
+    "medianAbsCentsDiff": 1.9299
    },
    "depth-diver": {
-    "compared": 17,
+    "compared": 16,
     "medianAbsCentsDiff": 1.0
    },
    "dip-hunter": {
@@ -348,7 +352,7 @@
     "medianAbsCentsDiff": 0.0785
    },
    "game-favourite": {
-    "compared": 16,
+    "compared": 14,
     "medianAbsCentsDiff": 0.9494
    },
    "gold-leader": {
@@ -357,38 +361,38 @@
    },
    "halftime-hype": {
     "compared": 3,
-    "medianAbsCentsDiff": 1.3894
+    "medianAbsCentsDiff": 2.3988
    },
    "heat-confirm": {
     "compared": 3,
     "medianAbsCentsDiff": 3.3825
    },
    "longshot-fader": {
-    "compared": 16,
-    "medianAbsCentsDiff": 0.9756
+    "compared": 15,
+    "medianAbsCentsDiff": 1.0
    },
    "micro-tail": {
-    "compared": 4,
+    "compared": 6,
     "medianAbsCentsDiff": 1.1827
    },
    "panic-fade": {
-    "compared": 11,
-    "medianAbsCentsDiff": 6.445
+    "compared": 12,
+    "medianAbsCentsDiff": 3.8008
    },
    "pinepilot": {
     "compared": 1,
     "medianAbsCentsDiff": 3.0
    },
    "scalp-8095": {
-    "compared": 9,
-    "medianAbsCentsDiff": 3.396
+    "compared": 7,
+    "medianAbsCentsDiff": 4.2298
    },
    "spike-surfer": {
     "compared": 13,
-    "medianAbsCentsDiff": 0.9772
+    "medianAbsCentsDiff": 1.0
    },
    "sure-thing": {
-    "compared": 6,
+    "compared": 8,
     "medianAbsCentsDiff": 0.8894
    },
    "tail-sprint": {
@@ -397,35 +401,35 @@
    },
    "tick-chaser": {
     "compared": 16,
-    "medianAbsCentsDiff": 0.4955
+    "medianAbsCentsDiff": 0.7462
    },
    "underdog-sweep": {
     "compared": 14,
-    "medianAbsCentsDiff": 0.1651
+    "medianAbsCentsDiff": 0.3614
    },
    "weather-bracket": {
-    "compared": 6,
-    "medianAbsCentsDiff": 3.2553
+    "compared": 5,
+    "medianAbsCentsDiff": 3.3825
    },
    "weather-fade": {
-    "compared": 3,
-    "medianAbsCentsDiff": 4.1905
+    "compared": 4,
+    "medianAbsCentsDiff": 3.1677
    },
    "yield-sniper": {
     "compared": 2,
     "medianAbsCentsDiff": 0.511
    }
   },
-  "compared": 168,
-  "generatedAt": "2026-09-23T00:02:53Z",
-  "insideTapeRangePct": 66.07,
-  "meanAbsCentsDiff": 2.4235,
+  "compared": 165,
+  "generatedAt": "2026-09-23T04:29:12Z",
+  "insideTapeRangePct": 67.88,
+  "meanAbsCentsDiff": 2.3364,
   "medianAbsCentsDiff": 1.0,
   "method": "GET /markets/trades?ticker=&min_ts=&max_ts= (official, unauthenticated); desk fills from forward/trades.jsonl. Every comparison stores the tape response hash and URL.",
-  "noTapeInWindow": 32,
-  "tapeCoveredPct": 70.83,
+  "noTapeInWindow": 35,
+  "tapeCoveredPct": 70.91,
   "tapeFetchFailed": 0,
-  "verdict": "168 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 75.0% had a real print within 1c of the desk's VWAP, 70.83% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 66.07% of fills. The desk is close to the tape.",
-  "withinOneCentPct": 75.0
+  "verdict": "165 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 76.36% had a real print within 1c of the desk's VWAP, 70.91% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 67.88% of fills. The desk is close to the tape.",
+  "withinOneCentPct": 76.36
  }
 }
