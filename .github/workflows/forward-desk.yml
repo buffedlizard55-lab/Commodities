@@ -58,6 +58,12 @@ jobs:
         id: mode
         run: |
           MODE="${{ github.event.inputs.mode }}"
+          SCHEDULE="${{ github.event.schedule }}"
+          # Recorded per cycle, so the ledger shows which trigger produced which rows (IRR-34).
+          TRIGGER="${{ github.event_name }}"
+          if [ -n "$SCHEDULE" ]; then TRIGGER="$TRIGGER:$SCHEDULE"; fi
+          if [ -n "$MODE" ]; then TRIGGER="$TRIGGER:$MODE"; fi
+          echo "DESK_TRIGGER=$TRIGGER" >> "$GITHUB_ENV"
           if [ -z "$MODE" ] && [ "${{ github.event_name }}" = "push" ]; then
             case "${{ github.event.head_commit.message }}" in
               *"[desk:universe]"*) MODE=universe ;;
@@ -67,15 +73,17 @@ jobs:
             esac
           fi
           if [ -z "$MODE" ]; then
-            case "${{ github.event.schedule }}" in
+            # Matched by the crontab line's own prefix rather than the whole string, because the
+            # expression's spacing is not something this workflow controls.
+            case "$SCHEDULE" in
               "17 6 * * 1") MODE=universe ;;
               "47 6 1 * *") MODE=settlements ;;
-              "*/5 * * * *") MODE=tick ;;
+              "*/5"*) MODE=tick ;;
               *) MODE=cycle ;;
             esac
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
-          echo "Running mode: $MODE"
+          echo "Running mode: $MODE (trigger: $TRIGGER)"
 
       - name: Refresh series catalog (official GET /series by category)
         if: steps.mode.outputs.mode == 'universe' || steps.mode.outputs.mode == 'both'
