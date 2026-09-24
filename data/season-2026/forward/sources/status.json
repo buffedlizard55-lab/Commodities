@@ -1,29 +1,24 @@
 {
- "cycle": "20260924T052543Z",
- "errorCount": 4,
- "failed": [
-  "KXHIGHTNOLA: no official coordinates for 'New Orleans   Daily' - series skipped",
-  "KXHIGHTPHX: no official coordinates for 'Phoenix   Daily' - series skipped",
-  "no Census place match for 'New Orleans   Daily' (state hint none; scanned 32363 gazetteer rows, sha256 af678e2d9908)",
-  "no Census place match for 'Phoenix   Daily' (state hint none; scanned 32363 gazetteer rows, sha256 af678e2d9908)"
- ],
- "generatedAt": "2026-09-24T05:25:43Z",
+ "cycle": "20260924T101521Z",
+ "errorCount": 0,
+ "failed": [],
+ "generatedAt": "2026-09-24T10:15:21Z",
  "note": "One row per official endpoint this cycle could read; status is read / not_needed / failed, and every read row carries the verbatim response hash where the adapter returned one. A failed read is recorded here and the dependent strategy abstains.",
  "schemaVersion": 1,
- "sourceCount": 14,
+ "sourceCount": 5,
  "sources": [
   {
-   "at": "2026-09-24T05:25:43Z",
+   "at": "2026-09-24T10:15:21Z",
    "detail": {
-    "apiCalls": 175,
-    "marketsSeen": 173
+    "apiCalls": 191,
+    "marketsSeen": 271
    },
    "source": "Kalshi Trade API v2",
    "status": "read",
    "url": "https://external-api.kalshi.com/trade-api/v2"
   },
   {
-   "at": "2026-09-24T05:25:43Z",
+   "at": "2026-09-24T10:15:21Z",
    "detail": {
     "mapped": null
    },
@@ -32,104 +27,21 @@
    "url": "https://api.weather.gov/gridpoints/OKX/34,45/forecast"
   },
   {
-   "at": "2026-09-24T05:26:11Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "abe4c8e008721724a6c0381da33e740581b2a5bd9ec9c3b5676d52795aa8d582",
+   "at": "2026-09-24T10:15:21Z",
+   "detail": {},
    "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/EWX/155,92/forecast"
+   "status": "not_needed",
+   "url": "https://api.weather.gov"
   },
   {
-   "at": "2026-09-24T05:26:11Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "e20f40aedc99adb7687ec4e3bd901299d46a5de001d34478b6e39c0f78a01310",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/LOT/74,71/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:11Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "d36fa3e65166e311de9c6369313495da1ad732387a0f4bb9109637714821fac2",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/BOU/67,62/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:12Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "6fcd67f87b82287b1b85b3804a0a5f2b4a4cb7b02d48be994906bbfc532d760c",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/LOX/149,45/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:12Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "1db917f077bb1416c93b66c3290f50bafc2f4c9ebe1a38e20e85c8192d219f79",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/FWD/90,105/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:12Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "e546d096f2fe3dff27af07854e6839fdc3a8d1988e433488e63859eea1c8a8da",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/HGX/62,96/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:12Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "676cdf710200c6c8752d5180f32353cf94df5f2a6857ad1ae28d4f98ab06baf9",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/VEF/119,101/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:13Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "0352b25938f41202cc6c3ae24282d21ce7119ca3124dd8e346e52f1887491f51",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/MPX/108,71/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:14Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "e1aa9e44e21271fa1a7f749f6407ca7362a5b0f218bb56fb014f030b1b8c9cea",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/OUN/97,94/forecast"
-  },
-  {
-   "at": "2026-09-24T05:26:14Z",
-   "bytes": null,
-   "detail": null,
-   "sha256": "d22a99641c9eedd5871708b3e2e1ec10a16e7bee91c0fb1fe93cc82e64071f07",
-   "source": "NWS city gridpoint forecasts",
-   "status": "read",
-   "url": "https://api.weather.gov/gridpoints/SGX/59,19/forecast"
-  },
-  {
-   "at": "2026-09-24T05:25:43Z",
+   "at": "2026-09-24T10:15:21Z",
    "detail": {},
    "source": "ESPN scoreboard (public JSON)",
    "status": "not_needed",
    "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
   },
   {
-   "at": "2026-09-24T05:25:43Z",
+   "at": "2026-09-24T10:15:21Z",
    "detail": {},
    "source": "ESPN league injuries (public JSON)",
    "status": "not_needed",
