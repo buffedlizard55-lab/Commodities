@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-09-29T11:32:34Z",
- "marketCount": 262,
+ "generatedAt": "2026-09-29T17:01:31Z",
+ "marketCount": 264,
  "markets": {
   "KXBTC-26SEP2006-B80350": {
    "archivedByCycle": "20260920T134010Z",
@@ -738,6 +738,36 @@
    "settlementTs": "2026-09-29T03:02:36Z",
    "sha256": "915d706406a8d731f0901d19c83bdc0e01c5c6ac0627fba09e84dc7a2c154fd5",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC/markets/KXBTC-26SEP2823-B83250/candlesticks?start_ts=1790647140&end_ts=1790651016&period_interval=1&exchange_index=2"
+  },
+  "KXBTC-26SEP2912-B83550": {
+   "archivedByCycle": "20260929T165839Z",
+   "bars": 61,
+   "closeTs": "2026-09-29T16:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXBTC/KXBTC-26SEP2912-B83550-p1.csv",
+   "openTs": "2026-09-29T15:00:00Z",
+   "period": 1,
+   "result": "no",
+   "series": "KXBTC",
+   "settlementTs": "2026-09-29T16:02:36Z",
+   "sha256": "a5917cc7176a653c430049a00c4eb700143d945350459bf43729ed8a7677acf6",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC/markets/KXBTC-26SEP2912-B83550/candlesticks?start_ts=1790693940&end_ts=1790697816&period_interval=1&exchange_index=2"
+  },
+  "KXBTC-26SEP2912-B83950": {
+   "archivedByCycle": "20260929T165839Z",
+   "bars": 59,
+   "closeTs": "2026-09-29T16:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXBTC/KXBTC-26SEP2912-B83950-p1.csv",
+   "openTs": "2026-09-29T15:00:00Z",
+   "period": 1,
+   "result": "no",
+   "series": "KXBTC",
+   "settlementTs": "2026-09-29T16:02:36Z",
+   "sha256": "1819e550824bd7fd6fa8008b5a83bd464b5936717dc5da55814c8a5ec8e3726f",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC/markets/KXBTC-26SEP2912-B83950/candlesticks?start_ts=1790693940&end_ts=1790697816&period_interval=1&exchange_index=2"
   },
   "KXBTC15M-26SEP192330-30": {
    "archivedByCycle": "20260920T033437Z",
@@ -3971,5 +4001,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 15085
+ "verifiedBars": 15205
 }
