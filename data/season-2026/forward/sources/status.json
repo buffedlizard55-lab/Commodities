@@ -1,51 +1,432 @@
 {
- "cycle": "20260930T084203Z",
+ "cycle": "20260930T125617Z",
  "errorCount": 0,
  "failed": [],
- "generatedAt": "2026-09-30T08:42:03Z",
+ "generatedAt": "2026-09-30T12:56:17Z",
  "note": "One row per official endpoint this cycle could read; status is read / not_needed / failed, and every read row carries the verbatim response hash where the adapter returned one. A failed read is recorded here and the dependent strategy abstains.",
  "schemaVersion": 1,
- "sourceCount": 5,
+ "sourceCount": 46,
  "sources": [
   {
-   "at": "2026-09-30T08:42:03Z",
+   "at": "2026-09-30T12:56:17Z",
    "detail": {
-    "apiCalls": 200,
-    "marketsSeen": 271
+    "apiCalls": 167,
+    "marketsSeen": 1766
    },
    "source": "Kalshi Trade API v2",
    "status": "read",
    "url": "https://external-api.kalshi.com/trade-api/v2"
   },
   {
-   "at": "2026-09-30T08:42:03Z",
+   "at": "2026-09-30T12:56:17Z",
    "detail": {
-    "mapped": null
+    "mapped": {
+     "KXHIGHNY-26SEP30": 74.0
+    }
    },
    "source": "NWS point forecast (KXHIGHNY gridpoint)",
-   "status": "not_needed",
+   "status": "read",
    "url": "https://api.weather.gov/gridpoints/OKX/34,45/forecast"
   },
   {
-   "at": "2026-09-30T08:42:03Z",
-   "detail": {},
+   "at": "2026-09-30T12:56:44Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "17f19dff60060f012fa43550a3e9fdbe56f96b64abe34f4576f41fc4dccfa13b",
    "source": "NWS city gridpoint forecasts",
-   "status": "not_needed",
-   "url": "https://api.weather.gov"
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/EWX/155,92/forecast"
   },
   {
-   "at": "2026-09-30T08:42:03Z",
-   "detail": {},
+   "at": "2026-09-30T12:56:45Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "e507d11ef14d91e331d4c231f2fcaee32f489e01b279be421906d03356d4b760",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/LOT/74,71/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:45Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "acdca0667c0d75d41c2ffd00f8bca65bfddf7948efd7cfb681d367ed88057442",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/BOU/67,62/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:45Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "c9ecd1861957c4f89f4a5cfd19019c8e69cc441c3cf64bb8c0a14d06b3914a96",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/LOX/149,45/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:46Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "11bc113d9b577fc6066839d0b39472fe5c24726717c2b659c8d4d6ea75b438e7",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/MFL/109,51/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:46Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "355d1423acd4c91781494b22432ab03ed057ae9efeec333662d89bb312ee830a",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/PHI/50,81/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:46Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "479888fad765f6edc4b42a35fb2ec32fd2d3b3a751c5ed956b7121641f6d39c6",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/FFC/49,87/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:46Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "7ef383c31b2d0ff4875a30f025a56df99c6b36d4765730cc30db2e90b62979de",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/BOX/73,100/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:47Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "f38c73727faed953c8edcfbae6e0c99de133e5fd63133fbcf45dfd10aabf322d",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/FWD/90,105/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:47Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "b4a1a6c3fb48a96640054bb5ac4a01cbc1ed469a2767e9ad27bb91a571d46d25",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/LWX/97,72/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:47Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "f128b5876f484a7658502e84632492a92535e367b989a6f4fd8804e293805717",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/OKX/27,42/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "49f497739310c224311f116cfad3e998c1466a96cb15e0ee6a127eecb0c412bc",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/HGX/62,96/forecast"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXEPLGAME",
+   "sha256": "57e18c687bf21abd795e68e9cdcd961cbeba98d5c583cc5a81e60abbeb8f544a",
    "source": "ESPN scoreboard (public JSON)",
-   "status": "not_needed",
-   "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20260929&limit=200"
   },
   {
-   "at": "2026-09-30T08:42:03Z",
-   "detail": {},
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXEPLGAME",
+   "sha256": "57e18c687bf21abd795e68e9cdcd961cbeba98d5c583cc5a81e60abbeb8f544a",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXEPLGAME",
+   "sha256": "57e18c687bf21abd795e68e9cdcd961cbeba98d5c583cc5a81e60abbeb8f544a",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXMLBGAME",
+   "sha256": "bdbf4f80fdda7057ff9688e8642c1dbd0043a8fb28c7ed3b2da579587e7958ef",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20260929&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXMLBGAME",
+   "sha256": "52b7d7e58d0c6634e219fa7e1b017e07eafb97bd71d15ea551a656d2eed4335d",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXMLBGAME",
+   "sha256": "adaee922b2d30535c28d6d5a00f1bfa16ce9d9db33d974fb0941e3c5b5710b08",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNBAGAME",
+   "sha256": "f399ddfd2152f7d2f29a75138ad3e19697c89461903864b96579b502565811b3",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20260929&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNBAGAME",
+   "sha256": "8338fbedc1f9f01690e6f8786a2aadd3c7fe425dcdb6ecf053ada40dcd925df4",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNBAGAME",
+   "sha256": "8338fbedc1f9f01690e6f8786a2aadd3c7fe425dcdb6ecf053ada40dcd925df4",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNCAAFGAME",
+   "sha256": "3e5fc016e3ab78cf0e86c07f39422e798c76bef091fe489db4361d64d98c05f6",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=20260929&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNCAAFGAME",
+   "sha256": "3e5fc016e3ab78cf0e86c07f39422e798c76bef091fe489db4361d64d98c05f6",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNCAAFGAME",
+   "sha256": "5e7bfcdb0f7087d9715ab1db317b102573be5a9e97992b6f09b9580aa6d9757f",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNFLGAME",
+   "sha256": "d32bdedc9f799a39a5728d8bd0c52d81096c889f596fde3cdd8b5d43bf46a8c5",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20260929&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNFLGAME",
+   "sha256": "d32bdedc9f799a39a5728d8bd0c52d81096c889f596fde3cdd8b5d43bf46a8c5",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNFLGAME",
+   "sha256": "ca2424fea1d1f630b56f967dcf299ac9a938d5c425084642c94b26d6c6963194",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNHLGAME",
+   "sha256": "635b80117e0fbe4147435dbd35e592653b64456112d80683ee858827df7c6703",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=20260929&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNHLGAME",
+   "sha256": "c00c47e2c956b84488acfd697d8d23bc230e040465e4c185fb473ed49932d418",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXNHLGAME",
+   "sha256": "d61f6754644729ac1b5905842feb7b54fb8cc0de1639c15d4138e1bb2f4559fd",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:48Z",
+   "bytes": null,
+   "detail": "KXWNBAGAME",
+   "sha256": "0bc14cd175121f82816b00eb76232c26a05fb333897ca90d692b8947a4ef2f2a",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=20260929&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:49Z",
+   "bytes": null,
+   "detail": "KXWNBAGAME",
+   "sha256": "fd1bcf7d02ac28515363e7163ec11e4969466b1cb1ea3e03165e4b7d81ddb48f",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=20260930&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:49Z",
+   "bytes": null,
+   "detail": "KXWNBAGAME",
+   "sha256": "a57ce2959680bb1c7ce23ac4f727583f86e669bcd41acc4c732bf4a1be1aced6",
+   "source": "ESPN scoreboard (public JSON)",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard?dates=20261001&limit=200"
+  },
+  {
+   "at": "2026-09-30T12:56:50Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "57b1e7534d003e4246182162fd2469cdf038de39405056f44fc006715e5496da",
+   "source": "openFDA Drugs@FDA",
+   "status": "read",
+   "url": "https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name%3A%22RETATRUTIDE%22&limit=5"
+  },
+  {
+   "at": "2026-09-30T12:56:50Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "57b1e7534d003e4246182162fd2469cdf038de39405056f44fc006715e5496da",
+   "source": "openFDA Drugs@FDA",
+   "status": "read",
+   "url": "https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name%3A%22RETATRUTIDE%22&limit=5"
+  },
+  {
+   "at": "2026-09-30T12:56:50Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "57b1e7534d003e4246182162fd2469cdf038de39405056f44fc006715e5496da",
+   "source": "openFDA Drugs@FDA",
+   "status": "read",
+   "url": "https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name%3A%22CYTISINICLINE%22&limit=5"
+  },
+  {
+   "at": "2026-09-30T12:56:50Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "57b1e7534d003e4246182162fd2469cdf038de39405056f44fc006715e5496da",
+   "source": "openFDA Drugs@FDA",
+   "status": "read",
+   "url": "https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name%3A%22RETATRUTIDE%22&limit=5"
+  },
+  {
+   "at": "2026-09-30T12:56:51Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "57b1e7534d003e4246182162fd2469cdf038de39405056f44fc006715e5496da",
+   "source": "openFDA Drugs@FDA",
+   "status": "read",
+   "url": "https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name%3A%22LONVOGURAN+ZICLUMERAN%22&limit=5"
+  },
+  {
+   "at": "2026-09-30T12:56:52Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "57b1e7534d003e4246182162fd2469cdf038de39405056f44fc006715e5496da",
+   "source": "openFDA Drugs@FDA",
+   "status": "read",
+   "url": "https://api.fda.gov/drug/drugsfda.json?search=openfda.substance_name%3A%22COMP360+PSILOCYBIN%22&limit=5"
+  },
+  {
+   "at": "2026-09-30T12:56:52Z",
+   "bytes": 734053,
+   "detail": "KXNBAGAME",
+   "sha256": "897f4e855522e3cdf6bcd11e7fbef3271a18156b20cff366af8e3bf765048e7c",
    "source": "ESPN league injuries (public JSON)",
-   "status": "not_needed",
+   "status": "read",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+  },
+  {
+   "at": "2026-09-30T12:56:52Z",
+   "bytes": 8744950,
+   "detail": "KXNFLGAME",
+   "sha256": "a3c690bea3a397ab6c89e08b3e13b5e4b9064c8c7fd1277fe1890de75c971381",
+   "source": "ESPN league injuries (public JSON)",
+   "status": "read",
    "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+  },
+  {
+   "at": "2026-09-30T12:56:53Z",
+   "bytes": 197313,
+   "detail": {
+    "month-over-month": 2,
+    "quarterly": 1,
+    "year-over-year": 2
+   },
+   "sha256": "74cb7f8b90e27da98a015a5a45e17628f2a0acaad403150d8c12874a68b963cc",
+   "source": "Cleveland Fed Inflation Nowcasting",
+   "status": "read",
+   "url": "https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting"
+  },
+  {
+   "at": "2026-09-30T12:56:53Z",
+   "bytes": 156,
+   "detail": "SP500",
+   "sha256": "a55fd05b026e219e3a1aa27f31590784174af36d932d2f06290ce16a7247a6e7",
+   "source": "FRED (Federal Reserve Bank of St. Louis)",
+   "status": "read",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SP500&cosd=2026-09-20&coed=2026-09-30"
+  },
+  {
+   "at": "2026-09-30T12:56:54Z",
+   "bytes": 174,
+   "detail": "NASDAQ100",
+   "sha256": "e5934f610b88fa7d3239366f69cd5bdd6159d6598a140bc8702968e34ed25931",
+   "source": "FRED (Federal Reserve Bank of St. Louis)",
+   "status": "read",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NASDAQ100&cosd=2026-09-20&coed=2026-09-30"
   }
  ]
 }
