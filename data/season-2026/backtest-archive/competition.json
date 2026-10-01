@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-09-30T22:33:07Z",
- "marketCount": 285,
+ "generatedAt": "2026-10-01T01:28:36Z",
+ "marketCount": 286,
  "markets": {
   "KXBTC-26SEP2006-B80350": {
    "archivedByCycle": "20260920T134010Z",
@@ -1638,6 +1638,21 @@
    "settlementTs": "2026-09-30T20:15:26Z",
    "sha256": "ada81c4110a493820855d27c4b448520a354f0582140a793d1e7b617fcf040a0",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXGOLD15M/markets/KXGOLD15M-26SEP301615-15/candlesticks?start_ts=1790798340&end_ts=1790799386&period_interval=1&exchange_index=2"
+  },
+  "KXGOLD15M-26SEP301945-45": {
+   "archivedByCycle": "20261001T012705Z",
+   "bars": 16,
+   "closeTs": "2026-09-30T23:45:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXGOLD15M/KXGOLD15M-26SEP301945-45-p1.csv",
+   "openTs": "2026-09-30T23:30:00Z",
+   "period": 1,
+   "result": "yes",
+   "series": "KXGOLD15M",
+   "settlementTs": "2026-09-30T23:45:26Z",
+   "sha256": "9c1068a7ff5653b087b7debffa350b49d221411192b0b677040c7d42b9b9951b",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXGOLD15M/markets/KXGOLD15M-26SEP301945-45/candlesticks?start_ts=1790810940&end_ts=1790811986&period_interval=1&exchange_index=2"
   },
   "KXHIGHAUS-26SEP26-B96.5": {
    "archivedByCycle": "20260927T125504Z",
@@ -4317,5 +4332,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 15981
+ "verifiedBars": 15997
 }
