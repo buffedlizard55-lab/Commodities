@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-10-03T00:42:26Z",
- "marketCount": 337,
+ "generatedAt": "2026-10-03T06:20:02Z",
+ "marketCount": 339,
  "markets": {
   "KXBTC-26OCT0113-B83750": {
    "archivedByCycle": "20261001T202650Z",
@@ -3979,6 +3979,36 @@
    "sha256": "7376d1478a440d4014d58da15d63266606bd1ffb9212f53eff0eeebb7ed0123e",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNCAAFGAME/markets/KXNCAAFGAME-26OCT01UNTTLSA-UNT/candlesticks?start_ts=1789693560&end_ts=1790918014&period_interval=1440"
   },
+  "KXNCAAFGAME-26OCT02MTSTIDHO-IDHO": {
+   "archivedByCycle": "20261003T061815Z",
+   "bars": 14,
+   "closeTs": "2026-10-03T06:14:44Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic_with_maker_fees",
+   "file": "candles/KXNCAAFGAME/KXNCAAFGAME-26OCT02MTSTIDHO-IDHO-p1440.csv",
+   "openTs": "2026-09-19T04:07:00Z",
+   "period": 1440,
+   "result": "yes",
+   "series": "KXNCAAFGAME",
+   "settlementTs": "2026-10-03T06:17:17Z",
+   "sha256": "e3290b8f9115defbb78f4bfa038afec5ff5ba180e79f5a91a93397b9258351c8",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNCAAFGAME/markets/KXNCAAFGAME-26OCT02MTSTIDHO-IDHO/candlesticks?start_ts=1789790760&end_ts=1791008297&period_interval=1440"
+  },
+  "KXNCAAFGAME-26OCT02MTSTIDHO-MTST": {
+   "archivedByCycle": "20261003T061815Z",
+   "bars": 14,
+   "closeTs": "2026-10-03T06:14:44Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic_with_maker_fees",
+   "file": "candles/KXNCAAFGAME/KXNCAAFGAME-26OCT02MTSTIDHO-MTST-p1440.csv",
+   "openTs": "2026-09-19T04:07:00Z",
+   "period": 1440,
+   "result": "no",
+   "series": "KXNCAAFGAME",
+   "settlementTs": "2026-10-03T06:17:17Z",
+   "sha256": "5e32530c119cbb20b3e2dd9e99e037ecff1955ea713e9eac3d7f7629eac4a9b6",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNCAAFGAME/markets/KXNCAAFGAME-26OCT02MTSTIDHO-MTST/candlesticks?start_ts=1789790760&end_ts=1791008297&period_interval=1440"
+  },
   "KXNCAAFGAME-26SEP19BYUCSU-CSU": {
    "archivedByCycle": "20260920T033910Z",
    "bars": 14,
@@ -5100,5 +5130,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 19709
+ "verifiedBars": 19737
 }
