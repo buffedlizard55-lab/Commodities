@@ -1,21 +1,21 @@
 {
- "generatedAt": "2026-10-04T01:57:52Z",
+ "generatedAt": "2026-10-04T08:20:29Z",
  "ledger": {
   "cycleErrorRows": 0,
-  "cyclesWithApiErrors": 62,
+  "cyclesWithApiErrors": 63,
   "equityCsvVsStateMismatches": [],
   "eventKinds": {
    "exit": 58,
-   "fill": 1261,
-   "settlement": 1091
+   "fill": 1279,
+   "settlement": 1122
   },
-  "events": 2410,
-  "eventsTotal": 2410,
-  "evidenceBound": 2410,
+  "events": 2459,
+  "eventsTotal": 2459,
+  "evidenceBound": 2459,
   "fillsWithoutExitOrPosition": 0,
   "intentStatusByStrategy": {
    "book-edge": {
-    "filled": 62,
+    "filled": 66,
     "not_confirmed_on_book": 34,
     "queued": 22,
     "skipped_position_cap": 97
@@ -24,24 +24,24 @@
     "filled": 3
    },
    "depth-diver": {
-    "filled": 108,
+    "filled": 112,
     "no_liquidity_or_cash": 11,
     "queued": 5,
     "skipped_position_cap": 69
    },
    "dip-hunter": {
     "filled": 39,
-    "no_liquidity_or_cash": 111,
+    "no_liquidity_or_cash": 115,
     "not_confirmed_on_book": 13,
-    "queued": 61,
+    "queued": 63,
     "skipped_position_cap": 45
    },
    "fda-premium": {
     "filled": 9,
-    "skipped_position_cap": 47
+    "skipped_position_cap": 48
    },
    "game-favourite": {
-    "filled": 70,
+    "filled": 72,
     "not_confirmed_on_book": 2,
     "queued": 1,
     "skipped_position_cap": 1
@@ -59,7 +59,7 @@
     "filled": 76,
     "not_confirmed_on_book": 15,
     "queued": 12,
-    "skipped_position_cap": 20
+    "skipped_position_cap": 21
    },
    "injury-fade": {
     "filled": 6
@@ -69,7 +69,7 @@
     "skipped_position_cap": 1
    },
    "longshot-fader": {
-    "filled": 67,
+    "filled": 69,
     "not_confirmed_on_book": 12,
     "queued": 7,
     "skipped_position_cap": 68
@@ -92,7 +92,7 @@
     "skipped_position_cap": 22
    },
    "scalp-8095": {
-    "filled": 78,
+    "filled": 79,
     "not_confirmed_on_book": 70,
     "queued": 13
    },
@@ -106,7 +106,7 @@
     "skipped_position_cap": 33
    },
    "spread-smith": {
-    "quote_plan": 163
+    "quote_plan": 166
    },
    "sure-thing": {
     "filled": 58,
@@ -116,42 +116,42 @@
    },
    "tail-sprint": {
     "filled": 49,
-    "no_liquidity_or_cash": 198,
+    "no_liquidity_or_cash": 202,
     "not_confirmed_on_book": 14,
-    "queued": 111,
+    "queued": 113,
     "skipped_position_cap": 4
    },
    "tick-chaser": {
-    "filled": 97,
+    "filled": 98,
     "no_liquidity_or_cash": 2,
     "queued": 1,
-    "skipped_position_cap": 38
+    "skipped_position_cap": 39
    },
    "underdog-sweep": {
     "filled": 27,
-    "no_liquidity_or_cash": 52,
+    "no_liquidity_or_cash": 54,
     "queued": 21
    },
    "weather-bracket": {
     "filled": 85,
     "no_liquidity_or_cash": 10,
     "queued": 7,
-    "skipped_position_cap": 19
+    "skipped_position_cap": 20
    },
    "weather-fade": {
     "filled": 63,
-    "skipped_position_cap": 23
+    "skipped_position_cap": 24
    },
    "yield-sniper": {
-    "filled": 91,
+    "filled": 95,
     "not_confirmed_on_book": 14,
     "queued": 7,
     "skipped_position_cap": 72
    }
   },
-  "openPositions": 112,
+  "openPositions": 99,
   "orphanFillSample": [],
-  "settledOrExited": 1149
+  "settledOrExited": 1180
  },
  "live": {
   "attempts": 8,
@@ -285,17 +285,17 @@
  },
  "schedule": {
   "cron": "7,37 * * * * (UTC)",
-  "cycles": 136,
-  "executed": 136,
-  "expectedSlots": 669,
+  "cycles": 138,
+  "executed": 138,
+  "expectedSlots": 682,
   "extraManual": 4,
   "firstCycle": "2026-09-20T03:21:26Z",
-  "lastCycle": "2026-10-04T01:56:02Z",
-  "late": 128,
-  "matchedSlots": 132,
+  "lastCycle": "2026-10-04T08:17:09Z",
+  "late": 130,
+  "matchedSlots": 134,
   "maxGapHours": 28.09,
   "medianDelayMin": 48.4,
-  "missed": 537,
+  "missed": 548,
   "missedSlotsSample": [
    "2026-09-20T04:07Z",
    "2026-09-20T04:37Z",
@@ -334,18 +334,21 @@
  "schemaVersion": 1,
  "season": "2026",
  "signals": {
-  "latestCycle": "20261004T015602Z",
-  "latestSignalErrors": [],
+  "latestCycle": "20261004T081709Z",
+  "latestSignalErrors": [
+   "openfda openfda.substance_name:\"RETATRUTIDE\": HTTP Error 500",
+   "openfda openfda.substance_name:\"RETATRUTIDE\": HTTP Error 500"
+  ],
   "note": "a source that answers nothing shows 0 here with its error lines below it - that is the adapter abstaining, never a defaulted value (the same fail-closed rule as the desk).",
   "totals": {
-   "candlesArchived": 366,
+   "candlesArchived": 370,
    "espnLiveSignals": 422,
-   "espnSignals": 6101,
-   "fdaNoRecord": 454,
-   "fdaSignals": 454,
-   "nwsCentralPark": 80,
-   "nwsCityForecasts": 6251,
-   "signalErrors": 121
+   "espnSignals": 6177,
+   "fdaNoRecord": 459,
+   "fdaSignals": 459,
+   "nwsCentralPark": 82,
+   "nwsCityForecasts": 6412,
+   "signalErrors": 125
   }
  },
  "status": "PASS",
@@ -355,7 +358,7 @@
   "compactedFiles": 22,
   "hashVerifyFailures": [],
   "hashVerifyPass": 22,
-  "indexUpdatedAt": "2026-10-04T01:57:52Z",
+  "indexUpdatedAt": "2026-10-04T08:20:29Z",
   "linesPreserved": 6079,
   "note": "evidence/ and quotes/ captures older than the compaction horizon are gzipped with their SHA-256 kept (IRR-24); append-only ledgers are never compressed."
  },
@@ -363,36 +366,36 @@
   "available": true,
   "byStrategy": {
    "book-edge": {
-    "compared": 5,
-    "medianAbsCentsDiff": 3.8381
+    "compared": 9,
+    "medianAbsCentsDiff": 3.3758
    },
    "depth-diver": {
-    "compared": 6,
-    "medianAbsCentsDiff": 1.4569
+    "compared": 9,
+    "medianAbsCentsDiff": 1.0
    },
    "game-favourite": {
     "compared": 16,
-    "medianAbsCentsDiff": 0.7554
+    "medianAbsCentsDiff": 0.6726
    },
    "halftime-hype": {
     "compared": 12,
-    "medianAbsCentsDiff": 1.1296
+    "medianAbsCentsDiff": 1.0109
    },
    "heat-confirm": {
     "compared": 10,
     "medianAbsCentsDiff": 3.1764
    },
    "longshot-fader": {
-    "compared": 5,
-    "medianAbsCentsDiff": 2.1449
+    "compared": 6,
+    "medianAbsCentsDiff": 1.2555
    },
    "micro-tail": {
-    "compared": 23,
+    "compared": 21,
     "medianAbsCentsDiff": 2.8138
    },
    "scalp-8095": {
-    "compared": 10,
-    "medianAbsCentsDiff": 3.1433
+    "compared": 9,
+    "medianAbsCentsDiff": 2.9691
    },
    "score-pulse": {
     "compared": 5,
@@ -400,11 +403,11 @@
    },
    "spike-surfer": {
     "compared": 1,
-    "medianAbsCentsDiff": 0.5656
+    "medianAbsCentsDiff": 0.866
    },
    "sure-thing": {
-    "compared": 7,
-    "medianAbsCentsDiff": 2.1462
+    "compared": 5,
+    "medianAbsCentsDiff": 1.7783
    },
    "tick-chaser": {
     "compared": 5,
@@ -419,20 +422,20 @@
     "medianAbsCentsDiff": 3.9342
    },
    "yield-sniper": {
-    "compared": 11,
-    "medianAbsCentsDiff": 0.9362
+    "compared": 14,
+    "medianAbsCentsDiff": 1.0
    }
   },
-  "compared": 137,
-  "generatedAt": "2026-10-04T01:57:30Z",
-  "insideTapeRangePct": 57.66,
-  "meanAbsCentsDiff": 2.128,
+  "compared": 143,
+  "generatedAt": "2026-10-04T08:19:52Z",
+  "insideTapeRangePct": 53.85,
+  "meanAbsCentsDiff": 2.055,
   "medianAbsCentsDiff": 1.4638,
   "method": "GET /markets/trades?ticker=&min_ts=&max_ts= (official, unauthenticated); desk fills from forward/trades.jsonl. Every comparison stores the tape response hash and URL.",
-  "noTapeInWindow": 63,
-  "tapeCoveredPct": 59.12,
+  "noTapeInWindow": 57,
+  "tapeCoveredPct": 57.34,
   "tapeFetchFailed": 0,
-  "verdict": "137 paper fill(s) compared with the official tape: median |desk - tape| 1.46c, 67.15% had a real print within 1c of the desk's VWAP, 59.12% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 57.66% of fills. The desk is optimistic versus the tape: treat its returns as an upper bound.",
-  "withinOneCentPct": 67.15
+  "verdict": "143 paper fill(s) compared with the official tape: median |desk - tape| 1.46c, 62.94% had a real print within 1c of the desk's VWAP, 57.34% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 53.85% of fills. The desk is optimistic versus the tape: treat its returns as an upper bound.",
+  "withinOneCentPct": 62.94
  }
 }
