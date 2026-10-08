@@ -1,24 +1,31 @@
 {
- "cycle": "20261008T002650Z",
- "errorCount": 0,
- "failed": [],
- "generatedAt": "2026-10-08T00:26:50Z",
+ "cycle": "20261008T062353Z",
+ "errorCount": 6,
+ "failed": [
+  "KXHIGHTPHX: no official coordinates for 'Phoenix   Daily' - series skipped",
+  "KXHIGHTSEA: no official coordinates for 'Seattle   Daily' - series skipped",
+  "KXHIGHTSFO: no official coordinates for 'San Francisco   Daily' - series skipped",
+  "no Census place match for 'Phoenix   Daily' (state hint none; scanned 32363 gazetteer rows, sha256 af678e2d9908)",
+  "no Census place match for 'Seattle   Daily' (state hint none; scanned 32363 gazetteer rows, sha256 af678e2d9908)",
+  "no Census place match for 'San Francisco   Daily' (state hint none; scanned 32363 gazetteer rows, sha256 af678e2d9908)"
+ ],
+ "generatedAt": "2026-10-08T06:23:53Z",
  "note": "One row per official endpoint this cycle could read; status is read / not_needed / failed, and every read row carries the verbatim response hash where the adapter returned one. A failed read is recorded here and the dependent strategy abstains.",
  "schemaVersion": 1,
- "sourceCount": 5,
+ "sourceCount": 8,
  "sources": [
   {
-   "at": "2026-10-08T00:26:50Z",
+   "at": "2026-10-08T06:23:53Z",
    "detail": {
-    "apiCalls": 191,
-    "marketsSeen": 291
+    "apiCalls": 183,
+    "marketsSeen": 85
    },
    "source": "Kalshi Trade API v2",
    "status": "read",
    "url": "https://external-api.kalshi.com/trade-api/v2"
   },
   {
-   "at": "2026-10-08T00:26:50Z",
+   "at": "2026-10-08T06:23:53Z",
    "detail": {
     "mapped": null
    },
@@ -27,21 +34,50 @@
    "url": "https://api.weather.gov/gridpoints/OKX/34,45/forecast"
   },
   {
-   "at": "2026-10-08T00:26:50Z",
-   "detail": {},
+   "at": "2026-10-08T06:24:31Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "69cd844cdfc30d733528aff2c2a3a85fb4c1696365b96b4d1fdb88ca041dd3a0",
    "source": "NWS city gridpoint forecasts",
-   "status": "not_needed",
-   "url": "https://api.weather.gov"
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/BOU/67,62/forecast"
   },
   {
-   "at": "2026-10-08T00:26:50Z",
+   "at": "2026-10-08T06:24:31Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "733fc3080f9551e601fcdf2b0b6c593082dd3d5652e3fb509401a7c0502a43c3",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/LOX/149,45/forecast"
+  },
+  {
+   "at": "2026-10-08T06:24:31Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "e96ddf32fad314584a17a20689a4bdf42f45610a5f9b93d5d9e6fc2aa987e007",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/VEF/119,101/forecast"
+  },
+  {
+   "at": "2026-10-08T06:24:32Z",
+   "bytes": null,
+   "detail": null,
+   "sha256": "92771af8fcae3e5082848be9c89cfc1e2238f1ef06bff8bd59db444eb7f0904b",
+   "source": "NWS city gridpoint forecasts",
+   "status": "read",
+   "url": "https://api.weather.gov/gridpoints/SGX/59,19/forecast"
+  },
+  {
+   "at": "2026-10-08T06:23:53Z",
    "detail": {},
    "source": "ESPN scoreboard (public JSON)",
    "status": "not_needed",
    "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
   },
   {
-   "at": "2026-10-08T00:26:50Z",
+   "at": "2026-10-08T06:23:53Z",
    "detail": {},
    "source": "ESPN league injuries (public JSON)",
    "status": "not_needed",
