@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-10-09T19:25:42Z",
- "marketCount": 443,
+ "generatedAt": "2026-10-09T23:27:50Z",
+ "marketCount": 445,
  "markets": {
   "KXBTC-26OCT0113-B83750": {
    "archivedByCycle": "20261001T202650Z",
@@ -4594,6 +4594,36 @@
    "sha256": "ebe5fb3fc900605219b5a50f59a7155281792a70c1d3c403e9ce9fda04bd8116",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXINX/markets/KXINX-26OCT02H1600-B7762/candlesticks?start_ts=1790389740&end_ts=1790982173&period_interval=60"
   },
+  "KXINX-26OCT09H1600-B7762": {
+   "archivedByCycle": "20261009T232554Z",
+   "bars": 131,
+   "closeTs": "2026-10-09T20:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXINX/KXINX-26OCT09H1600-B7762-p60.csv",
+   "openTs": "2026-10-03T02:30:00Z",
+   "period": 60,
+   "result": "no",
+   "series": "KXINX",
+   "settlementTs": "2026-10-09T23:01:28Z",
+   "sha256": "6a37eb537a7280b41fa245e7801546e32bb4b233bc6c7fd9320845cbcf2d18ee",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXINX/markets/KXINX-26OCT09H1600-B7762/candlesticks?start_ts=1790994540&end_ts=1791586948&period_interval=60"
+  },
+  "KXINX-26OCT09H1600-B7812": {
+   "archivedByCycle": "20261009T232554Z",
+   "bars": 142,
+   "closeTs": "2026-10-09T20:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXINX/KXINX-26OCT09H1600-B7812-p60.csv",
+   "openTs": "2026-10-03T02:30:00Z",
+   "period": 60,
+   "result": "yes",
+   "series": "KXINX",
+   "settlementTs": "2026-10-09T23:01:28Z",
+   "sha256": "a29ccc9853e7aa57711d0b17c771c7897154afc18df8bab6b9af2a4964f80a84",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXINX/markets/KXINX-26OCT09H1600-B7812/candlesticks?start_ts=1790994540&end_ts=1791586948&period_interval=60"
+  },
   "KXMLBGAME-26SEP192040MIASD-MIA": {
    "archivedByCycle": "20260920T091246Z",
    "bars": 71,
@@ -6691,5 +6721,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 26940
+ "verifiedBars": 27213
 }
