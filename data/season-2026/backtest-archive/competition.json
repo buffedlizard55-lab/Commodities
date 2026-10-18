@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-10-18T10:51:20Z",
- "marketCount": 582,
+ "generatedAt": "2026-10-18T14:28:52Z",
+ "marketCount": 584,
  "markets": {
   "KXBTC-26OCT0113-B83750": {
    "archivedByCycle": "20261001T202650Z",
@@ -4203,6 +4203,36 @@
    "settlementTs": "2026-10-17T14:09:06Z",
    "sha256": "65e372cbc3e8a6ed30ed01c98f4bd5c85580e4532710a985848b928f256ead7b",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHLAX/markets/KXHIGHLAX-26OCT16-B93.5/candlesticks?start_ts=1792072740&end_ts=1792246206&period_interval=60"
+  },
+  "KXHIGHLAX-26OCT17-B88.5": {
+   "archivedByCycle": "20261018T142652Z",
+   "bars": 43,
+   "closeTs": "2026-10-18T08:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXHIGHLAX/KXHIGHLAX-26OCT17-B88.5-p60.csv",
+   "openTs": "2026-10-16T14:00:00Z",
+   "period": 60,
+   "result": "no",
+   "series": "KXHIGHLAX",
+   "settlementTs": "2026-10-18T14:10:31Z",
+   "sha256": "ea628e01e6b201a45df0587a617ac0bbeefc0a9b4f7d263a33785c7377e361fa",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHLAX/markets/KXHIGHLAX-26OCT17-B88.5/candlesticks?start_ts=1792159140&end_ts=1792332691&period_interval=60"
+  },
+  "KXHIGHLAX-26OCT17-B92.5": {
+   "archivedByCycle": "20261018T142652Z",
+   "bars": 43,
+   "closeTs": "2026-10-18T08:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXHIGHLAX/KXHIGHLAX-26OCT17-B92.5-p60.csv",
+   "openTs": "2026-10-16T14:00:00Z",
+   "period": 60,
+   "result": "no",
+   "series": "KXHIGHLAX",
+   "settlementTs": "2026-10-18T14:10:31Z",
+   "sha256": "81ff5370ee68fc01b8ee944c57639edd801b880873cf847821c1ce5ae0584c45",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHLAX/markets/KXHIGHLAX-26OCT17-B92.5/candlesticks?start_ts=1792159140&end_ts=1792332691&period_interval=60"
   },
   "KXHIGHLAX-26SEP20-B78.5": {
    "archivedByCycle": "20260922T043112Z",
@@ -8780,5 +8810,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 35379
+ "verifiedBars": 35465
 }
