@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-10-17T23:01:25Z",
- "marketCount": 576,
+ "generatedAt": "2026-10-18T00:50:29Z",
+ "marketCount": 578,
  "markets": {
   "KXBTC-26OCT0113-B83750": {
    "archivedByCycle": "20261001T202650Z",
@@ -7234,6 +7234,21 @@
    "sha256": "7ab6f8dbd75c12bd0057b3bec9beecc301082b069e65a3061866cabb25355d8e",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNCAAFGAME/markets/KXNCAAFGAME-26OCT17MONMUNH-MONM/candlesticks?start_ts=1791054420&end_ts=1792267482&period_interval=1440"
   },
+  "KXNCAAFGAME-26OCT17SDAKMURR-MURR": {
+   "archivedByCycle": "20261018T004830Z",
+   "bars": 201,
+   "closeTs": "2026-10-18T00:34:49Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic_with_maker_fees",
+   "file": "candles/KXNCAAFGAME/KXNCAAFGAME-26OCT17SDAKMURR-MURR-p60.csv",
+   "openTs": "2026-10-04T01:07:00Z",
+   "period": 60,
+   "result": "no",
+   "series": "KXNCAAFGAME",
+   "settlementTs": "2026-10-18T00:37:21Z",
+   "sha256": "2be8c6def7de0fb74d7dc369642b7da3e905a8caab91903408f1b527564cb9ce",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNCAAFGAME/markets/KXNCAAFGAME-26OCT17SDAKMURR-MURR/candlesticks?start_ts=1791075960&end_ts=1792283901&period_interval=60"
+  },
   "KXNCAAFGAME-26OCT17UNLVAFA-AFA": {
    "archivedByCycle": "20261017T225925Z",
    "bars": 303,
@@ -8464,6 +8479,21 @@
    "sha256": "2284271f40aab7192c76f556e3490ffcde8f62ee64897c8f4ba4aa047b984e66",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNHLGAME/markets/KXNHLGAME-26OCT15VANFLA-VAN/candlesticks?start_ts=1791507900&end_ts=1792115406&period_interval=60"
   },
+  "KXNHLGAME-26OCT17SEAFLA-FLA": {
+   "archivedByCycle": "20261018T004830Z",
+   "bars": 147,
+   "closeTs": "2026-10-18T00:43:24Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic_with_maker_fees",
+   "file": "candles/KXNHLGAME/KXNHLGAME-26OCT17SEAFLA-FLA-p60.csv",
+   "openTs": "2026-10-10T22:06:00Z",
+   "period": 60,
+   "result": "yes",
+   "series": "KXNHLGAME",
+   "settlementTs": "2026-10-18T00:45:11Z",
+   "sha256": "2af6e02fdf5e0a19d972323ff72c0467488f2e617c8c581bea3beed8ad1c51dc",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXNHLGAME/markets/KXNHLGAME-26OCT17SEAFLA-FLA/candlesticks?start_ts=1791669900&end_ts=1792284371&period_interval=60"
+  },
   "KXNHLGAME-26SEP22CBJBUF-CBJ": {
    "archivedByCycle": "20260923T042740Z",
    "bars": 74,
@@ -8690,5 +8720,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 34789
+ "verifiedBars": 35137
 }
