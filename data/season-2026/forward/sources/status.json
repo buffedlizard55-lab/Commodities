@@ -1,24 +1,24 @@
 {
- "cycle": "20261019T171700Z",
+ "cycle": "20261019T213336Z",
  "errorCount": 0,
  "failed": [],
- "generatedAt": "2026-10-19T17:17:00Z",
+ "generatedAt": "2026-10-19T21:33:36Z",
  "note": "One row per official endpoint this cycle could read; status is read / not_needed / failed, and every read row carries the verbatim response hash where the adapter returned one. A failed read is recorded here and the dependent strategy abstains.",
  "schemaVersion": 1,
- "sourceCount": 7,
+ "sourceCount": 5,
  "sources": [
   {
-   "at": "2026-10-19T17:17:00Z",
+   "at": "2026-10-19T21:33:36Z",
    "detail": {
-    "apiCalls": 189,
-    "marketsSeen": 349
+    "apiCalls": 184,
+    "marketsSeen": 190
    },
    "source": "Kalshi Trade API v2",
    "status": "read",
    "url": "https://external-api.kalshi.com/trade-api/v2"
   },
   {
-   "at": "2026-10-19T17:17:00Z",
+   "at": "2026-10-19T21:33:36Z",
    "detail": {
     "mapped": null
    },
@@ -27,43 +27,25 @@
    "url": "https://api.weather.gov/gridpoints/OKX/34,45/forecast"
   },
   {
-   "at": "2026-10-19T17:17:00Z",
+   "at": "2026-10-19T21:33:36Z",
    "detail": {},
    "source": "NWS city gridpoint forecasts",
    "status": "not_needed",
    "url": "https://api.weather.gov"
   },
   {
-   "at": "2026-10-19T17:17:00Z",
+   "at": "2026-10-19T21:33:36Z",
    "detail": {},
    "source": "ESPN scoreboard (public JSON)",
    "status": "not_needed",
    "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
   },
   {
-   "at": "2026-10-19T17:17:00Z",
+   "at": "2026-10-19T21:33:36Z",
    "detail": {},
    "source": "ESPN league injuries (public JSON)",
    "status": "not_needed",
    "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
-  },
-  {
-   "at": "2026-10-19T17:17:25Z",
-   "bytes": 137,
-   "detail": "SP500",
-   "sha256": "424f6c666c585c6cebc71dc947a8e9a9ccc21706a13942e21fb410bd54c0121b",
-   "source": "FRED (Federal Reserve Bank of St. Louis)",
-   "status": "read",
-   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SP500&cosd=2026-10-09&coed=2026-10-19"
-  },
-  {
-   "at": "2026-10-19T17:17:26Z",
-   "bytes": 132,
-   "detail": "NASDAQ100",
-   "sha256": "b53aa72399b860db1908db201c6f6f6217f402e2b013c11e317809e8f1c54316",
-   "source": "FRED (Federal Reserve Bank of St. Louis)",
-   "status": "read",
-   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NASDAQ100&cosd=2026-10-09&coed=2026-10-19"
   }
  ]
 }
