@@ -17,8 +17,8 @@
    "medianAbsCentsDiff": 2.2833
   },
   "longshot-fader": {
-   "compared": 23,
-   "medianAbsCentsDiff": 1.031
+   "compared": 21,
+   "medianAbsCentsDiff": 1.0
   },
   "pinepilot": {
    "compared": 1,
@@ -26,7 +26,7 @@
   },
   "scalp-8095": {
    "compared": 14,
-   "medianAbsCentsDiff": 4.1676
+   "medianAbsCentsDiff": 3.7792
   },
   "score-pulse": {
    "compared": 6,
@@ -41,8 +41,8 @@
    "medianAbsCentsDiff": 0.7124
   },
   "tick-chaser": {
-   "compared": 8,
-   "medianAbsCentsDiff": 0.8052
+   "compared": 9,
+   "medianAbsCentsDiff": 0.9791
   },
   "tipoff-triage": {
    "compared": 1,
@@ -57,243 +57,17 @@
    "medianAbsCentsDiff": 0.7467
   }
  },
- "compared": 152,
- "generatedAt": "2026-10-19T00:06:14Z",
- "insideTapeRangePct": 67.11,
- "meanAbsCentsDiff": 2.4085,
+ "compared": 151,
+ "generatedAt": "2026-10-19T04:29:29Z",
+ "insideTapeRangePct": 68.21,
+ "meanAbsCentsDiff": 1.7799,
  "medianAbsCentsDiff": 1.0,
- "medianSignedCentsDiff": 0.8716,
+ "medianSignedCentsDiff": 0.8594,
  "method": "GET /markets/trades?ticker=&min_ts=&max_ts= (official, unauthenticated); desk fills from forward/trades.jsonl. Every comparison stores the tape response hash and URL.",
- "noTapeInWindow": 48,
+ "noTapeInWindow": 49,
  "rows": [
   {
-   "at": "2026-10-19T00:05:26Z",
-   "contracts": 170.0,
-   "deskAt": "2026-10-16T04:13:11Z",
-   "deskPrice": 0.331647,
-   "deskTouch": 0.31,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.36,
-   "positionId": "heat-confirm-KXHIGHTDC-26OCT16-B82.5-20261016T041217Z",
-   "series": "KXHIGHTDC",
-   "side": "yes",
-   "status": "no_tape_in_window",
-   "strategyId": "heat-confirm",
-   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
-   "tapeTrades": 0,
-   "tapeTradesAll": 0,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXHIGHTDC-26OCT16-B82.5&limit=1000&min_ts=1792123871&max_ts=1792124111",
-   "ticker": "KXHIGHTDC-26OCT16-B82.5",
-   "username": "HeatConfirm",
-   "windowSeconds": 120
-  },
-  {
-   "at": "2026-10-19T00:05:26Z",
-   "centsDiff": 90.4984,
-   "contracts": 349.0,
-   "coveredByTape": true,
-   "deskAt": "2026-10-16T04:13:11Z",
-   "deskPrice": 0.920464,
-   "deskPriceInsideTapeRange": false,
-   "deskTouch": 0.92,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.95,
-   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
-   "positionId": "longshot-fader-KXETH15M-26OCT160015-15-20261016T041217Z",
-   "series": "KXETH15M",
-   "side": "no",
-   "status": "compared",
-   "strategyId": "longshot-fader",
-   "tapeBest": 0.001,
-   "tapeContracts": 63803.01,
-   "tapeCoverageRatio": 182.8166,
-   "tapeMax": 0.15,
-   "tapeMin": 0.001,
-   "tapeSha256": "402dc254d5317a1845d40f666af219a8fc6c98d1ad097b7b802799b99395737e",
-   "tapeTrades": 1000,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXETH15M-26OCT160015-15&limit=1000&min_ts=1792123871&max_ts=1792124111",
-   "tapeVwap": 0.01548,
-   "ticker": "KXETH15M-26OCT160015-15",
-   "username": "LongshotFader",
-   "windowSeconds": 120,
-   "withinOneCent": false
-  },
-  {
-   "at": "2026-10-19T00:05:27Z",
-   "centsDiff": 5.7412,
-   "contracts": 125.2,
-   "coveredByTape": false,
-   "deskAt": "2026-10-16T05:04:20Z",
-   "deskPrice": 0.777412,
-   "deskPriceInsideTapeRange": false,
-   "deskTouch": 0.76,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.8,
-   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
-   "positionId": "scalp-8095-KXGOLDH-26OCT1602-T4179.99-20261016T050317Z",
-   "series": "KXGOLDH",
-   "side": "no",
-   "status": "compared",
-   "strategyId": "scalp-8095",
-   "tapeBest": 0.72,
-   "tapeContracts": 6.8,
-   "tapeCoverageRatio": 0.0543,
-   "tapeMax": 0.72,
-   "tapeMin": 0.72,
-   "tapeSha256": "15eb541855b13f9e2c469f4d717bc059083e0922952665879e997a8650cf676e",
-   "tapeTrades": 1,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXGOLDH-26OCT1602-T4179.99&limit=1000&min_ts=1792126940&max_ts=1792127180",
-   "tapeVwap": 0.72,
-   "ticker": "KXGOLDH-26OCT1602-T4179.99",
-   "username": "HighProbScalp",
-   "windowSeconds": 120,
-   "withinOneCent": false
-  },
-  {
-   "at": "2026-10-19T00:05:27Z",
-   "contracts": 61.0,
-   "deskAt": "2026-10-16T05:04:20Z",
-   "deskPrice": 0.784918,
-   "deskTouch": 0.76,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.8,
-   "positionId": "scalp-8095-KXGOLDH-26OCT1602-T4169.99-20261016T050317Z",
-   "series": "KXGOLDH",
-   "side": "yes",
-   "status": "no_tape_in_window",
-   "strategyId": "scalp-8095",
-   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
-   "tapeTrades": 0,
-   "tapeTradesAll": 0,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXGOLDH-26OCT1602-T4169.99&limit=1000&min_ts=1792126940&max_ts=1792127180",
-   "ticker": "KXGOLDH-26OCT1602-T4169.99",
-   "username": "HighProbScalp",
-   "windowSeconds": 120
-  },
-  {
-   "at": "2026-10-19T00:05:27Z",
-   "centsDiff": -3.5028,
-   "contracts": 175.0,
-   "coveredByTape": true,
-   "deskAt": "2026-10-16T05:04:18Z",
-   "deskPrice": 0.918,
-   "deskPriceInsideTapeRange": false,
-   "deskTouch": 0.918,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.95,
-   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
-   "positionId": "longshot-fader-KXBTC15M-26OCT160115-15-20261016T050317Z",
-   "series": "KXBTC15M",
-   "side": "yes",
-   "status": "compared",
-   "strategyId": "longshot-fader",
-   "tapeBest": 0.943,
-   "tapeContracts": 59770.82,
-   "tapeCoverageRatio": 341.5475,
-   "tapeMax": 0.966,
-   "tapeMin": 0.943,
-   "tapeSha256": "2d6c5c12481fdd7342c260d8a8725ac948719708e8f4aabf0743d2fbc0925697",
-   "tapeTrades": 1000,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXBTC15M-26OCT160115-15&limit=1000&min_ts=1792126938&max_ts=1792127178",
-   "tapeVwap": 0.953028,
-   "ticker": "KXBTC15M-26OCT160115-15",
-   "username": "LongshotFader",
-   "windowSeconds": 120,
-   "withinOneCent": false
-  },
-  {
-   "at": "2026-10-19T00:05:27Z",
-   "contracts": 1643.0,
-   "deskAt": "2026-10-16T09:13:57Z",
-   "deskPrice": 0.78,
-   "deskTouch": 0.78,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.8,
-   "positionId": "scalp-8095-KXBTC-26OCT1617-B82250-20261016T091316Z",
-   "series": "KXBTC",
-   "side": "no",
-   "status": "no_tape_in_window",
-   "strategyId": "scalp-8095",
-   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
-   "tapeTrades": 0,
-   "tapeTradesAll": 0,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXBTC-26OCT1617-B82250&limit=1000&min_ts=1792141917&max_ts=1792142157",
-   "ticker": "KXBTC-26OCT1617-B82250",
-   "username": "HighProbScalp",
-   "windowSeconds": 120
-  },
-  {
-   "at": "2026-10-19T00:05:28Z",
-   "centsDiff": 4.9217,
-   "contracts": 285.0,
-   "coveredByTape": false,
-   "deskAt": "2026-10-16T09:13:57Z",
-   "deskPrice": 0.790772,
-   "deskPriceInsideTapeRange": false,
-   "deskTouch": 0.75,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.8,
-   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
-   "positionId": "scalp-8095-KXBTC-26OCT1606-B82150-20261016T091316Z",
-   "series": "KXBTC",
-   "side": "no",
-   "status": "compared",
-   "strategyId": "scalp-8095",
-   "tapeBest": 0.74,
-   "tapeContracts": 12.86,
-   "tapeCoverageRatio": 0.0451,
-   "tapeMax": 0.75,
-   "tapeMin": 0.74,
-   "tapeSha256": "743cff616484acd8ecfbcc6041d501b43e8ca1dde0c20ed54058fb3ac3f455f8",
-   "tapeTrades": 7,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXBTC-26OCT1606-B82150&limit=1000&min_ts=1792141917&max_ts=1792142157",
-   "tapeVwap": 0.741555,
-   "ticker": "KXBTC-26OCT1606-B82150",
-   "username": "HighProbScalp",
-   "windowSeconds": 120,
-   "withinOneCent": false
-  },
-  {
-   "at": "2026-10-19T00:05:28Z",
-   "centsDiff": 1.0,
-   "contracts": 194.0,
-   "coveredByTape": false,
-   "deskAt": "2026-10-16T09:13:57Z",
-   "deskPrice": 0.86,
-   "deskPriceInsideTapeRange": false,
-   "deskTouch": 0.86,
-   "eventKind": "fill",
-   "kind": "execution-comparison",
-   "limitPrice": 0.91,
-   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
-   "positionId": "longshot-fader-KXNCAAFGAME-26OCT16MSSTLSU-MSST-20261016T091316Z",
-   "series": "KXNCAAFGAME",
-   "side": "no",
-   "status": "compared",
-   "strategyId": "longshot-fader",
-   "tapeBest": 0.85,
-   "tapeContracts": 6.29,
-   "tapeCoverageRatio": 0.0324,
-   "tapeMax": 0.85,
-   "tapeMin": 0.85,
-   "tapeSha256": "578c2fb78dcbe49e52456afc714ab23f19d2b1ae7e89019fd063f2d0ec6aa89d",
-   "tapeTrades": 1,
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNCAAFGAME-26OCT16MSSTLSU-MSST&limit=1000&min_ts=1792141917&max_ts=1792142157",
-   "tapeVwap": 0.85,
-   "ticker": "KXNCAAFGAME-26OCT16MSSTLSU-MSST",
-   "username": "LongshotFader",
-   "windowSeconds": 120,
-   "withinOneCent": false
-  },
-  {
-   "at": "2026-10-19T00:05:28Z",
+   "at": "2026-10-19T04:28:41Z",
    "contracts": 293.0,
    "deskAt": "2026-10-16T09:13:57Z",
    "deskPrice": 0.461819,
@@ -315,7 +89,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:28Z",
+   "at": "2026-10-19T04:28:41Z",
    "centsDiff": -7.1868,
    "contracts": 668.5,
    "coveredByTape": true,
@@ -347,7 +121,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:28Z",
+   "at": "2026-10-19T04:28:42Z",
    "centsDiff": 1.0,
    "contracts": 427.0,
    "coveredByTape": false,
@@ -379,7 +153,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:29Z",
+   "at": "2026-10-19T04:28:42Z",
    "centsDiff": 1.5834,
    "contracts": 1717.32,
    "coveredByTape": false,
@@ -411,7 +185,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:29Z",
+   "at": "2026-10-19T04:28:42Z",
    "centsDiff": 1.7939,
    "contracts": 2.0,
    "coveredByTape": true,
@@ -443,7 +217,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:29Z",
+   "at": "2026-10-19T04:28:42Z",
    "centsDiff": 3.7697,
    "contracts": 334.08,
    "coveredByTape": false,
@@ -475,7 +249,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:29Z",
+   "at": "2026-10-19T04:28:42Z",
    "centsDiff": 3.7767,
    "contracts": 64.25,
    "coveredByTape": false,
@@ -507,7 +281,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:29Z",
+   "at": "2026-10-19T04:28:42Z",
    "centsDiff": 5.4266,
    "contracts": 1026.2,
    "coveredByTape": false,
@@ -539,7 +313,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:30Z",
+   "at": "2026-10-19T04:28:43Z",
    "contracts": 190.16,
    "deskAt": "2026-10-16T14:10:25Z",
    "deskPrice": 0.309159,
@@ -561,7 +335,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:30Z",
+   "at": "2026-10-19T04:28:43Z",
    "centsDiff": 1.0,
    "contracts": 1473.0,
    "coveredByTape": false,
@@ -593,7 +367,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:30Z",
+   "at": "2026-10-19T04:28:43Z",
    "contracts": 954.0,
    "deskAt": "2026-10-16T14:10:25Z",
    "deskPrice": 0.77,
@@ -615,7 +389,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:30Z",
+   "at": "2026-10-19T04:28:43Z",
    "centsDiff": 3.2635,
    "contracts": 1332.0,
    "coveredByTape": false,
@@ -647,7 +421,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:30Z",
+   "at": "2026-10-19T04:28:43Z",
    "centsDiff": 0.7467,
    "contracts": 537.0,
    "coveredByTape": false,
@@ -679,7 +453,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:30Z",
+   "at": "2026-10-19T04:28:43Z",
    "contracts": 477.0,
    "deskAt": "2026-10-16T18:02:46Z",
    "deskPrice": 0.77,
@@ -701,7 +475,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:31Z",
+   "at": "2026-10-19T04:28:44Z",
    "contracts": 233.0,
    "deskAt": "2026-10-16T18:02:46Z",
    "deskPrice": 0.79,
@@ -723,7 +497,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:31Z",
+   "at": "2026-10-19T04:28:44Z",
    "centsDiff": -0.0,
    "contracts": 2997.0,
    "coveredByTape": false,
@@ -755,7 +529,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:31Z",
+   "at": "2026-10-19T04:28:44Z",
    "centsDiff": 1.0025,
    "contracts": 398.0,
    "coveredByTape": false,
@@ -787,7 +561,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:31Z",
+   "at": "2026-10-19T04:28:44Z",
    "contracts": 720.45,
    "deskAt": "2026-10-16T18:18:05Z",
    "deskPrice": 0.894254,
@@ -809,7 +583,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:31Z",
+   "at": "2026-10-19T04:28:44Z",
    "contracts": 218.55,
    "deskAt": "2026-10-16T18:18:05Z",
    "deskPrice": 0.913981,
@@ -831,7 +605,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:32Z",
+   "at": "2026-10-19T04:28:44Z",
    "centsDiff": 4.625,
    "contracts": 160.0,
    "coveredByTape": false,
@@ -863,7 +637,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:32Z",
+   "at": "2026-10-19T04:28:45Z",
    "contracts": 543.0,
    "deskAt": "2026-10-16T18:18:06Z",
    "deskPrice": 0.385396,
@@ -885,7 +659,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:32Z",
+   "at": "2026-10-19T04:28:45Z",
    "centsDiff": 2.0,
    "contracts": 688.0,
    "coveredByTape": false,
@@ -917,7 +691,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:32Z",
+   "at": "2026-10-19T04:28:45Z",
    "centsDiff": 1.0,
    "contracts": 368.0,
    "coveredByTape": true,
@@ -949,7 +723,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:32Z",
+   "at": "2026-10-19T04:28:45Z",
    "centsDiff": 0.0,
    "contracts": 1140.0,
    "coveredByTape": false,
@@ -981,7 +755,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:33Z",
+   "at": "2026-10-19T04:28:45Z",
    "contracts": 575.0,
    "deskAt": "2026-10-16T21:36:48Z",
    "deskPrice": 0.98,
@@ -1003,7 +777,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:33Z",
+   "at": "2026-10-19T04:28:45Z",
    "centsDiff": 1.4367,
    "contracts": 10.56,
    "coveredByTape": false,
@@ -1035,7 +809,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:33Z",
+   "at": "2026-10-19T04:28:46Z",
    "centsDiff": 3.5994,
    "contracts": 234.6,
    "coveredByTape": false,
@@ -1067,7 +841,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:33Z",
+   "at": "2026-10-19T04:28:46Z",
    "contracts": 215.0,
    "deskAt": "2026-10-16T21:36:48Z",
    "deskPrice": 0.739395,
@@ -1089,7 +863,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:33Z",
+   "at": "2026-10-19T04:28:46Z",
    "centsDiff": 2.7622,
    "contracts": 540.46,
    "coveredByTape": false,
@@ -1121,7 +895,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:33Z",
+   "at": "2026-10-19T04:28:46Z",
    "centsDiff": 0.4828,
    "contracts": 174.0,
    "coveredByTape": false,
@@ -1153,7 +927,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:34Z",
+   "at": "2026-10-19T04:28:46Z",
    "centsDiff": 0.0,
    "contracts": 87.0,
    "coveredByTape": false,
@@ -1185,7 +959,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:34Z",
+   "at": "2026-10-19T04:28:46Z",
    "centsDiff": 0.4828,
    "contracts": 859.0,
    "coveredByTape": false,
@@ -1217,7 +991,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:34Z",
+   "at": "2026-10-19T04:28:47Z",
    "centsDiff": 7.3393,
    "contracts": 33.0,
    "coveredByTape": true,
@@ -1249,7 +1023,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:34Z",
+   "at": "2026-10-19T04:28:48Z",
    "centsDiff": -0.6989,
    "contracts": 1515.0,
    "coveredByTape": true,
@@ -1281,7 +1055,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:34Z",
+   "at": "2026-10-19T04:28:48Z",
    "centsDiff": 0.9692,
    "contracts": 65.0,
    "coveredByTape": false,
@@ -1313,7 +1087,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:35Z",
+   "at": "2026-10-19T04:28:48Z",
    "centsDiff": -0.0394,
    "contracts": 46.0,
    "coveredByTape": true,
@@ -1345,7 +1119,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:35Z",
+   "at": "2026-10-19T04:28:49Z",
    "centsDiff": 0.641,
    "contracts": 23.0,
    "coveredByTape": true,
@@ -1377,7 +1151,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:35Z",
+   "at": "2026-10-19T04:28:49Z",
    "centsDiff": 3.9351,
    "contracts": 427.0,
    "coveredByTape": false,
@@ -1409,7 +1183,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:35Z",
+   "at": "2026-10-19T04:28:49Z",
    "centsDiff": 3.2543,
    "contracts": 226.0,
    "coveredByTape": true,
@@ -1441,7 +1215,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:36Z",
+   "at": "2026-10-19T04:28:49Z",
    "centsDiff": 6.6104,
    "contracts": 490.0,
    "coveredByTape": true,
@@ -1473,7 +1247,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:36Z",
+   "at": "2026-10-19T04:28:49Z",
    "centsDiff": 2.4897,
    "contracts": 734.0,
    "coveredByTape": true,
@@ -1505,7 +1279,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:36Z",
+   "at": "2026-10-19T04:28:49Z",
    "centsDiff": 2.4897,
    "contracts": 928.0,
    "coveredByTape": true,
@@ -1537,7 +1311,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:36Z",
+   "at": "2026-10-19T04:28:50Z",
    "centsDiff": 1.2407,
    "contracts": 464.0,
    "coveredByTape": true,
@@ -1569,7 +1343,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:36Z",
+   "at": "2026-10-19T04:28:50Z",
    "centsDiff": 2.4897,
    "contracts": 846.0,
    "coveredByTape": true,
@@ -1601,7 +1375,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:37Z",
+   "at": "2026-10-19T04:28:50Z",
    "centsDiff": 1.9023,
    "contracts": 14922.45,
    "coveredByTape": true,
@@ -1633,7 +1407,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:37Z",
+   "at": "2026-10-19T04:28:50Z",
    "contracts": 16.9,
    "deskAt": "2026-10-17T08:28:49Z",
    "deskPrice": 0.857101,
@@ -1655,7 +1429,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:38Z",
+   "at": "2026-10-19T04:28:50Z",
    "contracts": 5.0,
    "deskAt": "2026-10-17T08:28:49Z",
    "deskPrice": 0.63,
@@ -1677,7 +1451,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:38Z",
+   "at": "2026-10-19T04:28:51Z",
    "centsDiff": 0.0,
    "contracts": 1128.0,
    "coveredByTape": false,
@@ -1709,7 +1483,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:39Z",
+   "at": "2026-10-19T04:28:51Z",
    "centsDiff": 1.0,
    "contracts": 545.0,
    "coveredByTape": false,
@@ -1741,7 +1515,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:39Z",
+   "at": "2026-10-19T04:28:52Z",
    "contracts": 1658.0,
    "deskAt": "2026-10-17T08:28:50Z",
    "deskPrice": 0.769843,
@@ -1763,7 +1537,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:39Z",
+   "at": "2026-10-19T04:28:52Z",
    "centsDiff": -0.0,
    "contracts": 937.0,
    "coveredByTape": false,
@@ -1795,7 +1569,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:39Z",
+   "at": "2026-10-19T04:28:52Z",
    "contracts": 611.0,
    "deskAt": "2026-10-17T12:21:28Z",
    "deskPrice": 0.986825,
@@ -1817,7 +1591,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:39Z",
+   "at": "2026-10-19T04:28:52Z",
    "contracts": 305.0,
    "deskAt": "2026-10-17T12:21:28Z",
    "deskPrice": 0.99,
@@ -1839,7 +1613,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:39Z",
+   "at": "2026-10-19T04:28:53Z",
    "contracts": 468.0,
    "deskAt": "2026-10-17T12:21:28Z",
    "deskPrice": 0.198547,
@@ -1861,7 +1635,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:40Z",
+   "at": "2026-10-19T04:28:53Z",
    "centsDiff": 4.9613,
    "contracts": 1091.65,
    "coveredByTape": false,
@@ -1893,7 +1667,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:40Z",
+   "at": "2026-10-19T04:28:53Z",
    "contracts": 278.25,
    "deskAt": "2026-10-17T12:21:29Z",
    "deskPrice": 0.070144,
@@ -1915,7 +1689,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:40Z",
+   "at": "2026-10-19T04:28:53Z",
    "centsDiff": 0.9075,
    "contracts": 250.0,
    "coveredByTape": true,
@@ -1947,7 +1721,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:40Z",
+   "at": "2026-10-19T04:28:53Z",
    "centsDiff": 0.1022,
    "contracts": 125.0,
    "coveredByTape": true,
@@ -1979,7 +1753,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:40Z",
+   "at": "2026-10-19T04:28:53Z",
    "centsDiff": 0.8158,
    "contracts": 152.0,
    "coveredByTape": false,
@@ -2011,7 +1785,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:41Z",
+   "at": "2026-10-19T04:28:54Z",
    "centsDiff": 1.6525,
    "contracts": 830.0,
    "coveredByTape": true,
@@ -2043,7 +1817,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:41Z",
+   "at": "2026-10-19T04:28:54Z",
    "centsDiff": -0.8907,
    "contracts": 771.0,
    "coveredByTape": true,
@@ -2075,7 +1849,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:41Z",
+   "at": "2026-10-19T04:28:54Z",
    "centsDiff": 0.1197,
    "contracts": 1595.0,
    "coveredByTape": true,
@@ -2107,7 +1881,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:41Z",
+   "at": "2026-10-19T04:28:54Z",
    "centsDiff": 2.3404,
    "contracts": 112.32,
    "coveredByTape": true,
@@ -2139,7 +1913,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:42Z",
+   "at": "2026-10-19T04:28:54Z",
    "contracts": 80.95,
    "deskAt": "2026-10-17T15:52:29Z",
    "deskPrice": 0.3542,
@@ -2161,7 +1935,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:42Z",
+   "at": "2026-10-19T04:28:56Z",
    "centsDiff": -1.4134,
    "contracts": 67.0,
    "coveredByTape": true,
@@ -2193,7 +1967,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:42Z",
+   "at": "2026-10-19T04:28:56Z",
    "centsDiff": -0.4985,
    "contracts": 31.0,
    "coveredByTape": true,
@@ -2225,7 +1999,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:42Z",
+   "at": "2026-10-19T04:28:56Z",
    "centsDiff": 4.4,
    "contracts": 945.0,
    "coveredByTape": false,
@@ -2257,7 +2031,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:42Z",
+   "at": "2026-10-19T04:28:56Z",
    "contracts": 21.0,
    "deskAt": "2026-10-17T16:21:46Z",
    "deskPrice": 0.989524,
@@ -2279,7 +2053,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:44Z",
+   "at": "2026-10-19T04:28:56Z",
    "centsDiff": -1.9804,
    "contracts": 689.0,
    "coveredByTape": true,
@@ -2311,7 +2085,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:44Z",
+   "at": "2026-10-19T04:28:57Z",
    "centsDiff": 2.7011,
    "contracts": 781.0,
    "coveredByTape": true,
@@ -2343,7 +2117,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:44Z",
+   "at": "2026-10-19T04:28:57Z",
    "centsDiff": 0.4856,
    "contracts": 1603.0,
    "coveredByTape": false,
@@ -2375,7 +2149,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:45Z",
+   "at": "2026-10-19T04:28:57Z",
    "contracts": 523.24,
    "deskAt": "2026-10-17T18:21:40Z",
    "deskPrice": 0.032599,
@@ -2397,7 +2171,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:45Z",
+   "at": "2026-10-19T04:28:57Z",
    "centsDiff": 2.753,
    "contracts": 946.0,
    "coveredByTape": true,
@@ -2429,7 +2203,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:45Z",
+   "at": "2026-10-19T04:28:58Z",
    "centsDiff": 3.1839,
    "contracts": 304.04,
    "coveredByTape": true,
@@ -2461,7 +2235,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:45Z",
+   "at": "2026-10-19T04:28:58Z",
    "centsDiff": 0.0809,
    "contracts": 293.0,
    "coveredByTape": true,
@@ -2493,7 +2267,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:45Z",
+   "at": "2026-10-19T04:28:58Z",
    "centsDiff": 2.6589,
    "contracts": 684.0,
    "coveredByTape": true,
@@ -2525,7 +2299,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:46Z",
+   "at": "2026-10-19T04:28:58Z",
    "contracts": 265.0,
    "deskAt": "2026-10-17T18:34:58Z",
    "deskPrice": 0.987472,
@@ -2547,7 +2321,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:46Z",
+   "at": "2026-10-19T04:28:58Z",
    "contracts": 670.0,
    "deskAt": "2026-10-17T18:34:59Z",
    "deskPrice": 0.99,
@@ -2569,7 +2343,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:46Z",
+   "at": "2026-10-19T04:28:59Z",
    "centsDiff": 3.6233,
    "contracts": 236.0,
    "coveredByTape": false,
@@ -2601,7 +2375,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:46Z",
+   "at": "2026-10-19T04:28:59Z",
    "centsDiff": 0.8594,
    "contracts": 784.0,
    "coveredByTape": true,
@@ -2633,7 +2407,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:47Z",
+   "at": "2026-10-19T04:28:59Z",
    "contracts": 101.0,
    "deskAt": "2026-10-17T20:52:35Z",
    "deskPrice": 0.406238,
@@ -2655,7 +2429,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:47Z",
+   "at": "2026-10-19T04:28:59Z",
    "centsDiff": 1.0,
    "contracts": 1377.0,
    "coveredByTape": true,
@@ -2687,7 +2461,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:47Z",
+   "at": "2026-10-19T04:28:59Z",
    "centsDiff": -0.5103,
    "contracts": 175.0,
    "coveredByTape": true,
@@ -2719,7 +2493,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:47Z",
+   "at": "2026-10-19T04:28:59Z",
    "centsDiff": -0.0563,
    "contracts": 1419.0,
    "coveredByTape": true,
@@ -2751,7 +2525,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:47Z",
+   "at": "2026-10-19T04:29:01Z",
    "centsDiff": -2.4312,
    "contracts": 710.0,
    "coveredByTape": true,
@@ -2783,7 +2557,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:48Z",
+   "at": "2026-10-19T04:29:01Z",
    "contracts": 25.0,
    "deskAt": "2026-10-17T22:43:26Z",
    "deskPrice": 0.9812,
@@ -2805,7 +2579,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:48Z",
+   "at": "2026-10-19T04:29:01Z",
    "centsDiff": 0.0,
    "contracts": 1.0,
    "coveredByTape": true,
@@ -2837,7 +2611,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:48Z",
+   "at": "2026-10-19T04:29:01Z",
    "centsDiff": -8.0,
    "contracts": 4598.0,
    "coveredByTape": true,
@@ -2869,7 +2643,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:48Z",
+   "at": "2026-10-19T04:29:02Z",
    "centsDiff": -7.9982,
    "contracts": 2299.0,
    "coveredByTape": true,
@@ -2901,7 +2675,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:49Z",
+   "at": "2026-10-19T04:29:02Z",
    "centsDiff": 0.4665,
    "contracts": 2212.0,
    "coveredByTape": true,
@@ -2933,7 +2707,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:49Z",
+   "at": "2026-10-19T04:29:02Z",
    "centsDiff": 0.3878,
    "contracts": 1097.0,
    "coveredByTape": true,
@@ -2965,7 +2739,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:49Z",
+   "at": "2026-10-19T04:29:02Z",
    "centsDiff": 0.999,
    "contracts": 710.0,
    "coveredByTape": true,
@@ -2997,7 +2771,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:49Z",
+   "at": "2026-10-19T04:29:02Z",
    "centsDiff": 0.1024,
    "contracts": 348.0,
    "coveredByTape": true,
@@ -3029,7 +2803,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:50Z",
+   "at": "2026-10-19T04:29:03Z",
    "centsDiff": -8.0,
    "contracts": 1499.0,
    "coveredByTape": true,
@@ -3061,7 +2835,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:50Z",
+   "at": "2026-10-19T04:29:03Z",
    "centsDiff": -7.9982,
    "contracts": 749.0,
    "coveredByTape": true,
@@ -3093,7 +2867,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:50Z",
+   "at": "2026-10-19T04:29:03Z",
    "centsDiff": 1.0,
    "contracts": 23.0,
    "coveredByTape": true,
@@ -3125,7 +2899,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:50Z",
+   "at": "2026-10-19T04:29:03Z",
    "contracts": 49.0,
    "deskAt": "2026-10-18T00:19:47Z",
    "deskPrice": 0.99,
@@ -3147,7 +2921,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:51Z",
+   "at": "2026-10-19T04:29:03Z",
    "centsDiff": 7.109,
    "contracts": 403.0,
    "coveredByTape": false,
@@ -3179,7 +2953,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:51Z",
+   "at": "2026-10-19T04:29:04Z",
    "centsDiff": -0.7016,
    "contracts": 5753.0,
    "coveredByTape": true,
@@ -3211,7 +2985,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:51Z",
+   "at": "2026-10-19T04:29:04Z",
    "centsDiff": -1.9115,
    "contracts": 2876.0,
    "coveredByTape": true,
@@ -3243,7 +3017,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:51Z",
+   "at": "2026-10-19T04:29:04Z",
    "centsDiff": 0.5246,
    "contracts": 827.0,
    "coveredByTape": true,
@@ -3275,7 +3049,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:51Z",
+   "at": "2026-10-19T04:29:04Z",
    "centsDiff": 0.672,
    "contracts": 413.0,
    "coveredByTape": true,
@@ -3307,7 +3081,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:52Z",
+   "at": "2026-10-19T04:29:04Z",
    "centsDiff": 1.6436,
    "contracts": 817.0,
    "coveredByTape": false,
@@ -3339,7 +3113,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:52Z",
+   "at": "2026-10-19T04:29:05Z",
    "centsDiff": 0.0101,
    "contracts": 849.0,
    "coveredByTape": true,
@@ -3371,7 +3145,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:52Z",
+   "at": "2026-10-19T04:29:05Z",
    "centsDiff": 0.672,
    "contracts": 368.0,
    "coveredByTape": true,
@@ -3403,7 +3177,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:52Z",
+   "at": "2026-10-19T04:29:06Z",
    "centsDiff": -1.9115,
    "contracts": 191.0,
    "coveredByTape": true,
@@ -3435,7 +3209,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:52Z",
+   "at": "2026-10-19T04:29:06Z",
    "centsDiff": 0.5667,
    "contracts": 91.0,
    "coveredByTape": true,
@@ -3467,7 +3241,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:54Z",
+   "at": "2026-10-19T04:29:06Z",
    "centsDiff": 1.5709,
    "contracts": 1788.0,
    "coveredByTape": true,
@@ -3499,7 +3273,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:54Z",
+   "at": "2026-10-19T04:29:07Z",
    "centsDiff": 1.031,
    "contracts": 894.0,
    "coveredByTape": true,
@@ -3531,7 +3305,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:54Z",
+   "at": "2026-10-19T04:29:07Z",
    "centsDiff": 1.052,
    "contracts": 410.0,
    "coveredByTape": false,
@@ -3563,7 +3337,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:54Z",
+   "at": "2026-10-19T04:29:07Z",
    "centsDiff": 0.0,
    "contracts": 28.0,
    "coveredByTape": false,
@@ -3595,7 +3369,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:55Z",
+   "at": "2026-10-19T04:29:07Z",
    "centsDiff": 0.0,
    "contracts": 2.0,
    "coveredByTape": false,
@@ -3627,7 +3401,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:55Z",
+   "at": "2026-10-19T04:29:07Z",
    "centsDiff": 0.0,
    "contracts": 3722.0,
    "coveredByTape": false,
@@ -3659,7 +3433,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:55Z",
+   "at": "2026-10-19T04:29:07Z",
    "centsDiff": 1.5083,
    "contracts": 9.0,
    "coveredByTape": true,
@@ -3691,7 +3465,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:55Z",
+   "at": "2026-10-19T04:29:08Z",
    "centsDiff": 1.5083,
    "contracts": 9111.0,
    "coveredByTape": true,
@@ -3723,7 +3497,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:56Z",
+   "at": "2026-10-19T04:29:08Z",
    "centsDiff": 0.6838,
    "contracts": 4556.0,
    "coveredByTape": true,
@@ -3755,7 +3529,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:56Z",
+   "at": "2026-10-19T04:29:08Z",
    "contracts": 2027.3,
    "deskAt": "2026-10-18T05:41:07Z",
    "deskPrice": 0.99,
@@ -3777,7 +3551,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:56Z",
+   "at": "2026-10-19T04:29:08Z",
    "contracts": 2684.0,
    "deskAt": "2026-10-18T05:41:08Z",
    "deskPrice": 0.99,
@@ -3799,7 +3573,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:56Z",
+   "at": "2026-10-19T04:29:09Z",
    "centsDiff": 1.0,
    "contracts": 1692.0,
    "coveredByTape": false,
@@ -3831,7 +3605,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:56Z",
+   "at": "2026-10-19T04:29:09Z",
    "centsDiff": -16.5183,
    "contracts": 2063.0,
    "coveredByTape": true,
@@ -3863,7 +3637,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:57Z",
+   "at": "2026-10-19T04:29:09Z",
    "centsDiff": 0.0,
    "contracts": 962.0,
    "coveredByTape": false,
@@ -3895,7 +3669,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:57Z",
+   "at": "2026-10-19T04:29:09Z",
    "contracts": 154.0,
    "deskAt": "2026-10-18T05:41:10Z",
    "deskPrice": 0.44,
@@ -3917,7 +3691,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:57Z",
+   "at": "2026-10-19T04:29:09Z",
    "centsDiff": 3.5245,
    "contracts": 334.0,
    "coveredByTape": true,
@@ -3949,7 +3723,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:57Z",
+   "at": "2026-10-19T04:29:10Z",
    "centsDiff": 0.0,
    "contracts": 5.0,
    "coveredByTape": true,
@@ -3981,7 +3755,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:57Z",
+   "at": "2026-10-19T04:29:10Z",
    "contracts": 1583.0,
    "deskAt": "2026-10-18T10:50:01Z",
    "deskPrice": 0.85,
@@ -4003,7 +3777,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:58Z",
+   "at": "2026-10-19T04:29:10Z",
    "contracts": 1342.0,
    "deskAt": "2026-10-18T10:50:01Z",
    "deskPrice": 0.99,
@@ -4025,7 +3799,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:58Z",
+   "at": "2026-10-19T04:29:11Z",
    "contracts": 671.0,
    "deskAt": "2026-10-18T10:50:01Z",
    "deskPrice": 0.99,
@@ -4047,7 +3821,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:58Z",
+   "at": "2026-10-19T04:29:11Z",
    "contracts": 846.0,
    "deskAt": "2026-10-18T10:50:02Z",
    "deskPrice": 0.86,
@@ -4069,7 +3843,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:58Z",
+   "at": "2026-10-19T04:29:12Z",
    "centsDiff": 1.0,
    "contracts": 1679.0,
    "coveredByTape": false,
@@ -4101,7 +3875,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:05:58Z",
+   "at": "2026-10-19T04:29:12Z",
    "contracts": 840.0,
    "deskAt": "2026-10-18T10:50:02Z",
    "deskPrice": 0.86,
@@ -4123,7 +3897,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:05:59Z",
+   "at": "2026-10-19T04:29:12Z",
    "centsDiff": -0.2355,
    "contracts": 1314.0,
    "coveredByTape": true,
@@ -4155,7 +3929,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:59Z",
+   "at": "2026-10-19T04:29:12Z",
    "centsDiff": 0.0117,
    "contracts": 644.0,
    "coveredByTape": true,
@@ -4187,7 +3961,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:05:59Z",
+   "at": "2026-10-19T04:29:12Z",
    "centsDiff": 0.5706,
    "contracts": 322.0,
    "coveredByTape": true,
@@ -4219,7 +3993,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:00Z",
+   "at": "2026-10-19T04:29:13Z",
    "centsDiff": 3.4626,
    "contracts": 75.67,
    "coveredByTape": false,
@@ -4251,7 +4025,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:01Z",
+   "at": "2026-10-19T04:29:13Z",
    "centsDiff": 2.1366,
    "contracts": 132.03,
    "coveredByTape": false,
@@ -4283,7 +4057,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:01Z",
+   "at": "2026-10-19T04:29:13Z",
    "contracts": 223.0,
    "deskAt": "2026-10-18T14:27:33Z",
    "deskPrice": 0.12148,
@@ -4305,7 +4079,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:01Z",
+   "at": "2026-10-19T04:29:13Z",
    "centsDiff": 2.0089,
    "contracts": 55.52,
    "coveredByTape": false,
@@ -4337,7 +4111,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:01Z",
+   "at": "2026-10-19T04:29:13Z",
    "centsDiff": 1.0,
    "contracts": 414.0,
    "coveredByTape": true,
@@ -4369,7 +4143,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:01Z",
+   "at": "2026-10-19T04:29:13Z",
    "centsDiff": 0.0284,
    "contracts": 207.0,
    "coveredByTape": true,
@@ -4401,7 +4175,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:01Z",
+   "at": "2026-10-19T04:29:14Z",
    "contracts": 419.0,
    "deskAt": "2026-10-18T14:27:35Z",
    "deskPrice": 0.781718,
@@ -4423,7 +4197,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:02Z",
+   "at": "2026-10-19T04:29:15Z",
    "centsDiff": 3.5388,
    "contracts": 255.0,
    "coveredByTape": false,
@@ -4455,7 +4229,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:02Z",
+   "at": "2026-10-19T04:29:15Z",
    "centsDiff": 2.3295,
    "contracts": 391.0,
    "coveredByTape": false,
@@ -4487,7 +4261,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:02Z",
+   "at": "2026-10-19T04:29:15Z",
    "contracts": 84.0,
    "deskAt": "2026-10-18T16:30:07Z",
    "deskPrice": 0.9725,
@@ -4509,7 +4283,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:02Z",
+   "at": "2026-10-19T04:29:15Z",
    "centsDiff": 5.0,
    "contracts": 23.0,
    "coveredByTape": false,
@@ -4541,7 +4315,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:02Z",
+   "at": "2026-10-19T04:29:15Z",
    "centsDiff": -0.0254,
    "contracts": 2176.0,
    "coveredByTape": false,
@@ -4573,7 +4347,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:03Z",
+   "at": "2026-10-19T04:29:16Z",
    "centsDiff": 0.5814,
    "contracts": 1201.0,
    "coveredByTape": true,
@@ -4605,7 +4379,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:03Z",
+   "at": "2026-10-19T04:29:16Z",
    "contracts": 656.0,
    "deskAt": "2026-10-18T17:30:20Z",
    "deskPrice": 0.98,
@@ -4627,7 +4401,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:03Z",
+   "at": "2026-10-19T04:29:16Z",
    "centsDiff": 2.0,
    "contracts": 328.0,
    "coveredByTape": false,
@@ -4659,7 +4433,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:03Z",
+   "at": "2026-10-19T04:29:16Z",
    "contracts": 67.92,
    "deskAt": "2026-10-18T17:30:21Z",
    "deskPrice": 0.685579,
@@ -4681,7 +4455,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:03Z",
+   "at": "2026-10-19T04:29:16Z",
    "contracts": 181.86,
    "deskAt": "2026-10-18T17:30:21Z",
    "deskPrice": 0.919541,
@@ -4703,7 +4477,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:04Z",
+   "at": "2026-10-19T04:29:17Z",
    "contracts": 58.0,
    "deskAt": "2026-10-18T17:30:22Z",
    "deskPrice": 0.319828,
@@ -4725,7 +4499,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:04Z",
+   "at": "2026-10-19T04:29:17Z",
    "centsDiff": 0.5814,
    "contracts": 1639.0,
    "coveredByTape": true,
@@ -4757,7 +4531,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:04Z",
+   "at": "2026-10-19T04:29:17Z",
    "centsDiff": 0.8837,
    "contracts": 819.0,
    "coveredByTape": true,
@@ -4789,7 +4563,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:05Z",
+   "at": "2026-10-19T04:29:17Z",
    "centsDiff": 0.5814,
    "contracts": 214.0,
    "coveredByTape": true,
@@ -4821,7 +4595,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:06Z",
+   "at": "2026-10-19T04:29:17Z",
    "centsDiff": 0.0464,
    "contracts": 110.0,
    "coveredByTape": true,
@@ -4853,7 +4627,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:06Z",
+   "at": "2026-10-19T04:29:18Z",
    "centsDiff": 5.059,
    "contracts": 448.62,
    "coveredByTape": false,
@@ -4885,7 +4659,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:06Z",
+   "at": "2026-10-19T04:29:19Z",
    "centsDiff": 0.5814,
    "contracts": 1956.0,
    "coveredByTape": true,
@@ -4917,7 +4691,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:06Z",
+   "at": "2026-10-19T04:29:19Z",
    "centsDiff": 0.8837,
    "contracts": 978.0,
    "coveredByTape": true,
@@ -4949,7 +4723,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:07Z",
+   "at": "2026-10-19T04:29:19Z",
    "contracts": 73.0,
    "deskAt": "2026-10-18T17:30:23Z",
    "deskPrice": 0.46,
@@ -4971,7 +4745,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:07Z",
+   "at": "2026-10-19T04:29:19Z",
    "centsDiff": 2.2833,
    "contracts": 35.0,
    "coveredByTape": true,
@@ -5003,7 +4777,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:07Z",
+   "at": "2026-10-19T04:29:20Z",
    "contracts": 162.0,
    "deskAt": "2026-10-18T18:47:16Z",
    "deskPrice": 0.99,
@@ -5025,7 +4799,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:07Z",
+   "at": "2026-10-19T04:29:20Z",
    "centsDiff": 2.0,
    "contracts": 702.0,
    "coveredByTape": false,
@@ -5057,7 +4831,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:07Z",
+   "at": "2026-10-19T04:29:20Z",
    "centsDiff": 0.1473,
    "contracts": 24.0,
    "coveredByTape": true,
@@ -5089,7 +4863,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:08Z",
+   "at": "2026-10-19T04:29:20Z",
    "centsDiff": -1.9716,
    "contracts": 18.0,
    "coveredByTape": true,
@@ -5121,7 +4895,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:08Z",
+   "at": "2026-10-19T04:29:20Z",
    "centsDiff": 0.1473,
    "contracts": 1205.0,
    "coveredByTape": true,
@@ -5153,7 +4927,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:08Z",
+   "at": "2026-10-19T04:29:21Z",
    "centsDiff": 0.1473,
    "contracts": 4026.0,
    "coveredByTape": true,
@@ -5185,7 +4959,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:08Z",
+   "at": "2026-10-19T04:29:21Z",
    "centsDiff": 0.1041,
    "contracts": 1914.0,
    "coveredByTape": true,
@@ -5217,7 +4991,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:09Z",
+   "at": "2026-10-19T04:29:21Z",
    "contracts": 658.0,
    "deskAt": "2026-10-18T19:35:30Z",
    "deskPrice": 0.894347,
@@ -5239,7 +5013,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:09Z",
+   "at": "2026-10-19T04:29:21Z",
    "contracts": 29.53,
    "deskAt": "2026-10-18T19:35:30Z",
    "deskPrice": 0.403115,
@@ -5261,7 +5035,7 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:09Z",
+   "at": "2026-10-19T04:29:21Z",
    "centsDiff": 0.1473,
    "contracts": 375.0,
    "coveredByTape": true,
@@ -5293,7 +5067,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:09Z",
+   "at": "2026-10-19T04:29:22Z",
    "centsDiff": 0.1041,
    "contracts": 178.0,
    "coveredByTape": true,
@@ -5325,7 +5099,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:10Z",
+   "at": "2026-10-19T04:29:22Z",
    "centsDiff": 1.8167,
    "contracts": 43.0,
    "coveredByTape": true,
@@ -5357,7 +5131,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:10Z",
+   "at": "2026-10-19T04:29:22Z",
    "centsDiff": 0.8285,
    "contracts": 163.0,
    "coveredByTape": false,
@@ -5389,7 +5163,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:10Z",
+   "at": "2026-10-19T04:29:22Z",
    "centsDiff": 1.1684,
    "contracts": 53.0,
    "coveredByTape": true,
@@ -5421,7 +5195,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:10Z",
+   "at": "2026-10-19T04:29:22Z",
    "centsDiff": 0.9791,
    "contracts": 10.0,
    "coveredByTape": true,
@@ -5453,7 +5227,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:11Z",
+   "at": "2026-10-19T04:29:23Z",
    "centsDiff": 1.1684,
    "contracts": 4983.0,
    "coveredByTape": true,
@@ -5485,7 +5259,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:11Z",
+   "at": "2026-10-19T04:29:23Z",
    "centsDiff": 1.2291,
    "contracts": 1205.0,
    "coveredByTape": true,
@@ -5517,7 +5291,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:11Z",
+   "at": "2026-10-19T04:29:23Z",
    "centsDiff": 0.9791,
    "contracts": 4033.0,
    "coveredByTape": true,
@@ -5549,7 +5323,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:11Z",
+   "at": "2026-10-19T04:29:23Z",
    "centsDiff": 0.7258,
    "contracts": 2016.0,
    "coveredByTape": true,
@@ -5581,7 +5355,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:12Z",
+   "at": "2026-10-19T04:29:24Z",
    "centsDiff": 1.0,
    "contracts": 2181.0,
    "coveredByTape": false,
@@ -5613,7 +5387,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:12Z",
+   "at": "2026-10-19T04:29:25Z",
    "centsDiff": 4.2278,
    "contracts": 984.0,
    "coveredByTape": false,
@@ -5645,7 +5419,7 @@
    "withinOneCent": false
   },
   {
-   "at": "2026-10-19T00:06:12Z",
+   "at": "2026-10-19T04:29:25Z",
    "centsDiff": 0.0,
    "contracts": 3476.0,
    "coveredByTape": false,
@@ -5663,12 +5437,12 @@
    "status": "compared",
    "strategyId": "book-edge",
    "tapeBest": 0.44,
-   "tapeContracts": 31.0,
-   "tapeCoverageRatio": 0.0089,
+   "tapeContracts": 62.93,
+   "tapeCoverageRatio": 0.0181,
    "tapeMax": 0.44,
    "tapeMin": 0.44,
-   "tapeSha256": "dec772e60f4d9a6ad6a18b5b9cc942356f48eafa7467546316e1ced898392886",
-   "tapeTrades": 2,
+   "tapeSha256": "7e70e563649e524d0f6a6d4fe79b27bc180d1d1ec64f583c85bd73d0f945424c",
+   "tapeTrades": 4,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXWNBAGAME-26OCT19ATLGS-ATL&limit=1000&min_ts=1792368201&max_ts=1792368441",
    "tapeVwap": 0.44,
    "ticker": "KXWNBAGAME-26OCT19ATLGS-ATL",
@@ -5677,7 +5451,7 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:12Z",
+   "at": "2026-10-19T04:29:25Z",
    "contracts": 1909.0,
    "deskAt": "2026-10-19T00:05:21Z",
    "deskPrice": 0.13979,
@@ -5699,8 +5473,8 @@
    "windowSeconds": 120
   },
   {
-   "at": "2026-10-19T00:06:12Z",
-   "centsDiff": -0.2366,
+   "at": "2026-10-19T04:29:25Z",
+   "centsDiff": -0.6148,
    "contracts": 43.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5717,22 +5491,22 @@
    "status": "compared",
    "strategyId": "tick-chaser",
    "tapeBest": 0.82,
-   "tapeContracts": 3980.49,
-   "tapeCoverageRatio": 92.5695,
+   "tapeContracts": 8449.13,
+   "tapeCoverageRatio": 196.4914,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "fc8ccb510023cb8c7fc634bb3e87a83c3c8d5ca554cefb022f8e0b61e1e59fef",
-   "tapeTrades": 85,
+   "tapeSha256": "988ea9e20de25d979692f365c3cddf4cf2a0c850eab967adb56b465b14e712c9",
+   "tapeTrades": 125,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-MIN&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.842366,
+   "tapeVwap": 0.846148,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-MIN",
    "username": "TickChaser",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:13Z",
-   "centsDiff": 0.6312,
+   "at": "2026-10-19T04:29:26Z",
+   "centsDiff": 0.4849,
    "contracts": 21.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5749,24 +5523,24 @@
    "status": "compared",
    "strategyId": "tick-chaser",
    "tapeBest": 0.82,
-   "tapeContracts": 3985.34,
-   "tapeCoverageRatio": 189.7781,
+   "tapeContracts": 4936.03,
+   "tapeCoverageRatio": 235.049,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "1704efdc61e92b01176eb6829cf6d627fab11e989f353f36fb38500994f65fbd",
-   "tapeTrades": 77,
+   "tapeSha256": "1199fba35dd98335def825ee569ed175c5d6794b275d4d05bb212f60774fdf72",
+   "tapeTrades": 95,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-CBJ&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.833688,
+   "tapeVwap": 0.835151,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-CBJ",
    "username": "TickChaser",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:13Z",
-   "centsDiff": 0.2873,
+   "at": "2026-10-19T04:29:26Z",
+   "centsDiff": -0.0909,
    "contracts": 4154.0,
-   "coveredByTape": false,
+   "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
    "deskPrice": 0.845239,
    "deskPriceInsideTapeRange": true,
@@ -5781,22 +5555,22 @@
    "status": "compared",
    "strategyId": "spike-surfer",
    "tapeBest": 0.82,
-   "tapeContracts": 3980.49,
-   "tapeCoverageRatio": 0.9582,
+   "tapeContracts": 8449.13,
+   "tapeCoverageRatio": 2.034,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "fc8ccb510023cb8c7fc634bb3e87a83c3c8d5ca554cefb022f8e0b61e1e59fef",
-   "tapeTrades": 85,
+   "tapeSha256": "988ea9e20de25d979692f365c3cddf4cf2a0c850eab967adb56b465b14e712c9",
+   "tapeTrades": 125,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-MIN&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.842366,
+   "tapeVwap": 0.846148,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-MIN",
    "username": "SpikeSurfer",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:13Z",
-   "centsDiff": 1.3808,
+   "at": "2026-10-19T04:29:26Z",
+   "centsDiff": 1.2345,
    "contracts": 2072.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5813,21 +5587,21 @@
    "status": "compared",
    "strategyId": "spike-surfer",
    "tapeBest": 0.82,
-   "tapeContracts": 3985.34,
-   "tapeCoverageRatio": 1.9234,
+   "tapeContracts": 4936.03,
+   "tapeCoverageRatio": 2.3823,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "1704efdc61e92b01176eb6829cf6d627fab11e989f353f36fb38500994f65fbd",
-   "tapeTrades": 77,
+   "tapeSha256": "1199fba35dd98335def825ee569ed175c5d6794b275d4d05bb212f60774fdf72",
+   "tapeTrades": 95,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-CBJ&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.833688,
+   "tapeVwap": 0.835151,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-CBJ",
    "username": "SpikeSurfer",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:13Z",
+   "at": "2026-10-19T04:29:26Z",
    "centsDiff": 0.0,
    "contracts": 164.0,
    "coveredByTape": false,
@@ -5859,8 +5633,8 @@
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:13Z",
-   "centsDiff": -0.4604,
+   "at": "2026-10-19T04:29:26Z",
+   "centsDiff": -0.6148,
    "contracts": 1873.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5877,22 +5651,22 @@
    "status": "compared",
    "strategyId": "game-favourite",
    "tapeBest": 0.82,
-   "tapeContracts": 5642.39,
-   "tapeCoverageRatio": 3.0125,
+   "tapeContracts": 8449.13,
+   "tapeCoverageRatio": 4.511,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "9af7840e0ac55e2dcfb650f08d403172780f6bb6e8f4c21e52f0b000680634f7",
-   "tapeTrades": 87,
+   "tapeSha256": "988ea9e20de25d979692f365c3cddf4cf2a0c850eab967adb56b465b14e712c9",
+   "tapeTrades": 125,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-MIN&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.844604,
+   "tapeVwap": 0.846148,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-MIN",
    "username": "GridironPulse",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:14Z",
-   "centsDiff": 1.0745,
+   "at": "2026-10-19T04:29:26Z",
+   "centsDiff": 0.9282,
    "contracts": 932.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5909,22 +5683,22 @@
    "status": "compared",
    "strategyId": "game-favourite",
    "tapeBest": 0.82,
-   "tapeContracts": 3985.34,
-   "tapeCoverageRatio": 4.2761,
+   "tapeContracts": 4936.03,
+   "tapeCoverageRatio": 5.2962,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "1704efdc61e92b01176eb6829cf6d627fab11e989f353f36fb38500994f65fbd",
-   "tapeTrades": 77,
+   "tapeSha256": "1199fba35dd98335def825ee569ed175c5d6794b275d4d05bb212f60774fdf72",
+   "tapeTrades": 95,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-CBJ&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.833688,
+   "tapeVwap": 0.835151,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-CBJ",
    "username": "GridironPulse",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:14Z",
-   "centsDiff": -0.4604,
+   "at": "2026-10-19T04:29:27Z",
+   "centsDiff": -0.6148,
    "contracts": 551.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5941,22 +5715,22 @@
    "status": "compared",
    "strategyId": "longshot-fader",
    "tapeBest": 0.82,
-   "tapeContracts": 5642.39,
-   "tapeCoverageRatio": 10.2403,
+   "tapeContracts": 8449.13,
+   "tapeCoverageRatio": 15.3342,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "9af7840e0ac55e2dcfb650f08d403172780f6bb6e8f4c21e52f0b000680634f7",
-   "tapeTrades": 87,
+   "tapeSha256": "988ea9e20de25d979692f365c3cddf4cf2a0c850eab967adb56b465b14e712c9",
+   "tapeTrades": 125,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-MIN&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.844604,
+   "tapeVwap": 0.846148,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-MIN",
    "username": "LongshotFader",
    "windowSeconds": 120,
    "withinOneCent": true
   },
   {
-   "at": "2026-10-19T00:06:14Z",
-   "centsDiff": 0.6312,
+   "at": "2026-10-19T04:29:27Z",
+   "centsDiff": 0.4849,
    "contracts": 276.0,
    "coveredByTape": true,
    "deskAt": "2026-10-19T00:05:21Z",
@@ -5973,23 +5747,239 @@
    "status": "compared",
    "strategyId": "longshot-fader",
    "tapeBest": 0.82,
-   "tapeContracts": 3985.34,
-   "tapeCoverageRatio": 14.4396,
+   "tapeContracts": 4936.03,
+   "tapeCoverageRatio": 17.8842,
    "tapeMax": 0.85,
    "tapeMin": 0.82,
-   "tapeSha256": "1704efdc61e92b01176eb6829cf6d627fab11e989f353f36fb38500994f65fbd",
-   "tapeTrades": 77,
+   "tapeSha256": "1199fba35dd98335def825ee569ed175c5d6794b275d4d05bb212f60774fdf72",
+   "tapeTrades": 95,
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNHLGAME-26OCT18CBJMIN-CBJ&limit=1000&min_ts=1792368201&max_ts=1792368441",
-   "tapeVwap": 0.833688,
+   "tapeVwap": 0.835151,
    "ticker": "KXNHLGAME-26OCT18CBJMIN-CBJ",
    "username": "LongshotFader",
    "windowSeconds": 120,
    "withinOneCent": true
+  },
+  {
+   "at": "2026-10-19T04:29:27Z",
+   "contracts": 71.0,
+   "deskAt": "2026-10-19T04:28:37Z",
+   "deskPrice": 0.56,
+   "deskTouch": 0.56,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.58,
+   "positionId": "tick-chaser-KXNCAAFGAME-26OCT23TENNSCAR-SCAR-20261019T042801Z",
+   "series": "KXNCAAFGAME",
+   "side": "yes",
+   "status": "no_tape_in_window",
+   "strategyId": "tick-chaser",
+   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeTrades": 0,
+   "tapeTradesAll": 0,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNCAAFGAME-26OCT23TENNSCAR-SCAR&limit=1000&min_ts=1792383997&max_ts=1792384237",
+   "ticker": "KXNCAAFGAME-26OCT23TENNSCAR-SCAR",
+   "username": "TickChaser",
+   "windowSeconds": 120
+  },
+  {
+   "at": "2026-10-19T04:29:27Z",
+   "centsDiff": 1.0,
+   "contracts": 33.0,
+   "coveredByTape": true,
+   "deskAt": "2026-10-19T04:28:37Z",
+   "deskPrice": 0.6,
+   "deskPriceInsideTapeRange": false,
+   "deskTouch": 0.6,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.62,
+   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
+   "positionId": "tick-chaser-KXNFLGAME-26OCT22NECHI-NE-20261019T042801Z",
+   "series": "KXNFLGAME",
+   "side": "no",
+   "status": "compared",
+   "strategyId": "tick-chaser",
+   "tapeBest": 0.59,
+   "tapeContracts": 56.2,
+   "tapeCoverageRatio": 1.703,
+   "tapeMax": 0.59,
+   "tapeMin": 0.59,
+   "tapeSha256": "34aa106a7415352a14b8dbee914917a4b025e1f3d4c4ff405a6b23075201a955",
+   "tapeTrades": 4,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNFLGAME-26OCT22NECHI-NE&limit=1000&min_ts=1792383997&max_ts=1792384237",
+   "tapeVwap": 0.59,
+   "ticker": "KXNFLGAME-26OCT22NECHI-NE",
+   "username": "TickChaser",
+   "windowSeconds": 120,
+   "withinOneCent": false
+  },
+  {
+   "at": "2026-10-19T04:29:27Z",
+   "contracts": 5.0,
+   "deskAt": "2026-10-19T04:28:38Z",
+   "deskPrice": 0.736,
+   "deskTouch": 0.72,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.74,
+   "positionId": "spike-surfer-KXNCAAFGAME-26OCT31FLAUGA-FLA-20261019T042801Z",
+   "series": "KXNCAAFGAME",
+   "side": "no",
+   "status": "no_tape_in_window",
+   "strategyId": "spike-surfer",
+   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeTrades": 0,
+   "tapeTradesAll": 0,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNCAAFGAME-26OCT31FLAUGA-FLA&limit=1000&min_ts=1792383998&max_ts=1792384238",
+   "ticker": "KXNCAAFGAME-26OCT31FLAUGA-FLA",
+   "username": "SpikeSurfer",
+   "windowSeconds": 120
+  },
+  {
+   "at": "2026-10-19T04:29:29Z",
+   "contracts": 23.0,
+   "deskAt": "2026-10-19T04:28:38Z",
+   "deskPrice": 0.473913,
+   "deskTouch": 0.47,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.49,
+   "positionId": "spike-surfer-KXNCAAFGAME-26OCT24USTMRST-UST-20261019T042801Z",
+   "series": "KXNCAAFGAME",
+   "side": "no",
+   "status": "no_tape_in_window",
+   "strategyId": "spike-surfer",
+   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeTrades": 0,
+   "tapeTradesAll": 0,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNCAAFGAME-26OCT24USTMRST-UST&limit=1000&min_ts=1792383998&max_ts=1792384238",
+   "ticker": "KXNCAAFGAME-26OCT24USTMRST-UST",
+   "username": "SpikeSurfer",
+   "windowSeconds": 120
+  },
+  {
+   "at": "2026-10-19T04:29:29Z",
+   "centsDiff": 0.7886,
+   "contracts": 51.0,
+   "coveredByTape": true,
+   "deskAt": "2026-10-19T04:28:38Z",
+   "deskPrice": 0.790196,
+   "deskPriceInsideTapeRange": true,
+   "deskTouch": 0.79,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.8,
+   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
+   "positionId": "scalp-8095-KXGOLDH-26OCT1901-T4177.99-20261019T042801Z",
+   "series": "KXGOLDH",
+   "side": "no",
+   "status": "compared",
+   "strategyId": "scalp-8095",
+   "tapeBest": 0.77,
+   "tapeContracts": 52.29,
+   "tapeCoverageRatio": 1.0253,
+   "tapeMax": 0.81,
+   "tapeMin": 0.77,
+   "tapeSha256": "3f681522968282f2a632fd7daef69e76871f3ea4fe44b43241c7194c4af11457",
+   "tapeTrades": 3,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXGOLDH-26OCT1901-T4177.99&limit=1000&min_ts=1792383998&max_ts=1792384238",
+   "tapeVwap": 0.78231,
+   "ticker": "KXGOLDH-26OCT1901-T4177.99",
+   "username": "HighProbScalp",
+   "windowSeconds": 120,
+   "withinOneCent": false
+  },
+  {
+   "at": "2026-10-19T04:29:29Z",
+   "centsDiff": 5.6476,
+   "contracts": 1049.0,
+   "coveredByTape": false,
+   "deskAt": "2026-10-19T04:28:39Z",
+   "deskPrice": 0.779047,
+   "deskPriceInsideTapeRange": false,
+   "deskTouch": 0.76,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.8,
+   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
+   "positionId": "scalp-8095-KXGOLDH-26OCT1901-T4171.99-20261019T042801Z",
+   "series": "KXGOLDH",
+   "side": "yes",
+   "status": "compared",
+   "strategyId": "scalp-8095",
+   "tapeBest": 0.71,
+   "tapeContracts": 123.33,
+   "tapeCoverageRatio": 0.1176,
+   "tapeMax": 0.73,
+   "tapeMin": 0.71,
+   "tapeSha256": "626800163c620d89a7a31af8380ce31a5968fbb5a90ab23ea19a9b9542fd2a61",
+   "tapeTrades": 2,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXGOLDH-26OCT1901-T4171.99&limit=1000&min_ts=1792383999&max_ts=1792384239",
+   "tapeVwap": 0.722571,
+   "ticker": "KXGOLDH-26OCT1901-T4171.99",
+   "username": "HighProbScalp",
+   "windowSeconds": 120,
+   "withinOneCent": false
+  },
+  {
+   "at": "2026-10-19T04:29:29Z",
+   "centsDiff": 1.0,
+   "contracts": 618.0,
+   "coveredByTape": false,
+   "deskAt": "2026-10-19T04:28:39Z",
+   "deskPrice": 0.85,
+   "deskPriceInsideTapeRange": false,
+   "deskTouch": 0.85,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.9,
+   "note": "desk fill vs GET /markets/trades in a +-120s window; both responses are official",
+   "positionId": "longshot-fader-KXEPLGAME-26OCT19TOTCOV-COV-20261019T042801Z",
+   "series": "KXEPLGAME",
+   "side": "no",
+   "status": "compared",
+   "strategyId": "longshot-fader",
+   "tapeBest": 0.84,
+   "tapeContracts": 98.23,
+   "tapeCoverageRatio": 0.1589,
+   "tapeMax": 0.84,
+   "tapeMin": 0.84,
+   "tapeSha256": "c60a0d76157f51332796fc256fa73b1214858feaa573c85697065afb2d12064b",
+   "tapeTrades": 5,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXEPLGAME-26OCT19TOTCOV-COV&limit=1000&min_ts=1792383999&max_ts=1792384239",
+   "tapeVwap": 0.84,
+   "ticker": "KXEPLGAME-26OCT19TOTCOV-COV",
+   "username": "LongshotFader",
+   "windowSeconds": 120,
+   "withinOneCent": false
+  },
+  {
+   "at": "2026-10-19T04:29:29Z",
+   "contracts": 284.0,
+   "deskAt": "2026-10-19T04:28:39Z",
+   "deskPrice": 0.93,
+   "deskTouch": 0.93,
+   "eventKind": "fill",
+   "kind": "execution-comparison",
+   "limitPrice": 0.95,
+   "positionId": "longshot-fader-KXNCAAFGAME-26OCT23PITTMIA-PITT-20261019T042801Z",
+   "series": "KXNCAAFGAME",
+   "side": "no",
+   "status": "no_tape_in_window",
+   "strategyId": "longshot-fader",
+   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeTrades": 0,
+   "tapeTradesAll": 0,
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNCAAFGAME-26OCT23PITTMIA-PITT&limit=1000&min_ts=1792383999&max_ts=1792384239",
+   "ticker": "KXNCAAFGAME-26OCT23PITTMIA-PITT",
+   "username": "LongshotFader",
+   "windowSeconds": 120
   }
  ],
  "schemaVersion": 1,
- "tapeCoveredPct": 62.5,
+ "tapeCoveredPct": 63.58,
  "tapeFetchFailed": 0,
- "verdict": "152 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 71.05% had a real print within 1c of the desk's VWAP, 62.5% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 67.11% of fills. The desk is close to the tape.",
- "withinOneCentPct": 71.05
+ "verdict": "151 paper fill(s) compared with the official tape: median |desk - tape| 1.00c, 71.52% had a real print within 1c of the desk's VWAP, 63.58% had at least as much tape volume as the desk filled, and the desk's price sat inside the window's real price range for 68.21% of fills. The desk is close to the tape.",
+ "withinOneCentPct": 71.52
 }
