@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-10-29T05:29:27Z",
- "marketCount": 764,
+ "generatedAt": "2026-10-29T11:43:18Z",
+ "marketCount": 767,
  "markets": {
   "KXBTC-26OCT0113-B83750": {
    "archivedByCycle": "20261001T202650Z",
@@ -4099,6 +4099,21 @@
    "sha256": "df8138435028016d394f7957b6323321e1d37c147775c2cc6da02510965429c0",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXGOLD15M/markets/KXGOLD15M-26OCT272345-45/candlesticks?start_ts=1793158140&end_ts=1793159185&period_interval=1&exchange_index=2"
   },
+  "KXGOLD15M-26OCT290245-45": {
+   "archivedByCycle": "20261029T114121Z",
+   "bars": 16,
+   "closeTs": "2026-10-29T06:45:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXGOLD15M/KXGOLD15M-26OCT290245-45-p1.csv",
+   "openTs": "2026-10-29T06:30:00Z",
+   "period": 1,
+   "result": "yes",
+   "series": "KXGOLD15M",
+   "settlementTs": "2026-10-29T06:45:24Z",
+   "sha256": "b0911147e3cef0d3657cbd707a41ece402ba7c7f1038e0f2aa243d3c1ca6dd67",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXGOLD15M/markets/KXGOLD15M-26OCT290245-45/candlesticks?start_ts=1793255340&end_ts=1793256384&period_interval=1&exchange_index=2"
+  },
   "KXGOLD15M-26SEP200515-15": {
    "archivedByCycle": "20260920T134010Z",
    "bars": 16,
@@ -5869,6 +5884,21 @@
    "sha256": "4ee5560b2fbdfb7088daa47c38d7a2de98f43e27213c00596e9ac6777d1a00b0",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHMIA/markets/KXHIGHMIA-26OCT27-B81.5/candlesticks?start_ts=1793023140&end_ts=1793185839&period_interval=60"
   },
+  "KXHIGHMIA-26OCT28-B84.5": {
+   "archivedByCycle": "20261029T114121Z",
+   "bars": 40,
+   "closeTs": "2026-10-29T05:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXHIGHMIA/KXHIGHMIA-26OCT28-B84.5-p60.csv",
+   "openTs": "2026-10-27T14:00:00Z",
+   "period": 60,
+   "result": "no",
+   "series": "KXHIGHMIA",
+   "settlementTs": "2026-10-29T11:18:53Z",
+   "sha256": "8f075f34f59c9d0ec2bd21b52226c0d0ca74502d4870c1103b2f554fe6eea853",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHMIA/markets/KXHIGHMIA-26OCT28-B84.5/candlesticks?start_ts=1793109540&end_ts=1793272793&period_interval=60"
+  },
   "KXHIGHMIA-26SEP21-B88.5": {
    "archivedByCycle": "20260922T140820Z",
    "bars": 40,
@@ -6288,6 +6318,21 @@
    "settlementTs": "2026-10-27T11:09:25Z",
    "sha256": "0369659505fe845ed098da0f78e81788c51896e151d0cb07d74f5a9977ab7148",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHNY/markets/KXHIGHNY-26OCT26-B72.5/candlesticks?start_ts=1792936740&end_ts=1793099425&period_interval=60"
+  },
+  "KXHIGHNY-26OCT28-B64.5": {
+   "archivedByCycle": "20261029T114121Z",
+   "bars": 40,
+   "closeTs": "2026-10-29T05:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXHIGHNY/KXHIGHNY-26OCT28-B64.5-p60.csv",
+   "openTs": "2026-10-27T14:00:00Z",
+   "period": 60,
+   "result": "no",
+   "series": "KXHIGHNY",
+   "settlementTs": "2026-10-29T11:18:33Z",
+   "sha256": "2611a00e986565aa8dd6e5cd8c80b379fe8766cf057e0c7af45f830db2fdae05",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXHIGHNY/markets/KXHIGHNY-26OCT28-B64.5/candlesticks?start_ts=1793109540&end_ts=1793272773&period_interval=60"
   },
   "KXHIGHNY-26SEP20-B71.5": {
    "archivedByCycle": "20260922T043112Z",
@@ -11516,5 +11561,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 49856
+ "verifiedBars": 49952
 }
