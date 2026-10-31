@@ -1,12 +1,12 @@
 {
  "compared": 100,
- "generatedAt": "2026-10-31T00:39:02Z",
+ "generatedAt": "2026-10-31T06:15:48Z",
  "makerFeeNote": "Maker fees follow the official schedule: round_up(M x 0.0175 x C x P x (1-P)) for a resting order that ultimately executes, with M = the series' maker multiplier (0 for a series whose GET /series fee_type carries no maker fees, i.e. plain 'quadratic'; the series' recorded multiplier otherwise). IRR-41 closed 2026-09-22; gross and net numbers are both reported so historical runs stay comparable.",
  "makerFeeSource": "Kalshi fee schedule (July 2026 update) - https://kalshi.com/docs/kalshi-fee-schedule.pdf",
  "makerFeesModelled": true,
  "method": "Posted quote plans (forward/intents status=quote_plan) matched against GET /markets/trades?ticker=&min_ts=&max_ts= after each plan's post time. tape_traded_through requires a strictly better counterparty print (price priority proof); touch prints are queue-uncertain and never counted as fills.",
  "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
- "noFillEvidence": 26,
+ "noFillEvidence": 27,
  "plans": 100,
  "projectedMakerFees": 517.2231,
  "projectedPnlBeforeMakerFees": 30987.974,
@@ -14,124 +14,7 @@
  "queueUncertain": 4,
  "rows": [
   {
-   "at": "2026-10-31T00:38:38Z",
-   "fillEvidence": "tape_traded_through",
-   "filledContracts": 190.58,
-   "firstThroughTs": "2026-10-21T21:43:30.46715Z",
-   "improvementCents": 1,
-   "kind": "maker-model-comparison",
-   "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
-   "planLedgerFile": "intents/2026-10.jsonl",
-   "planLedgerLine": 4899,
-   "planReason": "maker quote plan: post a resting YES bid at 0.1600 (0.01 inside the 0.1500/0.2200 touch, spread 0.07) for 191 contracts - a plan, not a fill; fill evidence is measured later against the official tape",
-   "postedAt": "2026-10-21T20:55:12Z",
-   "postedContracts": 190.58,
-   "postedPrice": 0.16,
-   "series": "KXHIGHTATL",
-   "seriesFeeType": "quadratic",
-   "seriesMakerMultiplier": 0.0,
-   "settlement": {
-    "makerFee": 0.0,
-    "makerFeeMultiplier": 0.0,
-    "pnlBeforeMakerFees": null,
-    "result": null,
-    "settled": false
-   },
-   "side": "yes",
-   "spreadAtPost": 0.07,
-   "status": "compared",
-   "strategyId": "spread-smith",
-   "tapeMax": 0.2,
-   "tapeMin": 0.08,
-   "tapePrints": 129,
-   "tapeSha256": "6de10668af78c9977826b2b866e1fdb036e7aec7bb621877bc7db4fa35ae81f8",
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXHIGHTATL-26OCT21-B76.5&limit=1000&min_ts=1792616112&max_ts=1792619712",
-   "throughPrints": 99,
-   "ticker": "KXHIGHTATL-26OCT21-B76.5",
-   "touchPrints": 5,
-   "touchVolume": 50.26,
-   "username": "SpreadSmith",
-   "windowEnd": "2026-10-21T21:55:12Z",
-   "windowSeconds": 3600
-  },
-  {
-   "at": "2026-10-31T00:38:38Z",
-   "fillEvidence": "tape_traded_through",
-   "filledContracts": 44.0,
-   "firstThroughTs": "2026-10-21T23:58:42.344542Z",
-   "improvementCents": 1,
-   "kind": "maker-model-comparison",
-   "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
-   "planLedgerFile": "intents/2026-10.jsonl",
-   "planLedgerLine": 4935,
-   "planReason": "maker quote plan: post a resting YES bid at 0.0300 (0.01 inside the 0.0200/0.0700 touch, spread 0.05) for 44 contracts - a plan, not a fill; fill evidence is measured later against the official tape",
-   "postedAt": "2026-10-21T23:58:10Z",
-   "postedContracts": 44.0,
-   "postedPrice": 0.03,
-   "series": "KXBTC",
-   "seriesFeeType": "quadratic",
-   "seriesMakerMultiplier": 0.0,
-   "settlement": {
-    "makerFee": 0.0,
-    "makerFeeMultiplier": 0.0,
-    "pnlBeforeMakerFees": null,
-    "result": null,
-    "settled": false
-   },
-   "side": "yes",
-   "spreadAtPost": 0.05,
-   "status": "compared",
-   "strategyId": "spread-smith",
-   "tapeMax": 0.25,
-   "tapeMin": 0.01,
-   "tapePrints": 60,
-   "tapeSha256": "dc8aca819b8121774ba4febb6a931296bd50451711641922f6d20a39b25e57f5",
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXBTC-26OCT2120-B84150&limit=1000&min_ts=1792627090&max_ts=1792627200",
-   "throughPrints": 9,
-   "ticker": "KXBTC-26OCT2120-B84150",
-   "touchPrints": 10,
-   "touchVolume": 270.92,
-   "username": "SpreadSmith",
-   "windowEnd": "2026-10-22T00:00:00Z",
-   "windowSeconds": 3600
-  },
-  {
-   "at": "2026-10-31T00:38:38Z",
-   "fillEvidence": "no_fill_evidence",
-   "filledContracts": 0.0,
-   "improvementCents": 1,
-   "kind": "maker-model-comparison",
-   "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
-   "planLedgerFile": "intents/2026-10.jsonl",
-   "planLedgerLine": 4936,
-   "planReason": "maker quote plan: post a resting YES bid at 0.1900 (0.01 inside the 0.1800/0.2300 touch, spread 0.05) for 50 contracts - a plan, not a fill; fill evidence is measured later against the official tape",
-   "postedAt": "2026-10-21T23:58:10Z",
-   "postedContracts": 50.0,
-   "postedPrice": 0.19,
-   "series": "KXGOLDH",
-   "seriesFeeType": "quadratic",
-   "seriesMakerMultiplier": 0.0,
-   "settlement": {
-    "makerFee": 0.0,
-    "makerFeeMultiplier": 0.0,
-    "pnlBeforeMakerFees": null,
-    "result": null,
-    "settled": false
-   },
-   "side": "yes",
-   "spreadAtPost": 0.05,
-   "status": "compared",
-   "strategyId": "spread-smith",
-   "tapePrints": 0,
-   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
-   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXGOLDH-26OCT2121-T4131.99&limit=1000&min_ts=1792627090&max_ts=1792630690",
-   "ticker": "KXGOLDH-26OCT2121-T4131.99",
-   "username": "SpreadSmith",
-   "windowEnd": "2026-10-22T00:58:10Z",
-   "windowSeconds": 3600
-  },
-  {
-   "at": "2026-10-31T00:38:38Z",
+   "at": "2026-10-31T06:15:24Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 30.0,
    "firstThroughTs": "2026-10-22T00:42:42.680649Z",
@@ -175,7 +58,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:38Z",
+   "at": "2026-10-31T06:15:24Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 124.0,
    "firstThroughTs": "2026-10-22T04:59:10.615531Z",
@@ -219,7 +102,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:39Z",
+   "at": "2026-10-31T06:15:24Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-22T04:59:42.31923Z",
@@ -263,7 +146,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:39Z",
+   "at": "2026-10-31T06:15:25Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -304,7 +187,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:39Z",
+   "at": "2026-10-31T06:15:25Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 65.0,
    "firstThroughTs": "2026-10-22T20:07:19.2414Z",
@@ -348,7 +231,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:39Z",
+   "at": "2026-10-31T06:15:25Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 26.0,
    "firstThroughTs": "2026-10-22T20:01:15.879238Z",
@@ -392,7 +275,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:39Z",
+   "at": "2026-10-31T06:15:25Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 16.0,
    "firstThroughTs": "2026-10-22T19:29:51.79552Z",
@@ -436,7 +319,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:40Z",
+   "at": "2026-10-31T06:15:26Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 316.96,
    "firstThroughTs": "2026-10-23T01:58:54.879618Z",
@@ -480,7 +363,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:40Z",
+   "at": "2026-10-31T06:15:26Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 1000.0,
    "firstThroughTs": "2026-10-23T12:15:21.932085Z",
@@ -524,7 +407,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:40Z",
+   "at": "2026-10-31T06:15:26Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 8.0,
    "firstThroughTs": "2026-10-23T12:56:42.793333Z",
@@ -568,7 +451,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:40Z",
+   "at": "2026-10-31T06:15:26Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 50.0,
    "firstThroughTs": "2026-10-23T16:57:44.307023Z",
@@ -609,7 +492,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:41Z",
+   "at": "2026-10-31T06:15:27Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 1.0,
    "firstThroughTs": "2026-10-23T17:01:36.728292Z",
@@ -650,7 +533,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:41Z",
+   "at": "2026-10-31T06:15:27Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 4.73,
    "firstThroughTs": "2026-10-23T17:12:59.072687Z",
@@ -691,7 +574,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:41Z",
+   "at": "2026-10-31T06:15:27Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 182.23,
    "firstThroughTs": "2026-10-23T21:16:56.688895Z",
@@ -732,7 +615,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:41Z",
+   "at": "2026-10-31T06:15:27Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -773,7 +656,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:41Z",
+   "at": "2026-10-31T06:15:27Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -814,7 +697,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:42Z",
+   "at": "2026-10-31T06:15:28Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 165.41,
    "firstThroughTs": "2026-10-24T00:23:44.095843Z",
@@ -858,7 +741,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:42Z",
+   "at": "2026-10-31T06:15:28Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -899,7 +782,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:42Z",
+   "at": "2026-10-31T06:15:28Z",
    "fillEvidence": "queue_uncertain",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -941,7 +824,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:42Z",
+   "at": "2026-10-31T06:15:28Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 56.0,
    "firstThroughTs": "2026-10-24T17:11:15.405629Z",
@@ -985,7 +868,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:43Z",
+   "at": "2026-10-31T06:15:29Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 9.0,
    "firstThroughTs": "2026-10-24T17:03:58.953849Z",
@@ -1029,7 +912,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:43Z",
+   "at": "2026-10-31T06:15:29Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 47.0,
    "firstThroughTs": "2026-10-24T22:28:14.706632Z",
@@ -1070,7 +953,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:43Z",
+   "at": "2026-10-31T06:15:29Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 38.0,
    "firstThroughTs": "2026-10-24T21:54:19.738487Z",
@@ -1114,7 +997,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:43Z",
+   "at": "2026-10-31T06:15:30Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 75676.23,
    "firstThroughTs": "2026-10-24T22:28:25.587033Z",
@@ -1158,7 +1041,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:44Z",
+   "at": "2026-10-31T06:15:30Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 86.0,
    "firstThroughTs": "2026-10-24T23:57:43.008036Z",
@@ -1202,7 +1085,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:44Z",
+   "at": "2026-10-31T06:15:30Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 52562.1,
    "firstThroughTs": "2026-10-24T23:45:24.336714Z",
@@ -1246,7 +1129,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:44Z",
+   "at": "2026-10-31T06:15:30Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -1281,7 +1164,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:44Z",
+   "at": "2026-10-31T06:15:31Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -1322,7 +1205,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:45Z",
+   "at": "2026-10-31T06:15:31Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 24.0,
    "firstThroughTs": "2026-10-25T12:46:58.416044Z",
@@ -1366,7 +1249,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:45Z",
+   "at": "2026-10-31T06:15:31Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -1407,7 +1290,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:45Z",
+   "at": "2026-10-31T06:15:31Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 0.14,
    "firstThroughTs": "2026-10-25T13:23:41.731505Z",
@@ -1451,7 +1334,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:46Z",
+   "at": "2026-10-31T06:15:32Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 14.0,
    "firstThroughTs": "2026-10-25T16:44:59.915434Z",
@@ -1492,7 +1375,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:47Z",
+   "at": "2026-10-31T06:15:32Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2.0,
    "firstThroughTs": "2026-10-25T16:57:54.653423Z",
@@ -1536,7 +1419,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:47Z",
+   "at": "2026-10-31T06:15:32Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 7.0,
    "firstThroughTs": "2026-10-25T17:43:24.143653Z",
@@ -1580,7 +1463,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:47Z",
+   "at": "2026-10-31T06:15:32Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2.0,
    "firstThroughTs": "2026-10-25T20:36:23.407585Z",
@@ -1624,7 +1507,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:47Z",
+   "at": "2026-10-31T06:15:33Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 39.0,
    "firstThroughTs": "2026-10-25T20:29:31.478929Z",
@@ -1668,7 +1551,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:48Z",
+   "at": "2026-10-31T06:15:33Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 5.0,
    "firstThroughTs": "2026-10-25T20:03:37.99612Z",
@@ -1712,7 +1595,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:48Z",
+   "at": "2026-10-31T06:15:33Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 659.26,
    "firstThroughTs": "2026-10-26T00:22:19.100611Z",
@@ -1756,7 +1639,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:48Z",
+   "at": "2026-10-31T06:15:34Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 38.0,
    "firstThroughTs": "2026-10-26T04:55:32.62821Z",
@@ -1800,7 +1683,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:48Z",
+   "at": "2026-10-31T06:15:34Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 90.0,
    "firstThroughTs": "2026-10-26T04:59:14.405053Z",
@@ -1844,7 +1727,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:49Z",
+   "at": "2026-10-31T06:15:34Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 20.0,
    "firstThroughTs": "2026-10-26T04:34:23.599348Z",
@@ -1885,7 +1768,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:49Z",
+   "at": "2026-10-31T06:15:34Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -1926,7 +1809,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:49Z",
+   "at": "2026-10-31T06:15:34Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -1961,7 +1844,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:49Z",
+   "at": "2026-10-31T06:15:35Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -2002,7 +1885,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:49Z",
+   "at": "2026-10-31T06:15:35Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -2037,7 +1920,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:50Z",
+   "at": "2026-10-31T06:15:35Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 18.0,
    "firstThroughTs": "2026-10-26T22:29:45.632639Z",
@@ -2081,7 +1964,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:50Z",
+   "at": "2026-10-31T06:15:35Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -2122,7 +2005,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:50Z",
+   "at": "2026-10-31T06:15:36Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-27T00:56:50.308888Z",
@@ -2163,7 +2046,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:50Z",
+   "at": "2026-10-31T06:15:36Z",
    "fillEvidence": "queue_uncertain",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -2205,7 +2088,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:50Z",
+   "at": "2026-10-31T06:15:36Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 20764.65,
    "firstThroughTs": "2026-10-27T01:18:13.577901Z",
@@ -2246,7 +2129,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:51Z",
+   "at": "2026-10-31T06:15:36Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-27T06:44:32.920154Z",
@@ -2287,7 +2170,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:51Z",
+   "at": "2026-10-31T06:15:37Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 84319.33,
    "firstThroughTs": "2026-10-27T06:59:44.198775Z",
@@ -2331,7 +2214,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:51Z",
+   "at": "2026-10-31T06:15:37Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-27T12:54:38.273509Z",
@@ -2372,7 +2255,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:51Z",
+   "at": "2026-10-31T06:15:37Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -2407,7 +2290,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:51Z",
+   "at": "2026-10-31T06:15:37Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 74.0,
    "firstThroughTs": "2026-10-27T18:59:00.036813Z",
@@ -2451,7 +2334,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:52Z",
+   "at": "2026-10-31T06:15:38Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 197.81,
    "firstThroughTs": "2026-10-27T19:11:43.471837Z",
@@ -2492,7 +2375,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:52Z",
+   "at": "2026-10-31T06:15:38Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2.0,
    "firstThroughTs": "2026-10-27T19:01:08.434088Z",
@@ -2536,7 +2419,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:52Z",
+   "at": "2026-10-31T06:15:38Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -2577,7 +2460,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:52Z",
+   "at": "2026-10-31T06:15:38Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 64.0,
    "firstThroughTs": "2026-10-27T23:26:45.517253Z",
@@ -2621,7 +2504,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:53Z",
+   "at": "2026-10-31T06:15:39Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 344.93,
    "firstThroughTs": "2026-10-27T22:51:55.166142Z",
@@ -2665,7 +2548,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:53Z",
+   "at": "2026-10-31T06:15:39Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-28T01:56:06.820434Z",
@@ -2706,7 +2589,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:53Z",
+   "at": "2026-10-31T06:15:39Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -2741,7 +2624,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:53Z",
+   "at": "2026-10-31T06:15:39Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 30.0,
    "firstThroughTs": "2026-10-28T08:09:21.861844Z",
@@ -2782,7 +2665,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:53Z",
+   "at": "2026-10-31T06:15:40Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 12.0,
    "firstThroughTs": "2026-10-28T07:28:27.95236Z",
@@ -2826,7 +2709,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:54Z",
+   "at": "2026-10-31T06:15:40Z",
    "fillEvidence": "queue_uncertain",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -2868,7 +2751,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:54Z",
+   "at": "2026-10-31T06:15:40Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-28T14:45:53.148159Z",
@@ -2912,7 +2795,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:54Z",
+   "at": "2026-10-31T06:15:40Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 32.0,
    "firstThroughTs": "2026-10-28T15:17:31.612886Z",
@@ -2953,7 +2836,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:55Z",
+   "at": "2026-10-31T06:15:40Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -2994,7 +2877,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:55Z",
+   "at": "2026-10-31T06:15:41Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 32.0,
    "firstThroughTs": "2026-10-28T19:48:04.124656Z",
@@ -3035,7 +2918,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:56Z",
+   "at": "2026-10-31T06:15:41Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3076,7 +2959,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:56Z",
+   "at": "2026-10-31T06:15:41Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 3.0,
    "firstThroughTs": "2026-10-29T00:56:32.271373Z",
@@ -3120,7 +3003,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:56Z",
+   "at": "2026-10-31T06:15:41Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3161,7 +3044,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:56Z",
+   "at": "2026-10-31T06:15:42Z",
    "fillEvidence": "queue_uncertain",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3203,7 +3086,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:57Z",
+   "at": "2026-10-31T06:15:42Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 90.0,
    "firstThroughTs": "2026-10-29T05:55:00.342829Z",
@@ -3244,7 +3127,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:57Z",
+   "at": "2026-10-31T06:15:42Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 328.54,
    "firstThroughTs": "2026-10-29T05:42:03.147919Z",
@@ -3285,7 +3168,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:57Z",
+   "at": "2026-10-31T06:15:42Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -3320,7 +3203,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:57Z",
+   "at": "2026-10-31T06:15:42Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 117.0,
    "firstThroughTs": "2026-10-29T11:56:55.642294Z",
@@ -3361,7 +3244,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:58Z",
+   "at": "2026-10-31T06:15:43Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "improvementCents": 1,
@@ -3396,7 +3279,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:58Z",
+   "at": "2026-10-31T06:15:43Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3437,7 +3320,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:58Z",
+   "at": "2026-10-31T06:15:43Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 29.0,
    "firstThroughTs": "2026-10-29T19:20:51.333574Z",
@@ -3481,7 +3364,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:58Z",
+   "at": "2026-10-31T06:15:43Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 200.0,
    "firstThroughTs": "2026-10-29T22:59:09.424783Z",
@@ -3522,7 +3405,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:58Z",
+   "at": "2026-10-31T06:15:44Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3563,7 +3446,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:59Z",
+   "at": "2026-10-31T06:15:44Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 27.6,
    "firstThroughTs": "2026-10-29T22:59:53.691753Z",
@@ -3604,7 +3487,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:59Z",
+   "at": "2026-10-31T06:15:44Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-30T02:56:25.400847Z",
@@ -3645,7 +3528,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:59Z",
+   "at": "2026-10-31T06:15:44Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 51.0,
    "firstThroughTs": "2026-10-30T02:51:00.057059Z",
@@ -3686,7 +3569,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:59Z",
+   "at": "2026-10-31T06:15:44Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3727,7 +3610,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:38:59Z",
+   "at": "2026-10-31T06:15:45Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-30T08:56:56.783768Z",
@@ -3771,7 +3654,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:00Z",
+   "at": "2026-10-31T06:15:45Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 2050.0,
    "firstThroughTs": "2026-10-30T08:59:58.248244Z",
@@ -3812,7 +3695,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:00Z",
+   "at": "2026-10-31T06:15:45Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 86.58,
    "firstThroughTs": "2026-10-30T09:28:08.688924Z",
@@ -3853,7 +3736,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:00Z",
+   "at": "2026-10-31T06:15:45Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 16.0,
    "firstThroughTs": "2026-10-30T16:35:11.245806Z",
@@ -3894,7 +3777,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:00Z",
+   "at": "2026-10-31T06:15:45Z",
    "fillEvidence": "no_fill_evidence",
    "filledContracts": 0.0,
    "firstThroughTs": null,
@@ -3935,7 +3818,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:01Z",
+   "at": "2026-10-31T06:15:46Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 66.0,
    "firstThroughTs": "2026-10-30T16:45:47.799872Z",
@@ -3976,7 +3859,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:01Z",
+   "at": "2026-10-31T06:15:46Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 30104.0,
    "firstThroughTs": "2026-10-30T20:45:03.193507Z",
@@ -4020,7 +3903,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:01Z",
+   "at": "2026-10-31T06:15:46Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 1.0,
    "firstThroughTs": "2026-10-30T21:38:46.091994Z",
@@ -4061,7 +3944,7 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:01Z",
+   "at": "2026-10-31T06:15:46Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 9.0,
    "firstThroughTs": "2026-10-30T21:18:05.212604Z",
@@ -4102,10 +3985,10 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:02Z",
+   "at": "2026-10-31T06:15:47Z",
    "fillEvidence": "tape_traded_through",
    "filledContracts": 206.0,
-   "firstThroughTs": "2026-10-31T00:38:38.295747Z",
+   "firstThroughTs": "2026-10-31T00:42:41.454846Z",
    "improvementCents": 1,
    "kind": "maker-model-comparison",
    "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
@@ -4130,11 +4013,11 @@
    "status": "compared",
    "strategyId": "spread-smith",
    "tapeMax": 0.16,
-   "tapeMin": 0.09,
-   "tapePrints": 8,
-   "tapeSha256": "fa18018d9f9d14f72d65363d20cd940b8aac6998af7acfe6a7104602e721c398",
+   "tapeMin": 0.07,
+   "tapePrints": 9,
+   "tapeSha256": "6b08473f82d7d576fdd046f7f729c6eb89b564b843185d0b185cd2bad0e92981",
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXBTC-26OCT3021-B77050&limit=1000&min_ts=1793407065&max_ts=1793408400",
-   "throughPrints": 2,
+   "throughPrints": 3,
    "ticker": "KXBTC-26OCT3021-B77050",
    "touchPrints": 0,
    "touchVolume": 0,
@@ -4143,9 +4026,10 @@
    "windowSeconds": 3600
   },
   {
-   "at": "2026-10-31T00:39:02Z",
-   "fillEvidence": "no_fill_evidence",
-   "filledContracts": 0.0,
+   "at": "2026-10-31T06:15:47Z",
+   "fillEvidence": "tape_traded_through",
+   "filledContracts": 55039.16,
+   "firstThroughTs": "2026-10-31T00:52:53.985554Z",
    "improvementCents": 1,
    "kind": "maker-model-comparison",
    "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
@@ -4169,12 +4053,128 @@
    "spreadAtPost": 0.02,
    "status": "compared",
    "strategyId": "spread-smith",
-   "tapePrints": 0,
-   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeMax": 0.63,
+   "tapeMin": 0.61,
+   "tapePrints": 18,
+   "tapeSha256": "34c78dd7f7ddbe8098d045c9821edc861428bb3ff47aac1bd003f09520a76625",
    "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNCAAFGAME-26OCT30NWORE-ORE&limit=1000&min_ts=1793407063&max_ts=1793410663",
+   "throughPrints": 2,
    "ticker": "KXNCAAFGAME-26OCT30NWORE-ORE",
+   "touchPrints": 0,
+   "touchVolume": 0,
    "username": "SpreadSmith",
    "windowEnd": "2026-10-31T01:37:43Z",
+   "windowSeconds": 3600
+  },
+  {
+   "at": "2026-10-31T06:15:47Z",
+   "fillEvidence": "no_fill_evidence",
+   "filledContracts": 0.0,
+   "firstThroughTs": null,
+   "improvementCents": 1,
+   "kind": "maker-model-comparison",
+   "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
+   "planLedgerFile": "intents/2026-10.jsonl",
+   "planLedgerLine": 7132,
+   "planReason": "maker quote plan: post a resting YES bid at 0.2200 (0.01 inside the 0.2100/0.2300 touch, spread 0.02) for 1 contracts - a plan, not a fill; fill evidence is measured later against the official tape",
+   "postedAt": "2026-10-31T06:14:30Z",
+   "postedContracts": 1.0,
+   "postedPrice": 0.22,
+   "series": "KXBTC",
+   "seriesFeeType": "quadratic",
+   "seriesMakerMultiplier": 0.0,
+   "settlement": {
+    "makerFee": 0.0,
+    "makerFeeMultiplier": 0.0,
+    "pnlBeforeMakerFees": null,
+    "result": null,
+    "settled": false
+   },
+   "side": "yes",
+   "spreadAtPost": 0.02,
+   "status": "compared",
+   "strategyId": "spread-smith",
+   "tapeMax": 0.23,
+   "tapeMin": 0.23,
+   "tapePrints": 2,
+   "tapeSha256": "65df4b7f13bb6365c2933f8d6f15d8a3a4c81f798e230df31034b3478e3aeb8a",
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXBTC-26OCT3103-B77050&limit=1000&min_ts=1793427270&max_ts=1793430000",
+   "throughPrints": 0,
+   "ticker": "KXBTC-26OCT3103-B77050",
+   "touchPrints": 0,
+   "touchVolume": 0,
+   "username": "SpreadSmith",
+   "windowEnd": "2026-10-31T07:00:00Z",
+   "windowSeconds": 3600
+  },
+  {
+   "at": "2026-10-31T06:15:47Z",
+   "fillEvidence": "no_fill_evidence",
+   "filledContracts": 0.0,
+   "improvementCents": 1,
+   "kind": "maker-model-comparison",
+   "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
+   "planLedgerFile": "intents/2026-10.jsonl",
+   "planLedgerLine": 7131,
+   "planReason": "maker quote plan: post a resting YES bid at 0.2800 (0.01 inside the 0.2700/0.2900 touch, spread 0.02) for 57 contracts - a plan, not a fill; fill evidence is measured later against the official tape",
+   "postedAt": "2026-10-31T06:14:30Z",
+   "postedContracts": 57.0,
+   "postedPrice": 0.28,
+   "series": "KXHIGHNY",
+   "seriesFeeType": "quadratic",
+   "seriesMakerMultiplier": 0.0,
+   "settlement": {
+    "makerFee": 0.0,
+    "makerFeeMultiplier": 0.0,
+    "pnlBeforeMakerFees": null,
+    "result": null,
+    "settled": false
+   },
+   "side": "yes",
+   "spreadAtPost": 0.02,
+   "status": "compared",
+   "strategyId": "spread-smith",
+   "tapePrints": 0,
+   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXHIGHNY-26OCT31-B59.5&limit=1000&min_ts=1793427270&max_ts=1793430870",
+   "ticker": "KXHIGHNY-26OCT31-B59.5",
+   "username": "SpreadSmith",
+   "windowEnd": "2026-10-31T07:14:30Z",
+   "windowSeconds": 3600
+  },
+  {
+   "at": "2026-10-31T06:15:48Z",
+   "fillEvidence": "no_fill_evidence",
+   "filledContracts": 0.0,
+   "improvementCents": 1,
+   "kind": "maker-model-comparison",
+   "modelLabel": "MODELLED - tape evidence about a hypothetical resting order; never a ledger fill",
+   "planLedgerFile": "intents/2026-10.jsonl",
+   "planLedgerLine": 7130,
+   "planReason": "maker quote plan: post a resting YES bid at 0.4600 (0.01 inside the 0.4500/0.4700 touch, spread 0.02) for 288 contracts - a plan, not a fill; fill evidence is measured later against the official tape",
+   "postedAt": "2026-10-31T06:14:29Z",
+   "postedContracts": 288.0,
+   "postedPrice": 0.46,
+   "series": "KXNBAGAME",
+   "seriesFeeType": "quadratic_with_maker_fees",
+   "seriesMakerMultiplier": 1.0,
+   "settlement": {
+    "makerFee": 1.252,
+    "makerFeeMultiplier": 1.0,
+    "pnlBeforeMakerFees": null,
+    "result": null,
+    "settled": false
+   },
+   "side": "yes",
+   "spreadAtPost": 0.02,
+   "status": "compared",
+   "strategyId": "spread-smith",
+   "tapePrints": 0,
+   "tapeSha256": "ce91679332b1b83d2574366e4cc72f6d41bf656ccc2fa9cf574ee4f9ac6809e7",
+   "tapeUrl": "https://external-api.kalshi.com/trade-api/v2/markets/trades?ticker=KXNBAGAME-26NOV02PHXGSW-GSW&limit=1000&min_ts=1793427269&max_ts=1793430869",
+   "ticker": "KXNBAGAME-26NOV02PHXGSW-GSW",
+   "username": "SpreadSmith",
+   "windowEnd": "2026-10-31T07:14:29Z",
    "windowSeconds": 3600
   }
  ],
@@ -4182,6 +4182,6 @@
  "settledProvenFills": 38,
  "settledWins": 10,
  "tapeFetchFailed": 0,
- "tapeTradedThrough": 70,
- "verdict": "70 of 100 compared quote plan(s) have tape proof of a fill (the tape traded strictly through the posted price); 4 more have touch-only prints and stay queue-uncertain; 26 have no print at or through the posted price. Of the proven fills, 38 settled so far: 10 win(s), projected settlement PnL +30987.97 USD gross and +30470.75 USD net of modelled maker fees (517.22 USD). All figures are MODELLED evidence about hypothetical resting orders."
+ "tapeTradedThrough": 69,
+ "verdict": "69 of 100 compared quote plan(s) have tape proof of a fill (the tape traded strictly through the posted price); 4 more have touch-only prints and stay queue-uncertain; 27 have no print at or through the posted price. Of the proven fills, 38 settled so far: 10 win(s), projected settlement PnL +30987.97 USD gross and +30470.75 USD net of modelled maker fees (517.22 USD). All figures are MODELLED evidence about hypothetical resting orders."
 }
