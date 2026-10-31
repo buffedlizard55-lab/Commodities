@@ -1,8 +1,8 @@
 {
  "exitRule": "take-profit/SMA exits fill at the verified bid of a later bar; otherwise the position settles at the official result (1/0) at the archived settlement_ts",
  "feeRule": "0.07 * q * p * (1-p) * series fee_multiplier, rounded up to $0.0001; no fee on settlement",
- "generatedAt": "2026-10-30T20:40:48Z",
- "marketCount": 781,
+ "generatedAt": "2026-10-31T00:39:04Z",
+ "marketCount": 784,
  "markets": {
   "KXBTC-26OCT0113-B83750": {
    "archivedByCycle": "20261001T202650Z",
@@ -1459,6 +1459,21 @@
    "sha256": "296256392c410644c68ab3d098ff5135c6fd60e1bae70fd4f40402d900e37cbf",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC/markets/KXBTC-26OCT2917-B81375/candlesticks?start_ts=1793217540&end_ts=1793307823&period_interval=60&exchange_index=2"
   },
+  "KXBTC-26OCT3020-B76650": {
+   "archivedByCycle": "20261031T003703Z",
+   "bars": 61,
+   "closeTs": "2026-10-31T00:00:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXBTC/KXBTC-26OCT3020-B76650-p1.csv",
+   "openTs": "2026-10-30T23:00:00Z",
+   "period": 1,
+   "result": "no",
+   "series": "KXBTC",
+   "settlementTs": "2026-10-31T00:02:28Z",
+   "sha256": "599e9aeeb69080738cbd91f778d72d065c9902e6c960ec981e1f076ab8a79e8b",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC/markets/KXBTC-26OCT3020-B76650/candlesticks?start_ts=1793401140&end_ts=1793405008&period_interval=1&exchange_index=2"
+  },
   "KXBTC-26SEP2006-B80350": {
    "archivedByCycle": "20260920T134010Z",
    "bars": 61,
@@ -2779,6 +2794,21 @@
    "sha256": "1b8a5fdc296c02f76d7924407f83f336dd2f2d1954af2a18f483b383f4a7aabc",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC15M/markets/KXBTC15M-26OCT290945-45/candlesticks?start_ts=1793280540&end_ts=1793281563&period_interval=1&exchange_index=2"
   },
+  "KXBTC15M-26OCT301930-30": {
+   "archivedByCycle": "20261031T003703Z",
+   "bars": 16,
+   "closeTs": "2026-10-30T23:30:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXBTC15M/KXBTC15M-26OCT301930-30-p1.csv",
+   "openTs": "2026-10-30T23:15:00Z",
+   "period": 1,
+   "result": "yes",
+   "series": "KXBTC15M",
+   "settlementTs": "2026-10-30T23:30:03Z",
+   "sha256": "1efb110459c27eabf5e91e85a9d19b2dce394f9d90812f898cb794552252ad35",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXBTC15M/markets/KXBTC15M-26OCT301930-30/candlesticks?start_ts=1793402040&end_ts=1793403063&period_interval=1&exchange_index=2"
+  },
   "KXBTC15M-26SEP192330-30": {
    "archivedByCycle": "20260920T033437Z",
    "bars": 16,
@@ -3513,6 +3543,21 @@
    "settlementTs": "2026-10-28T21:15:05Z",
    "sha256": "cd199fa12bbc88f01a321f46c78ac3c952ca02d73100289dc12d62f98341a75c",
    "url": "https://external-api.kalshi.com/trade-api/v2/series/KXETH15M/markets/KXETH15M-26OCT281715-15/candlesticks?start_ts=1793221140&end_ts=1793222165&period_interval=1&exchange_index=2"
+  },
+  "KXETH15M-26OCT301930-30": {
+   "archivedByCycle": "20261031T003703Z",
+   "bars": 16,
+   "closeTs": "2026-10-30T23:30:00Z",
+   "feeMultiplier": 1.0,
+   "feeType": "quadratic",
+   "file": "candles/KXETH15M/KXETH15M-26OCT301930-30-p1.csv",
+   "openTs": "2026-10-30T23:15:00Z",
+   "period": 1,
+   "result": "yes",
+   "series": "KXETH15M",
+   "settlementTs": "2026-10-30T23:30:03Z",
+   "sha256": "5240935bd863dce0318ed22ee6176e9d112e89fcf91f6a91b9bede2cf9e0c7a2",
+   "url": "https://external-api.kalshi.com/trade-api/v2/series/KXETH15M/markets/KXETH15M-26OCT301930-30/candlesticks?start_ts=1793402040&end_ts=1793403063&period_interval=1&exchange_index=2"
   },
   "KXETH15M-26SEP192330-30": {
    "archivedByCycle": "20260920T033437Z",
@@ -11771,5 +11816,5 @@
  "seriesFilter": null,
  "sizingRule": "50% of cash, capped at 25% of the bar's verified volume; no entry without bar volume",
  "source": "data/season-*/forward/candles/ archived by scripts/forward_desk.py from GET /series/{series}/markets/{ticker}/candlesticks (each file is bound to the response URL and SHA-256 in candles/index.jsonl)",
- "verifiedBars": 50538
+ "verifiedBars": 50631
 }
